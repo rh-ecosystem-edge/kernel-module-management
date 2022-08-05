@@ -38,7 +38,7 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	ootov1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
+	kmmv1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/controllers"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -51,20 +51,20 @@ import (
 
 const (
 	NFDKernelLabelingMethod  = "nfd"
-	OOTOKernelLabelingMethod = "ooto"
+	KMMOKernelLabelingMethod = "kmmo"
 
 	KernelLabelingMethodEnvVar = "KERNEL_LABELING_METHOD"
 )
 
 var (
 	scheme               = runtime.NewScheme()
-	validLabelingMethods = sets.NewString(OOTOKernelLabelingMethod, NFDKernelLabelingMethod)
+	validLabelingMethods = sets.NewString(KMMOKernelLabelingMethod, NFDKernelLabelingMethod)
 )
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	utilruntime.Must(ootov1alpha1.AddToScheme(scheme))
+	utilruntime.Must(kmmv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -119,7 +119,7 @@ func main() {
 
 	var (
 		kernelLabel          string
-		kernelLabelingMethod = GetEnvWithDefault(KernelLabelingMethodEnvVar, OOTOKernelLabelingMethod)
+		kernelLabelingMethod = GetEnvWithDefault(KernelLabelingMethodEnvVar, KMMOKernelLabelingMethod)
 	)
 
 	setupLogger.V(1).Info("Determining kernel labeling method", KernelLabelingMethodEnvVar, kernelLabelingMethod)
@@ -127,8 +127,8 @@ func main() {
 	filter := filter.New(client, mgr.GetLogger())
 
 	switch kernelLabelingMethod {
-	case OOTOKernelLabelingMethod:
-		kernelLabel = "oot.node.kubernetes.io/kernel-version.full"
+	case KMMOKernelLabelingMethod:
+		kernelLabel = "kmm.node.kubernetes.io/kernel-version.full"
 
 		nodeKernelReconciler := controllers.NewNodeKernelReconciler(client, kernelLabel, filter)
 

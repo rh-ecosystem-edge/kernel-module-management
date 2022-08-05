@@ -7,7 +7,7 @@ import (
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	ootov1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
+	kmmv1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/daemonset"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
@@ -33,7 +33,7 @@ var _ = Describe("module status update", func() {
 		clnt        *client.MockClient
 		mockDC      *daemonset.MockDaemonSetCreator
 		mockMetrics *metrics.MockMetrics
-		mod         *ootov1alpha1.Module
+		mod         *kmmv1alpha1.Module
 		su          ModuleStatusUpdater
 	)
 
@@ -42,7 +42,7 @@ var _ = Describe("module status update", func() {
 		clnt = client.NewMockClient(ctrl)
 		mockDC = daemonset.NewMockDaemonSetCreator(ctrl)
 		mockMetrics = metrics.NewMockMetrics(ctrl)
-		mod = &ootov1alpha1.Module{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
+		mod = &kmmv1alpha1.Module{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
 		su = NewModuleStatusUpdater(clnt, mockDC, mockMetrics)
 	})
 
@@ -127,16 +127,16 @@ var _ = Describe("preflight status updates", func() {
 	var (
 		ctrl *gomock.Controller
 		clnt *client.MockClient
-		pv   *ootov1alpha1.PreflightValidation
-		ps   *ootov1alpha1.CRStatus
+		pv   *kmmv1alpha1.PreflightValidation
+		ps   *kmmv1alpha1.CRStatus
 		su   PreflightStatusUpdater
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		pv = &ootov1alpha1.PreflightValidation{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
-		ps = &ootov1alpha1.CRStatus{Name: "cr-name"}
+		pv = &kmmv1alpha1.PreflightValidation{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
+		ps = &kmmv1alpha1.CRStatus{Name: "cr-name"}
 		su = NewPreflightStatusUpdater(clnt)
 	})
 
@@ -147,8 +147,8 @@ var _ = Describe("preflight status updates", func() {
 
 		res := su.PreflightPresetVerificationStatus(context.Background(), pv, ps)
 		Expect(res).To(BeNil())
-		Expect(ps.VerificationStatus).To(Equal(ootov1alpha1.VerificationFalse))
-		Expect(ps.VerificationStage).To(Equal(ootov1alpha1.VerificationStageImage))
+		Expect(ps.VerificationStatus).To(Equal(kmmv1alpha1.VerificationFalse))
+		Expect(ps.VerificationStage).To(Equal(kmmv1alpha1.VerificationStageImage))
 	})
 
 	It("set preflight verification status", func() {

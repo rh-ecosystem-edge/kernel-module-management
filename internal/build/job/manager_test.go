@@ -7,7 +7,7 @@ import (
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	ootov1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
+	kmmv1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
@@ -25,7 +25,7 @@ var _ = Describe("Labels", func() {
 			targetKernel = "1.2.3"
 		)
 
-		mod := ootov1alpha1.Module{
+		mod := kmmv1alpha1.Module{
 			ObjectMeta: metav1.ObjectMeta{Name: moduleName},
 		}
 
@@ -60,10 +60,10 @@ var _ = Describe("JobManager", func() {
 			helper = build.NewMockHelper(ctrl)
 		})
 
-		po := ootov1alpha1.PullOptions{}
+		po := kmmv1alpha1.PullOptions{}
 
-		km := ootov1alpha1.KernelMapping{
-			Build:          &ootov1alpha1.Build{Pull: po},
+		km := kmmv1alpha1.KernelMapping{
+			Build:          &kmmv1alpha1.Build{Pull: po},
 			ContainerImage: imageName,
 		}
 
@@ -75,7 +75,7 @@ var _ = Describe("JobManager", func() {
 			)
 			mgr := NewBuildManager(nil, registry, maker, helper)
 
-			_, err := mgr.Sync(ctx, ootov1alpha1.Module{}, km, "")
+			_, err := mgr.Sync(ctx, kmmv1alpha1.Module{}, km, "")
 			Expect(err).To(HaveOccurred())
 		})
 
@@ -90,7 +90,7 @@ var _ = Describe("JobManager", func() {
 			mgr := NewBuildManager(nil, registry, maker, helper)
 
 			Expect(
-				mgr.Sync(ctx, ootov1alpha1.Module{}, km, ""),
+				mgr.Sync(ctx, kmmv1alpha1.Module{}, km, ""),
 			).To(
 				Equal(build.Result{Status: build.StatusCompleted}),
 			)
@@ -102,7 +102,7 @@ var _ = Describe("JobManager", func() {
 			jobName       = "some-job"
 		)
 
-		mod := ootov1alpha1.Module{
+		mod := kmmv1alpha1.Module{
 			ObjectMeta: metav1.ObjectMeta{Name: moduleName},
 		}
 

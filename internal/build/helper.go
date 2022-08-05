@@ -4,14 +4,14 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	ootov1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
+	kmmv1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
 )
 
 //go:generate mockgen -source=helper.go -package=build -destination=mock_helper.go
 
 type Helper interface {
 	ApplyBuildArgOverrides(args []v1alpha1.BuildArg, overrides ...v1alpha1.BuildArg) []v1alpha1.BuildArg
-	GetRelevantBuild(mod ootov1alpha1.Module, km ootov1alpha1.KernelMapping) *ootov1alpha1.Build
+	GetRelevantBuild(mod kmmv1alpha1.Module, km kmmv1alpha1.KernelMapping) *kmmv1alpha1.Build
 }
 
 type helper struct{}
@@ -45,7 +45,7 @@ func (m *helper) ApplyBuildArgOverrides(args []v1alpha1.BuildArg, overrides ...v
 	return args
 }
 
-func (m *helper) GetRelevantBuild(mod ootov1alpha1.Module, km ootov1alpha1.KernelMapping) *ootov1alpha1.Build {
+func (m *helper) GetRelevantBuild(mod kmmv1alpha1.Module, km kmmv1alpha1.KernelMapping) *kmmv1alpha1.Build {
 	if mod.Spec.Build == nil {
 		// km.Build cannot be nil in case mod.Build is nil, checked above
 		return km.Build.DeepCopy()

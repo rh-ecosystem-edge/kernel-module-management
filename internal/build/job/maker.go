@@ -3,7 +3,7 @@ package job
 import (
 	"fmt"
 
-	ootov1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
+	kmmv1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
@@ -16,7 +16,7 @@ import (
 //go:generate mockgen -source=maker.go -package=job -destination=mock_maker.go
 
 type Maker interface {
-	MakeJob(mod ootov1alpha1.Module, buildConfig *ootov1alpha1.Build, targetKernel, containerImage string) (*batchv1.Job, error)
+	MakeJob(mod kmmv1alpha1.Module, buildConfig *kmmv1alpha1.Build, targetKernel, containerImage string) (*batchv1.Job, error)
 }
 
 type maker struct {
@@ -28,12 +28,12 @@ func NewMaker(helper build.Helper, scheme *runtime.Scheme) Maker {
 	return &maker{helper: helper, scheme: scheme}
 }
 
-func (m *maker) MakeJob(mod ootov1alpha1.Module, buildConfig *ootov1alpha1.Build, targetKernel, containerImage string) (*batchv1.Job, error) {
+func (m *maker) MakeJob(mod kmmv1alpha1.Module, buildConfig *kmmv1alpha1.Build, targetKernel, containerImage string) (*batchv1.Job, error) {
 	args := []string{"--destination", containerImage}
 
 	buildArgs := m.helper.ApplyBuildArgOverrides(
 		buildConfig.BuildArgs,
-		ootov1alpha1.BuildArg{Name: "KERNEL_VERSION", Value: targetKernel},
+		kmmv1alpha1.BuildArg{Name: "KERNEL_VERSION", Value: targetKernel},
 	)
 
 	for _, ba := range buildArgs {

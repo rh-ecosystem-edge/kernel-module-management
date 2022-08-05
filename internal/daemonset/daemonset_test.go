@@ -8,7 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	ootov1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
+	kmmv1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	appsv1 "k8s.io/api/apps/v1"
@@ -41,7 +41,7 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 
 	It("should return an error if the DaemonSet is nil", func() {
 		Expect(
-			dg.SetDriverContainerAsDesired(context.Background(), nil, "", ootov1alpha1.Module{}, ""),
+			dg.SetDriverContainerAsDesired(context.Background(), nil, "", kmmv1alpha1.Module{}, ""),
 		).To(
 			HaveOccurred(),
 		)
@@ -49,7 +49,7 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 
 	It("should return an error if the image is empty", func() {
 		Expect(
-			dg.SetDriverContainerAsDesired(context.Background(), &appsv1.DaemonSet{}, "", ootov1alpha1.Module{}, ""),
+			dg.SetDriverContainerAsDesired(context.Background(), &appsv1.DaemonSet{}, "", kmmv1alpha1.Module{}, ""),
 		).To(
 			HaveOccurred(),
 		)
@@ -57,15 +57,15 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 
 	It("should return an error if the kernel version is empty", func() {
 		Expect(
-			dg.SetDriverContainerAsDesired(context.Background(), &appsv1.DaemonSet{}, "", ootov1alpha1.Module{}, ""),
+			dg.SetDriverContainerAsDesired(context.Background(), &appsv1.DaemonSet{}, "", kmmv1alpha1.Module{}, ""),
 		).To(
 			HaveOccurred(),
 		)
 	})
 
 	It("should not add a device-plugin container if it is not set in the spec", func() {
-		mod := ootov1alpha1.Module{
-			Spec: ootov1alpha1.ModuleSpec{
+		mod := kmmv1alpha1.Module{
+			Spec: kmmv1alpha1.ModuleSpec{
 				Selector: map[string]string{"has-feature-x": "true"},
 			},
 		}
@@ -81,8 +81,8 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 	It("should add additional volumes if there are any", func() {
 		vol := v1.Volume{Name: "test-volume"}
 
-		mod := ootov1alpha1.Module{
-			Spec: ootov1alpha1.ModuleSpec{
+		mod := kmmv1alpha1.Module{
+			Spec: kmmv1alpha1.ModuleSpec{
 				AdditionalVolumes: []v1.Volume{vol},
 			},
 		}
@@ -113,16 +113,16 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 			MountPath: "/some/path",
 		}
 
-		mod := ootov1alpha1.Module{
+		mod := kmmv1alpha1.Module{
 			TypeMeta: metav1.TypeMeta{
-				APIVersion: ootov1alpha1.GroupVersion.String(),
+				APIVersion: kmmv1alpha1.GroupVersion.String(),
 				Kind:       "Module",
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      moduleName,
 				Namespace: namespace,
 			},
-			Spec: ootov1alpha1.ModuleSpec{
+			Spec: kmmv1alpha1.ModuleSpec{
 				DriverContainer: v1.Container{
 					VolumeMounts: []v1.VolumeMount{dcVolMount},
 				},
@@ -246,7 +246,7 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 
 			dc := NewCreator(clnt, kernelLabel, scheme)
 
-			mod := ootov1alpha1.Module{
+			mod := kmmv1alpha1.Module{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      moduleName,
 					Namespace: namespace,
@@ -262,7 +262,7 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 			clnt.EXPECT().List(context.Background(), gomock.Any(), gomock.Any()).Return(errors.New("some error"))
 
 			dc := NewCreator(clnt, kernelLabel, scheme)
-			mod := ootov1alpha1.Module{
+			mod := kmmv1alpha1.Module{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      moduleName,
 					Namespace: namespace,
@@ -281,7 +281,7 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 					Name:      "ds1",
 					Namespace: namespace,
 					Labels: map[string]string{
-						"oot.node.kubernetes.io/module.name": moduleName,
+						"kmm.node.kubernetes.io/module.name": moduleName,
 						kernelLabel:                          kernelVersion,
 					},
 				},
@@ -292,7 +292,7 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 					Name:      "ds2",
 					Namespace: namespace,
 					Labels: map[string]string{
-						"oot.node.kubernetes.io/module.name": moduleName,
+						"kmm.node.kubernetes.io/module.name": moduleName,
 						kernelLabel:                          otherKernelVersion,
 					},
 				},
@@ -307,7 +307,7 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 			)
 
 			dc := NewCreator(clnt, kernelLabel, scheme)
-			mod := ootov1alpha1.Module{
+			mod := kmmv1alpha1.Module{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      moduleName,
 					Namespace: namespace,
@@ -328,7 +328,7 @@ var _ = Describe("SetDevicePluginAsDesired", func() {
 
 	It("should return an error if the DaemonSet is nil", func() {
 		Expect(
-			dg.SetDevicePluginAsDesired(context.Background(), nil, &ootov1alpha1.Module{}),
+			dg.SetDevicePluginAsDesired(context.Background(), nil, &kmmv1alpha1.Module{}),
 		).To(
 			HaveOccurred(),
 		)
@@ -337,7 +337,7 @@ var _ = Describe("SetDevicePluginAsDesired", func() {
 	It("should return an error if DevicePlugin not set in the Spec", func() {
 		ds := appsv1.DaemonSet{}
 		Expect(
-			dg.SetDevicePluginAsDesired(context.Background(), &ds, &ootov1alpha1.Module{}),
+			dg.SetDevicePluginAsDesired(context.Background(), &ds, &kmmv1alpha1.Module{}),
 		).To(
 			HaveOccurred(),
 		)
@@ -346,8 +346,8 @@ var _ = Describe("SetDevicePluginAsDesired", func() {
 	It("should add additional volumes if there are any", func() {
 		vol := v1.Volume{Name: "test-volume"}
 
-		mod := ootov1alpha1.Module{
-			Spec: ootov1alpha1.ModuleSpec{
+		mod := kmmv1alpha1.Module{
+			Spec: kmmv1alpha1.ModuleSpec{
 				DevicePlugin: &v1.Container{
 					Image: devicePluginImage,
 				},
@@ -380,16 +380,16 @@ var _ = Describe("SetDevicePluginAsDesired", func() {
 			MountPath: "/some/path",
 		}
 
-		mod := ootov1alpha1.Module{
+		mod := kmmv1alpha1.Module{
 			TypeMeta: metav1.TypeMeta{
-				APIVersion: ootov1alpha1.GroupVersion.String(),
+				APIVersion: kmmv1alpha1.GroupVersion.String(),
 				Kind:       "Module",
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      moduleName,
 				Namespace: namespace,
 			},
-			Spec: ootov1alpha1.ModuleSpec{
+			Spec: kmmv1alpha1.ModuleSpec{
 				DriverContainer: v1.Container{
 					VolumeMounts: []v1.VolumeMount{dcVolMount},
 				},
@@ -562,7 +562,7 @@ var _ = Describe("ModuleDaemonSetsByKernelVersion", func() {
 
 	It("should return an error if two DaemonSets are present for the same kernel", func() {
 		dsLabels := map[string]string{
-			"oot.node.kubernetes.io/module.name": moduleName,
+			"kmm.node.kubernetes.io/module.name": moduleName,
 			kernelLabel:                          kernelVersion,
 		}
 
@@ -603,7 +603,7 @@ var _ = Describe("ModuleDaemonSetsByKernelVersion", func() {
 				Name:      "ds1",
 				Namespace: namespace,
 				Labels: map[string]string{
-					"oot.node.kubernetes.io/module.name": moduleName,
+					"kmm.node.kubernetes.io/module.name": moduleName,
 					kernelLabel:                          kernelVersion,
 				},
 			},
@@ -614,7 +614,7 @@ var _ = Describe("ModuleDaemonSetsByKernelVersion", func() {
 				Name:      "ds2",
 				Namespace: namespace,
 				Labels: map[string]string{
-					"oot.node.kubernetes.io/module.name": moduleName,
+					"kmm.node.kubernetes.io/module.name": moduleName,
 					kernelLabel:                          otherKernelVersion,
 				},
 			},
@@ -644,7 +644,7 @@ var _ = Describe("ModuleDaemonSetsByKernelVersion", func() {
 				Name:      "ds1",
 				Namespace: namespace,
 				Labels: map[string]string{
-					"oot.node.kubernetes.io/module.name": moduleName,
+					"kmm.node.kubernetes.io/module.name": moduleName,
 					kernelLabel:                          kernelVersion,
 				},
 			},
@@ -655,7 +655,7 @@ var _ = Describe("ModuleDaemonSetsByKernelVersion", func() {
 				Name:      "ds2",
 				Namespace: namespace,
 				Labels: map[string]string{
-					"oot.node.kubernetes.io/module.name": moduleName,
+					"kmm.node.kubernetes.io/module.name": moduleName,
 				},
 			},
 		}
@@ -682,7 +682,7 @@ var _ = Describe("ModuleDaemonSetsByKernelVersion", func() {
 var _ = Describe("GetPodPullSecrets", func() {
 	It("should return nil if the Module has no pull secret", func() {
 		Expect(
-			GetPodPullSecrets(ootov1alpha1.Module{}),
+			GetPodPullSecrets(kmmv1alpha1.Module{}),
 		).To(
 			BeNil(),
 		)
@@ -691,8 +691,8 @@ var _ = Describe("GetPodPullSecrets", func() {
 	It("should a list with the reference nil if the Module has no pull secret", func() {
 		lor := &v1.LocalObjectReference{Name: "test"}
 
-		mod := ootov1alpha1.Module{
-			Spec: ootov1alpha1.ModuleSpec{ImagePullSecret: lor},
+		mod := kmmv1alpha1.Module{
+			Spec: kmmv1alpha1.ModuleSpec{ImagePullSecret: lor},
 		}
 
 		Expect(

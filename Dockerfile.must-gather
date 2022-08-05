@@ -6,10 +6,10 @@ RUN microdnf update -y \
     && microdnf install -y tar rsync findutils gzip iproute util-linux \
     && microdnf clean all
 
-LABEL org.opencontainers.image.title=oot-operator-must-gather
+LABEL org.opencontainers.image.title=kmm-operator-must-gather
 LABEL org.opencontainers.image.description="Must-gather image for KMMO"
-LABEL org.opencontainers.image.url=https://github.com/qbarrand/oot-operator
-LABEL org.opencontainers.image.source=https://github.com/qbarrand/oot-operator
+LABEL org.opencontainers.image.url=https://github.com/rh-ecosystem-edge/kernel-module-management
+LABEL org.opencontainers.image.source=https://github.com/rh-ecosystem-edge/kernel-module-management
 LABEL org.opencontainers.image.version=main
 
 # Copy oc binary

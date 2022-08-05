@@ -15,7 +15,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/crane"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
-	ootov1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
+	kmmv1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -39,7 +39,7 @@ type RepoPullConfig struct {
 //go:generate mockgen -source=registry.go -package=registry -destination=mock_registry_api.go
 
 type Registry interface {
-	ImageExists(ctx context.Context, image string, po ootov1alpha1.PullOptions, registryAuthGetter auth.RegistryAuthGetter) (bool, error)
+	ImageExists(ctx context.Context, image string, po kmmv1alpha1.PullOptions, registryAuthGetter auth.RegistryAuthGetter) (bool, error)
 	ExtractToolkitRelease(v1.Layer) (*DriverToolkitEntry, error)
 	GetLayersDigests(ctx context.Context, image string, registryAuthGetter auth.RegistryAuthGetter) ([]string, *RepoPullConfig, error)
 	GetLayerByDigest(digest string, pullConfig *RepoPullConfig) (v1.Layer, error)
@@ -51,7 +51,7 @@ func NewRegistry() Registry {
 	return &registry{}
 }
 
-func (r *registry) ImageExists(ctx context.Context, image string, po ootov1alpha1.PullOptions, registryAuthGetter auth.RegistryAuthGetter) (bool, error) {
+func (r *registry) ImageExists(ctx context.Context, image string, po kmmv1alpha1.PullOptions, registryAuthGetter auth.RegistryAuthGetter) (bool, error) {
 	pullConfig, err := r.getPullOptions(ctx, image, &po, registryAuthGetter)
 	if err != nil {
 		return false, fmt.Errorf("failed to get pull options for image %s: %w", image, err)
@@ -114,7 +114,7 @@ func (r *registry) ExtractToolkitRelease(layer v1.Layer) (*DriverToolkitEntry, e
 	return dtk, nil
 }
 
-func (r *registry) getPullOptions(ctx context.Context, image string, po *ootov1alpha1.PullOptions, registryAuthGetter auth.RegistryAuthGetter) (*RepoPullConfig, error) {
+func (r *registry) getPullOptions(ctx context.Context, image string, po *kmmv1alpha1.PullOptions, registryAuthGetter auth.RegistryAuthGetter) (*RepoPullConfig, error) {
 	var repo string
 	if hash := strings.Split(image, "@"); len(hash) > 1 {
 		repo = hash[0]

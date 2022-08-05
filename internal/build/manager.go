@@ -3,7 +3,7 @@ package build
 import (
 	"context"
 
-	ootov1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
+	kmmv1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
 )
 
 type Status string
@@ -22,5 +22,5 @@ type Result struct {
 //go:generate mockgen -source=manager.go -package=build -destination=mock_manager.go
 
 type Manager interface {
-	Sync(ctx context.Context, mod ootov1alpha1.Module, m ootov1alpha1.KernelMapping, targetKernel string) (Result, error)
+	Sync(ctx context.Context, mod kmmv1alpha1.Module, m kmmv1alpha1.KernelMapping, targetKernel string) (Result, error)
 }

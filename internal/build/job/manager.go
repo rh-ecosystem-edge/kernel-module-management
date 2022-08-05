@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	ootov1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
+	kmmv1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
@@ -34,14 +34,14 @@ func NewBuildManager(client client.Client, registry registry.Registry, maker Mak
 	}
 }
 
-func labels(mod ootov1alpha1.Module, targetKernel string) map[string]string {
+func labels(mod kmmv1alpha1.Module, targetKernel string) map[string]string {
 	return map[string]string{
 		constants.ModuleNameLabel:    mod.Name,
 		constants.TargetKernelTarget: targetKernel,
 	}
 }
 
-func (jbm *jobManager) getJob(ctx context.Context, mod ootov1alpha1.Module, targetKernel string) (*batchv1.Job, error) {
+func (jbm *jobManager) getJob(ctx context.Context, mod kmmv1alpha1.Module, targetKernel string) (*batchv1.Job, error) {
 	jobList := batchv1.JobList{}
 
 	opts := []client.ListOption{
@@ -62,7 +62,7 @@ func (jbm *jobManager) getJob(ctx context.Context, mod ootov1alpha1.Module, targ
 	return &jobList.Items[0], nil
 }
 
-func (jbm *jobManager) Sync(ctx context.Context, mod ootov1alpha1.Module, m ootov1alpha1.KernelMapping, targetKernel string) (build.Result, error) {
+func (jbm *jobManager) Sync(ctx context.Context, mod kmmv1alpha1.Module, m kmmv1alpha1.KernelMapping, targetKernel string) (build.Result, error) {
 	logger := log.FromContext(ctx)
 
 	buildConfig := jbm.helper.GetRelevantBuild(mod, m)

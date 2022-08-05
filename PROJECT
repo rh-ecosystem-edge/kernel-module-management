@@ -4,16 +4,16 @@ layout:
 plugins:
   manifests.sdk.operatorframework.io/v2: {}
   scorecard.sdk.operatorframework.io/v2: {}
-projectName: oot-operator
-repo: github.com/qbarrand/oot-operator
+projectName: kmm-operator
+repo: github.com/rh-ecosystem-edge/kernel-module-management
 resources:
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
   domain: sigs.k8s.io
-  group: ooto
+  group: kmm
   kind: Module
-  path: github.com/qbarrand/oot-operator/api/v1alpha1
+  path: github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1
   version: v1alpha1
 version: "3"

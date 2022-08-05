@@ -3,7 +3,7 @@
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 OUTPUT_DIR="${OUTPUT_DIR:-must-gather/${TIMESTAMP}}"
 
-NS="${NS:-oot-operator-system}"
+NS="${NS:-kmm-operator-system}"
 
 mkdir -p "$OUTPUT_DIR"
 
@@ -19,21 +19,21 @@ for resource in $(oc get all -n "$NS" --no-headers | awk '{print $1}'); do
   oc -n "$NS" describe "$resource" > "$describeFile"
 done
 
-echo "Collecting logs from 'deployment/oot-operator-controller-manager'"
-oc -n "$NS" logs "deployment/oot-operator-controller-manager" > "${OUTPUT_DIR}/oot-operator-controller-manager.log"
+echo "Collecting logs from 'deployment/kmm-operator-controller-manager'"
+oc -n "$NS" logs "deployment/kmm-operator-controller-manager" > "${OUTPUT_DIR}/kmm-operator-controller-manager.log"
 
-echo "Inspecting modules.ooto.sigs.k8s.io in all the namespaces"
-oc adm inspect -A crd/modules.ooto.sigs.k8s.io  --dest-dir="$OUTPUT_DIR/inspect"
+echo "Inspecting modules.kmm.sigs.k8s.io in all the namespaces"
+oc adm inspect -A crd/modules.kmm.sigs.k8s.io  --dest-dir="$OUTPUT_DIR/inspect"
 
 echo "Inspecting all Modules in all namespaces"
-oc adm inspect -A modules.ooto.sigs.k8s.io --dest-dir="$OUTPUT_DIR/inspect"
+oc adm inspect -A modules.kmm.sigs.k8s.io --dest-dir="$OUTPUT_DIR/inspect"
 
-for ns in $(oc get daemonset -A -l oot.node.kubernetes.io/module.name --no-headers -o custom-columns="NS:.metadata.namespace"); do
+for ns in $(oc get daemonset -A -l kmm.node.kubernetes.io/module.name --no-headers -o custom-columns="NS:.metadata.namespace"); do
   echo "Inspecting DaemonSet in '${ns}' namespace"
   oc adm inspect -n "$ns" daemonset.apps --dest-dir="$OUTPUT_DIR/inspect"
 done
 
-for ns in $(oc get job -A -l oot.node.kubernetes.io/module.name --no-headers -o custom-columns="NS:.metadata.namespace"); do
+for ns in $(oc get job -A -l kmm.node.kubernetes.io/module.name --no-headers -o custom-columns="NS:.metadata.namespace"); do
   echo "Inspecting job in '${ns}' namespace"
   oc adm inspect -n "$ns" job.batch --dest-dir="$OUTPUT_DIR/inspect"
 done

@@ -5,9 +5,9 @@ metadata:
     api-approved.kubernetes.io: unapproved, testing-only
     controller-gen.kubebuilder.io/version: v0.8.0
   creationTimestamp: null
-  name: modules.ooto.sigs.k8s.io
+  name: modules.kmm.sigs.k8s.io
 spec:
-  group: ooto.sigs.k8s.io
+  group: kmm.sigs.k8s.io
   names:
     kind: Module
     listKind: ModuleList

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	ootov1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
+	kmmv1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -32,8 +32,8 @@ const (
 type DaemonSetCreator interface {
 	GarbageCollect(ctx context.Context, existingDS map[string]*appsv1.DaemonSet, validKernels sets.String) ([]string, error)
 	ModuleDaemonSetsByKernelVersion(ctx context.Context, name, namespace string) (map[string]*appsv1.DaemonSet, error)
-	SetDriverContainerAsDesired(ctx context.Context, ds *appsv1.DaemonSet, image string, mod ootov1alpha1.Module, kernelVersion string) error
-	SetDevicePluginAsDesired(ctx context.Context, ds *appsv1.DaemonSet, mod *ootov1alpha1.Module) error
+	SetDriverContainerAsDesired(ctx context.Context, ds *appsv1.DaemonSet, image string, mod kmmv1alpha1.Module, kernelVersion string) error
+	SetDevicePluginAsDesired(ctx context.Context, ds *appsv1.DaemonSet, mod *kmmv1alpha1.Module) error
 	GetNodeLabelFromPod(pod *v1.Pod, moduleName string) string
 }
 
@@ -89,7 +89,7 @@ func (dc *daemonSetGenerator) ModuleDaemonSetsByKernelVersion(ctx context.Contex
 	return dsByKernelVersion, nil
 }
 
-func (dc *daemonSetGenerator) SetDriverContainerAsDesired(ctx context.Context, ds *appsv1.DaemonSet, image string, mod ootov1alpha1.Module, kernelVersion string) error {
+func (dc *daemonSetGenerator) SetDriverContainerAsDesired(ctx context.Context, ds *appsv1.DaemonSet, image string, mod kmmv1alpha1.Module, kernelVersion string) error {
 	if ds == nil {
 		return errors.New("ds cannot be nil")
 	}
@@ -174,7 +174,7 @@ func (dc *daemonSetGenerator) SetDriverContainerAsDesired(ctx context.Context, d
 	return controllerutil.SetControllerReference(&mod, ds, dc.scheme)
 }
 
-func (dc *daemonSetGenerator) SetDevicePluginAsDesired(ctx context.Context, ds *appsv1.DaemonSet, mod *ootov1alpha1.Module) error {
+func (dc *daemonSetGenerator) SetDevicePluginAsDesired(ctx context.Context, ds *appsv1.DaemonSet, mod *kmmv1alpha1.Module) error {
 	if ds == nil {
 		return errors.New("ds cannot be nil")
 	}
@@ -274,11 +274,11 @@ func CopyMapStringString(m map[string]string) map[string]string {
 }
 
 func getDriverContainerNodeLabel(moduleName string) string {
-	return fmt.Sprintf("oot.node.kubernetes.io/%s.ready", moduleName)
+	return fmt.Sprintf("kmm.node.kubernetes.io/%s.ready", moduleName)
 }
 
 func getDevicePluginNodeLabel(moduleName string) string {
-	return fmt.Sprintf("oot.node.kubernetes.io/%s.device-plugin-ready", moduleName)
+	return fmt.Sprintf("kmm.node.kubernetes.io/%s.device-plugin-ready", moduleName)
 }
 
 func IsDevicePluginKernelVersion(kernelVersion string) bool {
@@ -289,7 +289,7 @@ func GetDevicePluginKernelVersion() string {
 	return devicePluginKernelVersion
 }
 
-func GetPodPullSecrets(mod ootov1alpha1.Module) []v1.LocalObjectReference {
+func GetPodPullSecrets(mod kmmv1alpha1.Module) []v1.LocalObjectReference {
 	var pullSecrets []v1.LocalObjectReference
 
 	if ips := mod.Spec.ImagePullSecret; ips != nil {
