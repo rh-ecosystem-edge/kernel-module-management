@@ -23,14 +23,14 @@ import (
 	"os"
 	"runtime/debug"
 
-	"github.com/qbarrand/oot-operator/internal/build"
-	"github.com/qbarrand/oot-operator/internal/build/job"
-	"github.com/qbarrand/oot-operator/internal/daemonset"
-	"github.com/qbarrand/oot-operator/internal/filter"
-	"github.com/qbarrand/oot-operator/internal/metrics"
-	"github.com/qbarrand/oot-operator/internal/module"
-	"github.com/qbarrand/oot-operator/internal/registry"
-	"github.com/qbarrand/oot-operator/internal/statusupdater"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build/job"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/daemonset"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2/klogr"
 
@@ -38,8 +38,8 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	ootov1alpha1 "github.com/qbarrand/oot-operator/api/v1alpha1"
-	"github.com/qbarrand/oot-operator/controllers"
+	ootov1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/controllers"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"

@@ -1,10 +1,10 @@
 package build
 
 import (
-	"github.com/qbarrand/oot-operator/api/v1alpha1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	ootov1alpha1 "github.com/qbarrand/oot-operator/api/v1alpha1"
+	ootov1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
 )
 
 //go:generate mockgen -source=helper.go -package=build -destination=mock_helper.go

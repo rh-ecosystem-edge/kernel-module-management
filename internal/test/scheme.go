@@ -1,7 +1,7 @@
 package test
 
 import (
-	ootov1alpha1 "github.com/qbarrand/oot-operator/api/v1alpha1"
+	ootov1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 )

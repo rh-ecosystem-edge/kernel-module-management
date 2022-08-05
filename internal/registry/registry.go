@@ -15,8 +15,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/crane"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
-	ootov1alpha1 "github.com/qbarrand/oot-operator/api/v1alpha1"
-	"github.com/qbarrand/oot-operator/internal/auth"
+	ootov1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 

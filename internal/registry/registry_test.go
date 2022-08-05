@@ -14,8 +14,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	ootov1alpha1 "github.com/qbarrand/oot-operator/api/v1alpha1"
-	"github.com/qbarrand/oot-operator/internal/auth"
+	ootov1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 

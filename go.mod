@@ -1,4 +1,4 @@
-module github.com/qbarrand/oot-operator
+module github.com/rh-ecosystem-edge/kernel-module-management
 
 go 1.18
 

@@ -8,7 +8,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	v1alpha1 "github.com/qbarrand/oot-operator/api/v1alpha1"
+	v1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 )
 
