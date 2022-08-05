@@ -1,0 +1,15 @@
+#!/bin/sh
+
+set -euxo pipefail
+
+: "${BINDIR}"
+
+TMPDIR=$(mktemp -d)
+OS=$(go env GOOS)
+ARCH=$(go env GOARCH)
+
+curl -L https://github.com/golangci/golangci-lint/releases/download/v1.48.0/golangci-lint-1.48.0-${OS}-${ARCH}.tar.gz | tar xvz -C "${TMPDIR}"
+
+mv "${TMPDIR}/golangci-lint-1.48.0-${OS}-${ARCH}/golangci-lint" "${BINDIR}"
+
+rm -fr "${TMPDIR}"

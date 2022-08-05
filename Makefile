@@ -117,7 +117,7 @@ unit-test: vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test $(TEST) -coverprofile cover.out
 
 .PHONY: lint
-lint: golangci-lint ## Run golangci-lint against code.
+lint: $(GOLANGCI_LINT) ## Run golangci-lint against code.
 	@if [ `gofmt -l . | wc -l` -ne 0 ]; then \
 		echo There are some malformed files, please make sure to run \'make fmt\'; \
 		exit 1; \
@@ -181,9 +181,8 @@ controller-gen: ## Download controller-gen locally if necessary.
 	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.8.0)
 
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
-.PHONY: golangci-lint
-golangci-lint: ## Download golangci-lint locally if necessary.
-	$(call go-get-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.46.2)
+$(GOLANGCI_LINT): ## Download golangci-lint locally if necessary.
+	BINDIR=bin ./scripts/download-golangci-lint
 
 .PHONY: mockgen
 mockgen: ## Install mockgen locally.
