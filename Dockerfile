@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM golang:1.18 as builder
+FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.18-openshift-4.11 as builder
 
 WORKDIR /workspace
 
@@ -7,9 +7,8 @@ WORKDIR /workspace
 COPY go.mod go.mod
 COPY go.sum go.sum
 
-# cache deps before building and copying source so that we don't need to re-download as much
-# and so that source changes don't invalidate our downloaded layer
-RUN go mod download
+# Add the vendored dependencies
+COPY vendor vendor
 
 # Copy the go source
 COPY main.go main.go
@@ -19,7 +18,6 @@ COPY internal internal
 
 # Copy Makefile
 COPY Makefile Makefile
-COPY docs.mk docs.mk
 
 # Copy the .git directory which is needed to store the build info
 COPY .git .git
@@ -27,11 +25,10 @@ COPY .git .git
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 make manager
 
-# Use distroless as minimal base image to package the manager binary
-# Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/static:nonroot
+FROM registry.ci.openshift.org/ocp/4.11:base
 WORKDIR /
 COPY --from=builder /workspace/manager .
-USER 65532:65532
+RUN useradd -r kmm
+USER kmm:kmm
 
 ENTRYPOINT ["/manager"]
