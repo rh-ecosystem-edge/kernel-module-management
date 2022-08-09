@@ -180,8 +180,9 @@ controller-gen: ## Download controller-gen locally if necessary.
 	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.8.0)
 
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
-$(GOLANGCI_LINT): ## Download golangci-lint locally if necessary.
-	BINDIR=bin ./scripts/download-golangci-lint
+.PHONY: golangci-lint
+golangci-lint: ## Download golangci-lint locally if necessary.
+	$(call go-get-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.46.2)
 
 .PHONY: mockgen
 mockgen: ## Install mockgen locally.
