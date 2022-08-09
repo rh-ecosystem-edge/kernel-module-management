@@ -114,9 +114,10 @@ TEST ?= ./...
 unit-test: vet ## Run tests.
 	go test $(TEST) -coverprofile cover.out
 
+GOFILES_NO_VENDOR = $(shell find . -type f -name '*.go' -not -path "./vendor/*")
 .PHONY: lint
 lint: $(GOLANGCI_LINT) ## Run golangci-lint against code.
-	@if [ `gofmt -l . | wc -l` -ne 0 ]; then \
+	@if [ `gofmt -l $(GOFILES_NO_VENDOR) | wc -l` -ne 0 ]; then \
 		echo There are some malformed files, please make sure to run \'make fmt\'; \
 		exit 1; \
 	fi
