@@ -116,9 +116,10 @@ unit-test: vet ## Run tests.
 
 GOFILES_NO_VENDOR = $(shell find . -type f -name '*.go' -not -path "./vendor/*")
 .PHONY: lint
-lint: $(GOLANGCI_LINT) ## Run golangci-lint against code.
+lint: golangci-lint ## Run golangci-lint against code.
 	@if [ `gofmt -l $(GOFILES_NO_VENDOR) | wc -l` -ne 0 ]; then \
 		echo There are some malformed files, please make sure to run \'make fmt\'; \
+		gofmt -l $(GOFILES_NO_VENDOR); \
 		exit 1; \
 	fi
 	$(GOLANGCI_LINT) run -v --timeout 5m0s
@@ -180,8 +181,9 @@ controller-gen: ## Download controller-gen locally if necessary.
 	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.8.0)
 
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
-$(GOLANGCI_LINT): ## Download golangci-lint locally if necessary.
-	BINDIR=bin ./scripts/download-golangci-lint
+.PHONY: golangci-lint
+golangci-lint: ## Download golangci-lint locally if necessary.
+	$(call go-get-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.46.2)
 
 .PHONY: mockgen
 mockgen: ## Install mockgen locally.
