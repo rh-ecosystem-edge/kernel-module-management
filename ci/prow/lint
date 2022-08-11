@@ -2,4 +2,7 @@
 
 set -euxo pipefail
 
-make lint
+export GOCACHE=/tmp
+export GOLANGCI_LINT_CACHE=/tmp
+
+make lint GOLANGCI_LINT=/usr/bin/golangci-lint
