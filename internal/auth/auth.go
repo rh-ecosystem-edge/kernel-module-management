@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn/kubernetes"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	k8s "k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -20,13 +21,6 @@ type RegistryAuthGetter interface {
 type registrySecretAuthGetter struct {
 	client         client.Client
 	namespacedName types.NamespacedName
-}
-
-func NewRegistryAuthGetter(client client.Client, namespacedName types.NamespacedName) RegistryAuthGetter {
-	return &registrySecretAuthGetter{
-		client:         client,
-		namespacedName: namespacedName,
-	}
 }
 
 func (rsag *registrySecretAuthGetter) GetKeyChain(ctx context.Context) (authn.Keychain, error) {
@@ -42,4 +36,50 @@ func (rsag *registrySecretAuthGetter) GetKeyChain(ctx context.Context) (authn.Ke
 	}
 
 	return keychain, nil
+}
+
+type serviceAccountRegistryAuthGetter struct {
+	coreClientSet      k8s.Interface
+	namespace          string
+	serviceAccountName string
+}
+
+func (sarag *serviceAccountRegistryAuthGetter) GetKeyChain(ctx context.Context) (authn.Keychain, error) {
+	opts := kubernetes.Options{
+		Namespace:          sarag.namespace,
+		ServiceAccountName: sarag.serviceAccountName,
+	}
+
+	keychain, err := kubernetes.New(ctx, sarag.coreClientSet, opts)
+	if err != nil {
+		return nil, fmt.Errorf("could not get the service account's pull secrets: %v", err)
+	}
+
+	return keychain, nil
+}
+
+type RegistryAuthGetterFactory interface {
+	NewRegistryAuthGetter(client client.Client, namespacedName types.NamespacedName) RegistryAuthGetter
+	NewServiceAccountRegistryAuthGetter(coreClientSet k8s.Interface, namespace, serviceAccountName string) RegistryAuthGetter
+}
+
+type registryAuthGetterFactory struct{}
+
+func NewRegistryAuthGetterFactory() RegistryAuthGetterFactory {
+	return registryAuthGetterFactory{}
+}
+
+func (registryAuthGetterFactory) NewRegistryAuthGetter(client client.Client, namespacedName types.NamespacedName) RegistryAuthGetter {
+	return &registrySecretAuthGetter{
+		client:         client,
+		namespacedName: namespacedName,
+	}
+}
+
+func (registryAuthGetterFactory) NewServiceAccountRegistryAuthGetter(coreClientSet k8s.Interface, namespace, serviceAccountName string) RegistryAuthGetter {
+	return &serviceAccountRegistryAuthGetter{
+		coreClientSet:      coreClientSet,
+		namespace:          namespace,
+		serviceAccountName: serviceAccountName,
+	}
 }

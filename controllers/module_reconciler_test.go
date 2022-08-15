@@ -10,6 +10,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/daemonset"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
@@ -22,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/kubernetes/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -71,7 +73,18 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 				apierrors.NewNotFound(schema.GroupResource{}, moduleName),
 			)
 
-		mr := NewModuleReconciler(clnt, mockBM, mockDC, mockKM, mockMetrics, nil, mockRegistry, mockSU)
+		mr := NewModuleReconciler(
+			clnt,
+			nil,
+			mockBM,
+			mockDC,
+			mockKM,
+			mockMetrics,
+			nil,
+			mockRegistry,
+			nil,
+			mockSU)
+
 		Expect(
 			mr.Reconcile(ctx, req),
 		).To(
@@ -113,7 +126,18 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			),
 		)
 
-		mr := NewModuleReconciler(clnt, mockBM, mockDC, mockKM, mockMetrics, nil, mockRegistry, mockSU)
+		mr := NewModuleReconciler(
+			clnt,
+			nil,
+			mockBM,
+			mockDC,
+			mockKM,
+			mockMetrics,
+			nil,
+			mockRegistry,
+			nil,
+			mockSU,
+		)
 
 		dsByKernelVersion := make(map[string]*appsv1.DaemonSet)
 
@@ -171,7 +195,18 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			),
 		)
 
-		mr := NewModuleReconciler(clnt, mockBM, mockDC, mockKM, mockMetrics, nil, mockRegistry, mockSU)
+		mr := NewModuleReconciler(
+			clnt,
+			nil,
+			mockBM,
+			mockDC,
+			mockKM,
+			mockMetrics,
+			nil,
+			mockRegistry,
+			nil,
+			mockSU,
+		)
 
 		dsByKernelVersion := map[string]*appsv1.DaemonSet{kernelVersion: &ds}
 
@@ -232,7 +267,18 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 
 		dsByKernelVersion := make(map[string]*appsv1.DaemonSet)
 
-		mr := NewModuleReconciler(clnt, mockBM, mockDC, mockKM, mockMetrics, nil, mockRegistry, mockSU)
+		mr := NewModuleReconciler(
+			clnt,
+			nil,
+			mockBM,
+			mockDC,
+			mockKM,
+			mockMetrics,
+			nil,
+			mockRegistry,
+			nil,
+			mockSU,
+		)
 
 		ds := appsv1.DaemonSet{
 			ObjectMeta: metav1.ObjectMeta{
@@ -361,7 +407,18 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			clnt.EXPECT().Patch(ctx, gomock.Any(), gomock.Any()),
 		)
 
-		mr := NewModuleReconciler(clnt, mockBM, mockDC, mockKM, mockMetrics, nil, mockRegistry, mockSU)
+		mr := NewModuleReconciler(
+			clnt,
+			nil,
+			mockBM,
+			mockDC,
+			mockKM,
+			mockMetrics,
+			nil,
+			mockRegistry,
+			nil,
+			mockSU,
+		)
 
 		dsByKernelVersion := map[string]*appsv1.DaemonSet{kernelVersion: &ds}
 
@@ -412,7 +469,18 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			},
 		}
 
-		mr := NewModuleReconciler(clnt, mockBM, mockDC, mockKM, mockMetrics, nil, mockRegistry, mockSU)
+		mr := NewModuleReconciler(
+			clnt,
+			nil,
+			mockBM,
+			mockDC,
+			mockKM,
+			mockMetrics,
+			nil,
+			mockRegistry,
+			nil,
+			mockSU,
+		)
 
 		ds := appsv1.DaemonSet{
 			ObjectMeta: metav1.ObjectMeta{
@@ -459,19 +527,23 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 
 var _ = Describe("ModuleReconciler_handleBuild", func() {
 	var (
-		ctrl         *gomock.Controller
-		clnt         *client.MockClient
-		mockBM       *build.MockManager
-		mockDC       *daemonset.MockDaemonSetCreator
-		mockKM       *module.MockKernelMapper
-		mockMetrics  *metrics.MockMetrics
-		mockSU       *statusupdater.MockModuleStatusUpdater
-		mockRegistry *registry.MockRegistry
+		authGetter      = &auth.MockRegistryAuthGetter{}
+		ctrl            *gomock.Controller
+		clnt            *client.MockClient
+		fakeClientSet   = fake.NewSimpleClientset()
+		mockAuthFactory *auth.MockRegistryAuthGetterFactory
+		mockBM          *build.MockManager
+		mockDC          *daemonset.MockDaemonSetCreator
+		mockKM          *module.MockKernelMapper
+		mockMetrics     *metrics.MockMetrics
+		mockSU          *statusupdater.MockModuleStatusUpdater
+		mockRegistry    *registry.MockRegistry
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
+		mockAuthFactory = auth.NewMockRegistryAuthGetterFactory(ctrl)
 		mockBM = build.NewMockManager(ctrl)
 		mockDC = daemonset.NewMockDaemonSetCreator(ctrl)
 		mockKM = module.NewMockKernelMapper(ctrl)
@@ -494,14 +566,27 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 
 		mod := &kmmv1beta1.Module{}
 
-		mr := NewModuleReconciler(clnt, mockBM, mockDC, mockKM, mockMetrics, nil, mockRegistry, mockSU)
+		mr := NewModuleReconciler(
+			clnt,
+			nil,
+			mockBM,
+			mockDC,
+			mockKM,
+			mockMetrics,
+			nil,
+			mockRegistry,
+			nil,
+			mockSU,
+		)
 
 		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(BeFalse())
 	})
 
-	It("Build present, image exists", func() {
+	It("Build present, image exists, push secret specified", func() {
+		const secretName = "pull-push-secret"
+
 		km := &kmmv1beta1.KernelMapping{
 			ContainerImage: imageName,
 			Literal:        kernelVersion,
@@ -513,18 +598,82 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 				Namespace: namespace,
 			},
 			Spec: kmmv1beta1.ModuleSpec{
-				ImageRepoSecret: &v1.LocalObjectReference{Name: "pull-push-secret"},
+				ImageRepoSecret: &v1.LocalObjectReference{Name: secretName},
 			},
 		}
 
-		mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, gomock.Any()).DoAndReturn(
-			func(_ interface{}, _ interface{}, _ interface{}, registryAuthGetter auth.RegistryAuthGetter) (bool, error) {
-				Expect(registryAuthGetter).ToNot(BeNil())
-				return true, nil
-			},
+		authGetter := &auth.MockRegistryAuthGetter{}
+
+		gomock.InOrder(
+			mockAuthFactory.
+				EXPECT().
+				NewRegistryAuthGetter(clnt, types.NamespacedName{Name: secretName, Namespace: namespace}).
+				Return(authGetter),
+			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, authGetter).DoAndReturn(
+				func(_ interface{}, _ interface{}, _ interface{}, registryAuthGetter auth.RegistryAuthGetter) (bool, error) {
+					Expect(registryAuthGetter).ToNot(BeNil())
+					return true, nil
+				},
+			),
 		)
 
-		mr := NewModuleReconciler(clnt, mockBM, mockDC, mockKM, mockMetrics, nil, mockRegistry, mockSU)
+		mr := NewModuleReconciler(
+			clnt,
+			fakeClientSet,
+			mockBM,
+			mockDC,
+			mockKM,
+			mockMetrics,
+			nil,
+			mockRegistry,
+			mockAuthFactory,
+			mockSU,
+		)
+
+		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res).To(BeFalse())
+	})
+
+	It("Build present, image exists, no push secret", func() {
+		km := &kmmv1beta1.KernelMapping{
+			ContainerImage: imageName,
+			Literal:        kernelVersion,
+			Build:          &kmmv1beta1.Build{},
+		}
+		mod := &kmmv1beta1.Module{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      moduleName,
+				Namespace: namespace,
+			},
+		}
+
+		gomock.InOrder(
+			mockAuthFactory.
+				EXPECT().
+				NewServiceAccountRegistryAuthGetter(fakeClientSet, namespace, constants.OCPBuilderServiceAccountName).
+				Return(authGetter),
+			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, authGetter).DoAndReturn(
+				func(_ interface{}, _ interface{}, _ interface{}, registryAuthGetter auth.RegistryAuthGetter) (bool, error) {
+					Expect(registryAuthGetter).ToNot(BeNil())
+					return true, nil
+				},
+			),
+		)
+
+		mr := NewModuleReconciler(
+			clnt,
+			fakeClientSet,
+			mockBM,
+			mockDC,
+			mockKM,
+			mockMetrics,
+			nil,
+			mockRegistry,
+			mockAuthFactory,
+			mockSU,
+		)
+
 		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(BeFalse())
@@ -545,12 +694,28 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 		}
 		buildRes := build.Result{Requeue: true, Status: build.StatusCreated}
 		gomock.InOrder(
-			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, gomock.Any()).Return(false, nil),
+			mockAuthFactory.
+				EXPECT().
+				NewServiceAccountRegistryAuthGetter(fakeClientSet, namespace, constants.OCPBuilderServiceAccountName).
+				Return(authGetter),
+			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, authGetter).Return(false, nil),
 			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any()).Return(buildRes, nil),
 			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, kernelVersion, metrics.BuildStage, false),
 		)
 
-		mr := NewModuleReconciler(clnt, mockBM, mockDC, mockKM, mockMetrics, nil, mockRegistry, mockSU)
+		mr := NewModuleReconciler(
+			clnt,
+			fakeClientSet,
+			mockBM,
+			mockDC,
+			mockKM,
+			mockMetrics,
+			nil,
+			mockRegistry,
+			mockAuthFactory,
+			mockSU,
+		)
+
 		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(BeTrue())
@@ -571,12 +736,28 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 		}
 		buildRes := build.Result{Requeue: true, Status: build.StatusCreated}
 		gomock.InOrder(
-			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, gomock.Any()).Return(false, nil),
+			mockAuthFactory.
+				EXPECT().
+				NewServiceAccountRegistryAuthGetter(fakeClientSet, namespace, constants.OCPBuilderServiceAccountName).
+				Return(authGetter),
+			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, authGetter).Return(false, nil),
 			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any()).Return(buildRes, nil),
 			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, kernelVersion, metrics.BuildStage, false),
 		)
 
-		mr := NewModuleReconciler(clnt, mockBM, mockDC, mockKM, mockMetrics, nil, mockRegistry, mockSU)
+		mr := NewModuleReconciler(
+			clnt,
+			fakeClientSet,
+			mockBM,
+			mockDC,
+			mockKM,
+			mockMetrics,
+			nil,
+			mockRegistry,
+			mockAuthFactory,
+			mockSU,
+		)
+
 		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(BeTrue())
@@ -597,12 +778,28 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 		}
 		buildRes := build.Result{Requeue: false, Status: build.StatusCompleted}
 		gomock.InOrder(
-			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, gomock.Any()).Return(false, nil),
+			mockAuthFactory.
+				EXPECT().
+				NewServiceAccountRegistryAuthGetter(fakeClientSet, namespace, constants.OCPBuilderServiceAccountName).
+				Return(authGetter),
+			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, authGetter).Return(false, nil),
 			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any()).Return(buildRes, nil),
 			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, kernelVersion, metrics.BuildStage, true),
 		)
 
-		mr := NewModuleReconciler(clnt, mockBM, mockDC, mockKM, mockMetrics, nil, mockRegistry, mockSU)
+		mr := NewModuleReconciler(
+			clnt,
+			fakeClientSet,
+			mockBM,
+			mockDC,
+			mockKM,
+			mockMetrics,
+			nil,
+			mockRegistry,
+			mockAuthFactory,
+			mockSU,
+		)
+
 		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(BeFalse())

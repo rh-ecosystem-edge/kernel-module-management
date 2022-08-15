@@ -23,8 +23,10 @@ import (
 	"os"
 	"runtime/debug"
 
+	buildv1 "github.com/openshift/api/build/v1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build/job"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build/buildconfig"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/daemonset"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
@@ -32,6 +34,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2/klogr"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -65,6 +68,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(kmmv1beta1.AddToScheme(scheme))
+	utilruntime.Must(buildv1.Install(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -102,7 +106,9 @@ func main() {
 
 	setupLogger.Info("Creating manager", "git commit", commit)
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	restConfig := ctrl.GetConfigOrDie()
+
+	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
 		Port:                   9443,
@@ -151,15 +157,27 @@ func main() {
 
 	metricsAPI := metrics.New()
 	metricsAPI.Register()
-	registryAPI := registry.NewRegistry()
 	helperAPI := build.NewHelper()
-	makerAPI := job.NewMaker(helperAPI, scheme)
-	buildAPI := job.NewBuildManager(client, makerAPI, helperAPI)
+	buildAPI := buildconfig.NewManager(
+		client,
+		buildconfig.NewMaker(helperAPI, scheme),
+		buildconfig.NewOpenShiftBuildsHelper(client),
+	)
 	daemonAPI := daemonset.NewCreator(client, kernelLabel, scheme)
 	kernelAPI := module.NewKernelMapper()
 	moduleStatusUpdaterAPI := statusupdater.NewModuleStatusUpdater(client, daemonAPI, metricsAPI)
 
-	mc := controllers.NewModuleReconciler(client, buildAPI, daemonAPI, kernelAPI, metricsAPI, filter, registryAPI, moduleStatusUpdaterAPI)
+	mc := controllers.NewModuleReconciler(
+		client,
+		kubernetes.NewForConfigOrDie(restConfig),
+		buildAPI,
+		daemonAPI,
+		kernelAPI,
+		metricsAPI,
+		filter,
+		registry.NewRegistry(),
+		auth.NewRegistryAuthGetterFactory(),
+		moduleStatusUpdaterAPI)
 
 	if err = mc.SetupWithManager(mgr, kernelLabel); err != nil {
 		setupLogger.Error(err, "unable to create controller", "controller", "Module")

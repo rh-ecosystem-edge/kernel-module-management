@@ -12,8 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-var _ = Describe("GetKeyChain", func() {
-
+var _ = Describe("registrySecretAuthGetter_GetKeyChain", func() {
 	const (
 		secretName      = "pull-push-secret"
 		secretNamespace = "default"
@@ -22,6 +21,7 @@ var _ = Describe("GetKeyChain", func() {
 	var (
 		ctrl       *gomock.Controller
 		ctx        context.Context
+		factory    = NewRegistryAuthGetterFactory()
 		mockClient *client.MockClient
 	)
 
@@ -43,7 +43,7 @@ var _ = Describe("GetKeyChain", func() {
 			Name:      secretName,
 			Namespace: secretNamespace,
 		}
-		registryAuthGetter := NewRegistryAuthGetter(mockClient, namespacedNamespace)
+		registryAuthGetter := factory.NewRegistryAuthGetter(mockClient, namespacedNamespace)
 
 		_, err := registryAuthGetter.GetKeyChain(ctx)
 		Expect(err).To(HaveOccurred())
@@ -66,7 +66,7 @@ var _ = Describe("GetKeyChain", func() {
 			Name:      secretName,
 			Namespace: secretNamespace,
 		}
-		registryAuthGetter := NewRegistryAuthGetter(mockClient, namespacedNamespace)
+		registryAuthGetter := factory.NewRegistryAuthGetter(mockClient, namespacedNamespace)
 
 		_, err := registryAuthGetter.GetKeyChain(ctx)
 		Expect(err).To(HaveOccurred())
@@ -81,7 +81,7 @@ var _ = Describe("GetKeyChain", func() {
 			Name:      secretName,
 			Namespace: secretNamespace,
 		}
-		registryAuthGetter := NewRegistryAuthGetter(mockClient, namespacedNamespace)
+		registryAuthGetter := factory.NewRegistryAuthGetter(mockClient, namespacedNamespace)
 
 		_, err := registryAuthGetter.GetKeyChain(ctx)
 		Expect(err).NotTo(HaveOccurred())
