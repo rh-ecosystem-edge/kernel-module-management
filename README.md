@@ -11,5 +11,5 @@ the kernel modules for new incoming kernel versions attached to upgrades.
 ## Getting started
 Install the bleeding edge KMMO in one command:
 ```shell
-kubectl apply -k https://github.com/rh-ecosystem-edge/kernel-module-management/config/default
+oc apply -k https://github.com/rh-ecosystem-edge/kernel-module-management/config/default
 ```

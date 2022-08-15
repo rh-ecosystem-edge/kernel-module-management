@@ -28,6 +28,8 @@ spec:
         node-role.kubernetes.io/master: ''
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - command:
         - /manager
@@ -38,6 +40,8 @@ spec:
         imagePullPolicy: Always
         securityContext:
           allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
         livenessProbe:
           httpGet:
             path: /healthz
