@@ -50,7 +50,7 @@ ifeq ($(USE_IMAGE_DIGESTS), true)
 endif
 
 # Image URL to use all building/pushing image targets
-IMG ?= quay.io/edge-infrastructure/kernel-module-management:main
+IMG ?= quay.io/edge-infrastructure/kernel-module-management:latest
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
