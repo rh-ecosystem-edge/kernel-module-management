@@ -8,7 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	kmmv1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
+	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	appsv1 "k8s.io/api/apps/v1"
@@ -41,7 +41,7 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 
 	It("should return an error if the DaemonSet is nil", func() {
 		Expect(
-			dg.SetDriverContainerAsDesired(context.Background(), nil, "", kmmv1alpha1.Module{}, ""),
+			dg.SetDriverContainerAsDesired(context.Background(), nil, "", kmmv1beta1.Module{}, ""),
 		).To(
 			HaveOccurred(),
 		)
@@ -49,7 +49,7 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 
 	It("should return an error if the image is empty", func() {
 		Expect(
-			dg.SetDriverContainerAsDesired(context.Background(), &appsv1.DaemonSet{}, "", kmmv1alpha1.Module{}, ""),
+			dg.SetDriverContainerAsDesired(context.Background(), &appsv1.DaemonSet{}, "", kmmv1beta1.Module{}, ""),
 		).To(
 			HaveOccurred(),
 		)
@@ -57,15 +57,15 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 
 	It("should return an error if the kernel version is empty", func() {
 		Expect(
-			dg.SetDriverContainerAsDesired(context.Background(), &appsv1.DaemonSet{}, "", kmmv1alpha1.Module{}, ""),
+			dg.SetDriverContainerAsDesired(context.Background(), &appsv1.DaemonSet{}, "", kmmv1beta1.Module{}, ""),
 		).To(
 			HaveOccurred(),
 		)
 	})
 
 	It("should not add a device-plugin container if it is not set in the spec", func() {
-		mod := kmmv1alpha1.Module{
-			Spec: kmmv1alpha1.ModuleSpec{
+		mod := kmmv1beta1.Module{
+			Spec: kmmv1beta1.ModuleSpec{
 				Selector: map[string]string{"has-feature-x": "true"},
 			},
 		}
@@ -78,63 +78,32 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 		Expect(ds.Spec.Template.Spec.Volumes).To(HaveLen(2))
 	})
 
-	It("should add additional volumes if there are any", func() {
-		vol := v1.Volume{Name: "test-volume"}
-
-		mod := kmmv1alpha1.Module{
-			Spec: kmmv1alpha1.ModuleSpec{
-				AdditionalVolumes: []v1.Volume{vol},
-			},
-		}
-
-		ds := appsv1.DaemonSet{}
-
-		err := dg.SetDriverContainerAsDesired(context.Background(), &ds, "test-image", mod, kernelVersion)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(ds.Spec.Template.Spec.Volumes).To(HaveLen(3))
-		Expect(ds.Spec.Template.Spec.Volumes[2]).To(Equal(vol))
-	})
-
 	It("should work as expected", func() {
 		const (
 			driverContainerImage = "driver-image"
 			dsName               = "ds-name"
-			serviceAccountName   = "some-service-account"
+			imageRepoSecretName  = "image-repo-secret"
+			serviceAccountName   = "driver-service-account"
 		)
 
-		dcVolMount := v1.VolumeMount{
-			Name:      "some-dc-volume-mount",
-			ReadOnly:  true,
-			MountPath: "/some/path",
-		}
-
-		dpVolMount := v1.VolumeMount{
-			Name:      "some-dp-volume-mount",
-			MountPath: "/some/path",
-		}
-
-		mod := kmmv1alpha1.Module{
+		mod := kmmv1beta1.Module{
 			TypeMeta: metav1.TypeMeta{
-				APIVersion: kmmv1alpha1.GroupVersion.String(),
+				APIVersion: kmmv1beta1.GroupVersion.String(),
 				Kind:       "Module",
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      moduleName,
 				Namespace: namespace,
 			},
-			Spec: kmmv1alpha1.ModuleSpec{
-				DriverContainer: v1.Container{
-					VolumeMounts: []v1.VolumeMount{dcVolMount},
+			Spec: kmmv1beta1.ModuleSpec{
+				DriverContainer: kmmv1beta1.DriverContainerSpec{
+					Container: kmmv1beta1.DriverContainerContainerSpec{
+						Modprobe: kmmv1beta1.ModprobeSpec{ModuleName: "some-kmod"},
+					},
+					ServiceAccountName: serviceAccountName,
 				},
-				DevicePlugin: &v1.Container{
-					Image:        devicePluginImage,
-					VolumeMounts: []v1.VolumeMount{dpVolMount},
-				},
-				Selector:           map[string]string{"has-feature-x": "true"},
-				ServiceAccountName: serviceAccountName,
-				ImagePullSecret: &v1.LocalObjectReference{
-					Name: "pull-push-secret",
-				},
+				ImageRepoSecret: &v1.LocalObjectReference{Name: imageRepoSecretName},
+				Selector:        map[string]string{"has-feature-x": "true"},
 			},
 		}
 
@@ -183,8 +152,20 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 							{
 								Name:  "driver-container",
 								Image: driverContainerImage,
+								Lifecycle: &v1.Lifecycle{
+									PostStart: &v1.LifecycleHandler{
+										Exec: &v1.ExecAction{
+											Command: MakeLoadCommand(mod.Spec.DriverContainer.Container.Modprobe),
+										},
+									},
+									PreStop: &v1.LifecycleHandler{
+										Exec: &v1.ExecAction{
+											Command: MakeUnloadCommand(mod.Spec.DriverContainer.Container.Modprobe),
+										},
+									},
+								},
+								Command: []string{"sleep", "infinity"},
 								VolumeMounts: []v1.VolumeMount{
-									dcVolMount,
 									{
 										Name:      "node-lib-modules",
 										ReadOnly:  true,
@@ -196,7 +177,15 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 										MountPath: "/usr/lib/modules",
 									},
 								},
+								SecurityContext: &v1.SecurityContext{
+									Capabilities: &v1.Capabilities{
+										Add: []v1.Capability{"SYS_MODULE"},
+									},
+								},
 							},
+						},
+						ImagePullSecrets: []v1.LocalObjectReference{
+							{Name: imageRepoSecretName},
 						},
 						NodeSelector: map[string]string{
 							"has-feature-x": "true",
@@ -223,11 +212,6 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 								},
 							},
 						},
-						ImagePullSecrets: []v1.LocalObjectReference{
-							{
-								Name: "pull-push-secret",
-							},
-						},
 					},
 				},
 			},
@@ -246,7 +230,7 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 
 			dc := NewCreator(clnt, kernelLabel, scheme)
 
-			mod := kmmv1alpha1.Module{
+			mod := kmmv1beta1.Module{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      moduleName,
 					Namespace: namespace,
@@ -262,7 +246,7 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 			clnt.EXPECT().List(context.Background(), gomock.Any(), gomock.Any()).Return(errors.New("some error"))
 
 			dc := NewCreator(clnt, kernelLabel, scheme)
-			mod := kmmv1alpha1.Module{
+			mod := kmmv1beta1.Module{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      moduleName,
 					Namespace: namespace,
@@ -307,7 +291,7 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 			)
 
 			dc := NewCreator(clnt, kernelLabel, scheme)
-			mod := kmmv1alpha1.Module{
+			mod := kmmv1beta1.Module{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      moduleName,
 					Namespace: namespace,
@@ -328,7 +312,7 @@ var _ = Describe("SetDevicePluginAsDesired", func() {
 
 	It("should return an error if the DaemonSet is nil", func() {
 		Expect(
-			dg.SetDevicePluginAsDesired(context.Background(), nil, &kmmv1alpha1.Module{}),
+			dg.SetDevicePluginAsDesired(context.Background(), nil, &kmmv1beta1.Module{}),
 		).To(
 			HaveOccurred(),
 		)
@@ -337,7 +321,7 @@ var _ = Describe("SetDevicePluginAsDesired", func() {
 	It("should return an error if DevicePlugin not set in the Spec", func() {
 		ds := appsv1.DaemonSet{}
 		Expect(
-			dg.SetDevicePluginAsDesired(context.Background(), &ds, &kmmv1alpha1.Module{}),
+			dg.SetDevicePluginAsDesired(context.Background(), &ds, &kmmv1beta1.Module{}),
 		).To(
 			HaveOccurred(),
 		)
@@ -346,12 +330,12 @@ var _ = Describe("SetDevicePluginAsDesired", func() {
 	It("should add additional volumes if there are any", func() {
 		vol := v1.Volume{Name: "test-volume"}
 
-		mod := kmmv1alpha1.Module{
-			Spec: kmmv1alpha1.ModuleSpec{
-				DevicePlugin: &v1.Container{
-					Image: devicePluginImage,
+		mod := kmmv1beta1.Module{
+			Spec: kmmv1beta1.ModuleSpec{
+				DevicePlugin: &kmmv1beta1.DevicePluginSpec{
+					Container: kmmv1beta1.DevicePluginContainerSpec{Image: devicePluginImage},
+					Volumes:   []v1.Volume{vol},
 				},
-				AdditionalVolumes: []v1.Volume{vol},
 			},
 		}
 
@@ -369,10 +353,9 @@ var _ = Describe("SetDevicePluginAsDesired", func() {
 			serviceAccountName = "some-service-account"
 		)
 
-		dcVolMount := v1.VolumeMount{
-			Name:      "some-dc-volume-mount",
-			ReadOnly:  true,
-			MountPath: "/some/path",
+		dpVol := v1.Volume{
+			Name:         "test-volume",
+			VolumeSource: v1.VolumeSource{},
 		}
 
 		dpVolMount := v1.VolumeMount{
@@ -380,25 +363,28 @@ var _ = Describe("SetDevicePluginAsDesired", func() {
 			MountPath: "/some/path",
 		}
 
-		mod := kmmv1alpha1.Module{
+		repoSecret := v1.LocalObjectReference{Name: "pull-secret-name"}
+
+		mod := kmmv1beta1.Module{
 			TypeMeta: metav1.TypeMeta{
-				APIVersion: kmmv1alpha1.GroupVersion.String(),
+				APIVersion: kmmv1beta1.GroupVersion.String(),
 				Kind:       "Module",
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      moduleName,
 				Namespace: namespace,
 			},
-			Spec: kmmv1alpha1.ModuleSpec{
-				DriverContainer: v1.Container{
-					VolumeMounts: []v1.VolumeMount{dcVolMount},
+			Spec: kmmv1beta1.ModuleSpec{
+				DevicePlugin: &kmmv1beta1.DevicePluginSpec{
+					Container: kmmv1beta1.DevicePluginContainerSpec{
+						Image:        devicePluginImage,
+						VolumeMounts: []v1.VolumeMount{dpVolMount},
+					},
+					ServiceAccountName: serviceAccountName,
+					Volumes:            []v1.Volume{dpVol},
 				},
-				DevicePlugin: &v1.Container{
-					Image:        devicePluginImage,
-					VolumeMounts: []v1.VolumeMount{dpVolMount},
-				},
-				Selector:           map[string]string{"has-feature-x": "true"},
-				ServiceAccountName: serviceAccountName,
+				ImageRepoSecret: &repoSecret,
+				Selector:        map[string]string{"has-feature-x": "true"},
 			},
 		}
 
@@ -458,6 +444,7 @@ var _ = Describe("SetDevicePluginAsDesired", func() {
 								},
 							},
 						},
+						ImagePullSecrets: []v1.LocalObjectReference{repoSecret},
 						NodeSelector: map[string]string{
 							getDriverContainerNodeLabel(mod.Name): "",
 						},
@@ -472,6 +459,7 @@ var _ = Describe("SetDevicePluginAsDesired", func() {
 									},
 								},
 							},
+							dpVol,
 						},
 					},
 				},
@@ -680,25 +668,21 @@ var _ = Describe("ModuleDaemonSetsByKernelVersion", func() {
 })
 
 var _ = Describe("GetPodPullSecrets", func() {
-	It("should return nil if the Module has no pull secret", func() {
+	It("should return nil if the secret is nil", func() {
 		Expect(
-			GetPodPullSecrets(kmmv1alpha1.Module{}),
+			GetPodPullSecrets(nil),
 		).To(
 			BeNil(),
 		)
 	})
 
-	It("should a list with the reference nil if the Module has no pull secret", func() {
-		lor := &v1.LocalObjectReference{Name: "test"}
-
-		mod := kmmv1alpha1.Module{
-			Spec: kmmv1alpha1.ModuleSpec{ImagePullSecret: lor},
-		}
+	It("should return a slice with the secret inside", func() {
+		lor := v1.LocalObjectReference{Name: "test"}
 
 		Expect(
-			GetPodPullSecrets(mod),
+			GetPodPullSecrets(&lor),
 		).To(
-			Equal([]v1.LocalObjectReference{*lor}),
+			Equal([]v1.LocalObjectReference{lor}),
 		)
 	})
 })
@@ -756,5 +740,108 @@ var _ = Describe("GetNodeLabelFromPod", func() {
 		}
 		res := dc.GetNodeLabelFromPod(&pod, "module-name")
 		Expect(res).To(Equal(getDevicePluginNodeLabel("module-name")))
+	})
+})
+
+var _ = Describe("MakeLoadCommand", func() {
+	const moduleName = "some-kmod"
+
+	It("should only use raw arguments if they are provided", func() {
+		spec := kmmv1beta1.ModprobeSpec{
+			ModuleName: moduleName,
+			RawArgs: &kmmv1beta1.ModprobeArgs{
+				Load: []string{"load", "arguments"},
+			},
+		}
+
+		Expect(
+			MakeLoadCommand(spec),
+		).To(
+			Equal([]string{"modprobe", "load", "arguments"}),
+		)
+	})
+
+	It("should build the command from the spec as expected", func() {
+		const (
+			arg1 = "arg1"
+			arg2 = "arg2"
+			dir  = "/some-dir"
+		)
+
+		spec := kmmv1beta1.ModprobeSpec{
+			ModuleName: moduleName,
+			Parameters: []string{arg1, arg2},
+			DirName:    dir,
+		}
+
+		Expect(
+			MakeLoadCommand(spec),
+		).To(
+			Equal([]string{"modprobe", "-v", "-d", dir, moduleName, arg1, arg2}),
+		)
+	})
+
+	It("should use provided arguments if provided", func() {
+		spec := kmmv1beta1.ModprobeSpec{
+			Args: &kmmv1beta1.ModprobeArgs{
+				Load: []string{"-z", "-k"},
+			},
+			ModuleName: moduleName,
+		}
+
+		Expect(
+			MakeLoadCommand(spec),
+		).To(
+			Equal([]string{"modprobe", "-z", "-k", moduleName}),
+		)
+	})
+})
+
+var _ = Describe("MakeUnloadCommand", func() {
+	const moduleName = "some-kmod"
+
+	It("should only use raw arguments if they are provided", func() {
+		spec := kmmv1beta1.ModprobeSpec{
+			ModuleName: moduleName,
+			RawArgs: &kmmv1beta1.ModprobeArgs{
+				Unload: []string{"unload", "arguments"},
+			},
+		}
+
+		Expect(
+			MakeUnloadCommand(spec),
+		).To(
+			Equal([]string{"modprobe", "unload", "arguments"}),
+		)
+	})
+
+	It("should build the command from the spec as expected", func() {
+		const dir = "/some-dir"
+
+		spec := kmmv1beta1.ModprobeSpec{
+			ModuleName: moduleName,
+			DirName:    dir,
+		}
+
+		Expect(
+			MakeUnloadCommand(spec),
+		).To(
+			Equal([]string{"modprobe", "-rv", "-d", dir, moduleName}),
+		)
+	})
+
+	It("should use provided arguments if provided", func() {
+		spec := kmmv1beta1.ModprobeSpec{
+			Args: &kmmv1beta1.ModprobeArgs{
+				Unload: []string{"-z", "-k"},
+			},
+			ModuleName: moduleName,
+		}
+
+		Expect(
+			MakeUnloadCommand(spec),
+		).To(
+			Equal([]string{"modprobe", "-z", "-k", moduleName}),
+		)
 	})
 })

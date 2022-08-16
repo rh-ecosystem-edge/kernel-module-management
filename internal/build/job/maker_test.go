@@ -5,7 +5,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	kmmv1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
+	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"golang.org/x/exp/slices"
@@ -41,21 +41,22 @@ var _ = Describe("MakeJob", func() {
 		ctrl.Finish()
 	})
 
-	mod := kmmv1alpha1.Module{
+	mod := kmmv1beta1.Module{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      moduleName,
 			Namespace: namespace,
 		},
 	}
 
-	buildArgs := []kmmv1alpha1.BuildArg{
+	buildArgs := []kmmv1beta1.BuildArg{
 		{Name: "name1", Value: "value1"},
 	}
 
 	DescribeTable("should set fields correctly", func(buildSecrets []v1.LocalObjectReference, imagePullSecret *v1.LocalObjectReference) {
+		nodeSelector := map[string]string{"arch": "x64"}
 
-		km := kmmv1alpha1.KernelMapping{
-			Build: &kmmv1alpha1.Build{
+		km := kmmv1beta1.KernelMapping{
+			Build: &kmmv1beta1.Build{
 				BuildArgs:  buildArgs,
 				Dockerfile: dockerfile,
 			},
@@ -72,7 +73,7 @@ var _ = Describe("MakeJob", func() {
 				},
 				OwnerReferences: []metav1.OwnerReference{
 					{
-						APIVersion:         "kmm.sigs.k8s.io/v1alpha1",
+						APIVersion:         "kmm.sigs.k8s.io/v1beta1",
 						Kind:               "Module",
 						Name:               moduleName,
 						Controller:         pointer.Bool(true),
@@ -105,6 +106,7 @@ var _ = Describe("MakeJob", func() {
 								},
 							},
 						},
+						NodeSelector:  nodeSelector,
 						RestartPolicy: v1.RestartPolicyOnFailure,
 						Volumes: []v1.Volume{
 							{
@@ -129,8 +131,7 @@ var _ = Describe("MakeJob", func() {
 		}
 
 		if imagePullSecret != nil {
-
-			mod.Spec.ImagePullSecret = imagePullSecret
+			mod.Spec.ImageRepoSecret = imagePullSecret
 
 			expected.Spec.Template.Spec.Containers[0].VolumeMounts =
 				append(expected.Spec.Template.Spec.Containers[0].VolumeMounts,
@@ -186,10 +187,13 @@ var _ = Describe("MakeJob", func() {
 				)
 		}
 
-		override := kmmv1alpha1.BuildArg{Name: "KERNEL_VERSION", Value: kernelVersion}
+		mod := mod.DeepCopy()
+		mod.Spec.Selector = nodeSelector
+
+		override := kmmv1beta1.BuildArg{Name: "KERNEL_VERSION", Value: kernelVersion}
 		mh.EXPECT().ApplyBuildArgOverrides(buildArgs, override).Return(append(slices.Clone(buildArgs), override))
 
-		actual, err := m.MakeJob(mod, km.Build, kernelVersion, km.ContainerImage)
+		actual, err := m.MakeJob(*mod, km.Build, kernelVersion, km.ContainerImage)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(
@@ -220,17 +224,17 @@ var _ = Describe("MakeJob", func() {
 		),
 	)
 
-	DescribeTable("should set correct kaniko flags", func(b kmmv1alpha1.Build, flag string) {
+	DescribeTable("should set correct kaniko flags", func(b kmmv1beta1.Build, flag string) {
 
-		km := kmmv1alpha1.KernelMapping{
-			Build: &kmmv1alpha1.Build{
+		km := kmmv1beta1.KernelMapping{
+			Build: &kmmv1beta1.Build{
 				BuildArgs:  buildArgs,
 				Dockerfile: dockerfile,
 			},
 			ContainerImage: containerImage,
 		}
 
-		mh.EXPECT().ApplyBuildArgOverrides(nil, kmmv1alpha1.BuildArg{Name: "KERNEL_VERSION", Value: kernelVersion})
+		mh.EXPECT().ApplyBuildArgOverrides(nil, kmmv1beta1.BuildArg{Name: "KERNEL_VERSION", Value: kernelVersion})
 
 		actual, err := m.MakeJob(mod, &b, kernelVersion, km.ContainerImage)
 		Expect(err).NotTo(HaveOccurred())
@@ -239,22 +243,22 @@ var _ = Describe("MakeJob", func() {
 	},
 		Entry(
 			"PullOptions.Insecure",
-			kmmv1alpha1.Build{Pull: kmmv1alpha1.PullOptions{Insecure: true}},
+			kmmv1beta1.Build{Pull: kmmv1beta1.PullOptions{Insecure: true}},
 			"--insecure-pull",
 		),
 		Entry(
 			"PullOptions.InsecureSkipTLSVerify",
-			kmmv1alpha1.Build{Pull: kmmv1alpha1.PullOptions{InsecureSkipTLSVerify: true}},
+			kmmv1beta1.Build{Pull: kmmv1beta1.PullOptions{InsecureSkipTLSVerify: true}},
 			"--skip-tls-verify-pull",
 		),
 		Entry(
 			"PushOptions.Insecure",
-			kmmv1alpha1.Build{Push: kmmv1alpha1.PushOptions{Insecure: true}},
+			kmmv1beta1.Build{Push: kmmv1beta1.PushOptions{Insecure: true}},
 			"--insecure",
 		),
 		Entry(
 			"PushOptions.InsecureSkipTLSVerify",
-			kmmv1alpha1.Build{Push: kmmv1alpha1.PushOptions{InsecureSkipTLSVerify: true}},
+			kmmv1beta1.Build{Push: kmmv1beta1.PushOptions{InsecureSkipTLSVerify: true}},
 			"--skip-tls-verify",
 		),
 	)

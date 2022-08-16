@@ -17,7 +17,7 @@ spec:
     singular: preflightvalidation
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - name: v1beta1
     schema:
       openAPIV3Schema:
         description: PreflightValidation initiates a preflight validations for all
