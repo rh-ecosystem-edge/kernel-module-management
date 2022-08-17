@@ -7,7 +7,7 @@ import (
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	kmmv1alpha1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1alpha1"
+	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/daemonset"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
@@ -33,7 +33,7 @@ var _ = Describe("module status update", func() {
 		clnt        *client.MockClient
 		mockDC      *daemonset.MockDaemonSetCreator
 		mockMetrics *metrics.MockMetrics
-		mod         *kmmv1alpha1.Module
+		mod         *kmmv1beta1.Module
 		su          ModuleStatusUpdater
 	)
 
@@ -42,14 +42,14 @@ var _ = Describe("module status update", func() {
 		clnt = client.NewMockClient(ctrl)
 		mockDC = daemonset.NewMockDaemonSetCreator(ctrl)
 		mockMetrics = metrics.NewMockMetrics(ctrl)
-		mod = &kmmv1alpha1.Module{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
+		mod = &kmmv1beta1.Module{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
 		su = NewModuleStatusUpdater(clnt, mockDC, mockMetrics)
 	})
 
 	DescribeTable("checking status updater based on module",
 		func(mappingsNodes []v1.Node, targetedNodes []v1.Node, dsMap map[string]*appsv1.DaemonSet, devicePluginPresent bool) {
 			if devicePluginPresent {
-				mod.Spec.DevicePlugin = &v1.Container{}
+				mod.Spec.DevicePlugin = &kmmv1beta1.DevicePluginSpec{}
 			}
 			var driverContainerAvailable int32
 			var devicePluginAvailable int32
@@ -127,16 +127,16 @@ var _ = Describe("preflight status updates", func() {
 	var (
 		ctrl *gomock.Controller
 		clnt *client.MockClient
-		pv   *kmmv1alpha1.PreflightValidation
-		ps   *kmmv1alpha1.CRStatus
+		pv   *kmmv1beta1.PreflightValidation
+		ps   *kmmv1beta1.CRStatus
 		su   PreflightStatusUpdater
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		pv = &kmmv1alpha1.PreflightValidation{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
-		ps = &kmmv1alpha1.CRStatus{Name: "cr-name"}
+		pv = &kmmv1beta1.PreflightValidation{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
+		ps = &kmmv1beta1.CRStatus{Name: "cr-name"}
 		su = NewPreflightStatusUpdater(clnt)
 	})
 
@@ -147,8 +147,8 @@ var _ = Describe("preflight status updates", func() {
 
 		res := su.PreflightPresetVerificationStatus(context.Background(), pv, ps)
 		Expect(res).To(BeNil())
-		Expect(ps.VerificationStatus).To(Equal(kmmv1alpha1.VerificationFalse))
-		Expect(ps.VerificationStage).To(Equal(kmmv1alpha1.VerificationStageImage))
+		Expect(ps.VerificationStatus).To(Equal(kmmv1beta1.VerificationFalse))
+		Expect(ps.VerificationStage).To(Equal(kmmv1beta1.VerificationStageImage))
 	})
 
 	It("set preflight verification status", func() {
