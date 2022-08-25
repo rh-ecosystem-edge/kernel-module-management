@@ -81,10 +81,10 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 
 	It("should work as expected", func() {
 		const (
-			driverContainerImage = "driver-image"
-			dsName               = "ds-name"
-			imageRepoSecretName  = "image-repo-secret"
-			serviceAccountName   = "driver-service-account"
+			moduleLoaderImage   = "driver-image"
+			dsName              = "ds-name"
+			imageRepoSecretName = "image-repo-secret"
+			serviceAccountName  = "driver-service-account"
 		)
 
 		mod := kmmv1beta1.Module{
@@ -97,8 +97,8 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 				Namespace: namespace,
 			},
 			Spec: kmmv1beta1.ModuleSpec{
-				DriverContainer: kmmv1beta1.DriverContainerSpec{
-					Container: kmmv1beta1.DriverContainerContainerSpec{
+				ModuleLoader: kmmv1beta1.ModuleLoaderSpec{
+					Container: kmmv1beta1.ModuleLoaderContainerSpec{
 						Modprobe: kmmv1beta1.ModprobeSpec{ModuleName: "some-kmod"},
 					},
 					ServiceAccountName: serviceAccountName,
@@ -115,7 +115,7 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 			},
 		}
 
-		err := dg.SetDriverContainerAsDesired(context.Background(), &ds, driverContainerImage, mod, kernelVersion)
+		err := dg.SetDriverContainerAsDesired(context.Background(), &ds, moduleLoaderImage, mod, kernelVersion)
 		Expect(err).NotTo(HaveOccurred())
 
 		podLabels := map[string]string{
@@ -151,17 +151,17 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 					Spec: v1.PodSpec{
 						Containers: []v1.Container{
 							{
-								Name:  "driver-container",
-								Image: driverContainerImage,
+								Name:  "module-loader",
+								Image: moduleLoaderImage,
 								Lifecycle: &v1.Lifecycle{
 									PostStart: &v1.LifecycleHandler{
 										Exec: &v1.ExecAction{
-											Command: MakeLoadCommand(mod.Spec.DriverContainer.Container.Modprobe),
+											Command: MakeLoadCommand(mod.Spec.ModuleLoader.Container.Modprobe),
 										},
 									},
 									PreStop: &v1.LifecycleHandler{
 										Exec: &v1.ExecAction{
-											Command: MakeUnloadCommand(mod.Spec.DriverContainer.Container.Modprobe),
+											Command: MakeUnloadCommand(mod.Spec.ModuleLoader.Container.Modprobe),
 										},
 									},
 								},
