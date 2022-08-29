@@ -93,3 +93,23 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - kmm.sigs.k8s.io
+  resources:
+  - preflightvalidations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kmm.sigs.k8s.io
+  resources:
+  - preflightvalidations/status
+  verbs:
+  - get
+  - patch
+  - update

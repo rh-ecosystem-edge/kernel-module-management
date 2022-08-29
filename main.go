@@ -31,6 +31,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/preflight"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -166,6 +167,10 @@ func main() {
 	daemonAPI := daemonset.NewCreator(client, kernelLabel, scheme)
 	kernelAPI := module.NewKernelMapper()
 	moduleStatusUpdaterAPI := statusupdater.NewModuleStatusUpdater(client, daemonAPI, metricsAPI)
+	preflightStatusUpdaterAPI := statusupdater.NewPreflightStatusUpdater(client)
+	registryAPI := registry.NewRegistry()
+	authFactory := auth.NewRegistryAuthGetterFactory()
+	preflightAPI := preflight.NewPreflightAPI(client, registryAPI, kernelAPI, authFactory)
 
 	mc := controllers.NewModuleReconciler(
 		client,
@@ -175,8 +180,8 @@ func main() {
 		kernelAPI,
 		metricsAPI,
 		filter,
-		registry.NewRegistry(),
-		auth.NewRegistryAuthGetterFactory(),
+		registryAPI,
+		authFactory,
 		moduleStatusUpdaterAPI)
 
 	if err = mc.SetupWithManager(mgr, kernelLabel); err != nil {
@@ -186,6 +191,11 @@ func main() {
 
 	if err = controllers.NewPodNodeModuleReconciler(client, daemonAPI).SetupWithManager(mgr); err != nil {
 		setupLogger.Error(err, "unable to create controller", "controller", "PodNodeModule")
+		os.Exit(1)
+	}
+
+	if err = controllers.NewPreflightValidationReconciler(client, filter, preflightStatusUpdaterAPI, preflightAPI).SetupWithManager(mgr); err != nil {
+		setupLogger.Error(err, "unable to create controller", "controller", "Preflight")
 		os.Exit(1)
 	}
 

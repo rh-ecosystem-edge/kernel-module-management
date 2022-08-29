@@ -15,6 +15,44 @@ import (
 	client "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// MockRegistryAuthGetter is a mock of RegistryAuthGetter interface.
+type MockRegistryAuthGetter struct {
+	ctrl     *gomock.Controller
+	recorder *MockRegistryAuthGetterMockRecorder
+}
+
+// MockRegistryAuthGetterMockRecorder is the mock recorder for MockRegistryAuthGetter.
+type MockRegistryAuthGetterMockRecorder struct {
+	mock *MockRegistryAuthGetter
+}
+
+// NewMockRegistryAuthGetter creates a new mock instance.
+func NewMockRegistryAuthGetter(ctrl *gomock.Controller) *MockRegistryAuthGetter {
+	mock := &MockRegistryAuthGetter{ctrl: ctrl}
+	mock.recorder = &MockRegistryAuthGetterMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockRegistryAuthGetter) EXPECT() *MockRegistryAuthGetterMockRecorder {
+	return m.recorder
+}
+
+// GetKeyChain mocks base method.
+func (m *MockRegistryAuthGetter) GetKeyChain(ctx context.Context) (authn.Keychain, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetKeyChain", ctx)
+	ret0, _ := ret[0].(authn.Keychain)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetKeyChain indicates an expected call of GetKeyChain.
+func (mr *MockRegistryAuthGetterMockRecorder) GetKeyChain(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetKeyChain", reflect.TypeOf((*MockRegistryAuthGetter)(nil).GetKeyChain), ctx)
+}
+
 // MockRegistryAuthGetterFactory is a mock of RegistryAuthGetterFactory interface.
 type MockRegistryAuthGetterFactory struct {
 	ctrl     *gomock.Controller
@@ -64,42 +102,4 @@ func (m *MockRegistryAuthGetterFactory) NewServiceAccountRegistryAuthGetter(core
 func (mr *MockRegistryAuthGetterFactoryMockRecorder) NewServiceAccountRegistryAuthGetter(coreClientSet, namespace, serviceAccountName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewServiceAccountRegistryAuthGetter", reflect.TypeOf((*MockRegistryAuthGetterFactory)(nil).NewServiceAccountRegistryAuthGetter), coreClientSet, namespace, serviceAccountName)
-}
-
-// MockRegistryAuthGetter is a mock of RegistryAuthGetter interface.
-type MockRegistryAuthGetter struct {
-	ctrl     *gomock.Controller
-	recorder *MockRegistryAuthGetterMockRecorder
-}
-
-// MockRegistryAuthGetterMockRecorder is the mock recorder for MockRegistryAuthGetter.
-type MockRegistryAuthGetterMockRecorder struct {
-	mock *MockRegistryAuthGetter
-}
-
-// NewMockRegistryAuthGetter creates a new mock instance.
-func NewMockRegistryAuthGetter(ctrl *gomock.Controller) *MockRegistryAuthGetter {
-	mock := &MockRegistryAuthGetter{ctrl: ctrl}
-	mock.recorder = &MockRegistryAuthGetterMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockRegistryAuthGetter) EXPECT() *MockRegistryAuthGetterMockRecorder {
-	return m.recorder
-}
-
-// GetKeyChain mocks base method.
-func (m *MockRegistryAuthGetter) GetKeyChain(ctx context.Context) (authn.Keychain, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetKeyChain", ctx)
-	ret0, _ := ret[0].(authn.Keychain)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetKeyChain indicates an expected call of GetKeyChain.
-func (mr *MockRegistryAuthGetterMockRecorder) GetKeyChain(ctx interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetKeyChain", reflect.TypeOf((*MockRegistryAuthGetter)(nil).GetKeyChain), ctx)
 }
