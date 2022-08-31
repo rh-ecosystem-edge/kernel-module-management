@@ -17,7 +17,7 @@ import (
 //go:generate mockgen -source=maker.go -package=buildconfig -destination=mock_maker.go
 
 type Maker interface {
-	MakeBuildConfig(mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string) (*buildv1.BuildConfig, error)
+	MakeBuildConfig(mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string, pushImage bool) (*buildv1.BuildConfig, error)
 }
 
 type maker struct {
@@ -32,13 +32,24 @@ func NewMaker(helper build.Helper, scheme *runtime.Scheme) Maker {
 	}
 }
 
-func (m *maker) MakeBuildConfig(mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string) (*buildv1.BuildConfig, error) {
+func (m *maker) MakeBuildConfig(mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string, pushImage bool) (*buildv1.BuildConfig, error) {
 	kmmBuild := m.helper.GetRelevantBuild(mod, mapping)
 
 	buildArgs := m.helper.ApplyBuildArgOverrides(
 		kmmBuild.BuildArgs,
 		kmmv1beta1.BuildArg{Name: "KERNEL_VERSION", Value: targetKernel},
 	)
+
+	buildTarget := buildv1.BuildOutput{
+		To: &v1.ObjectReference{
+			Kind: "DockerImage",
+			Name: containerImage,
+		},
+		PushSecret: mod.Spec.ImageRepoSecret,
+	}
+	if !pushImage {
+		buildTarget = buildv1.BuildOutput{}
+	}
 
 	bc := buildv1.BuildConfig{
 		ObjectMeta: metav1.ObjectMeta{
@@ -64,13 +75,7 @@ func (m *maker) MakeBuildConfig(mod kmmv1beta1.Module, mapping kmmv1beta1.Kernel
 						Volumes:   buildVolumesFromBuildSecrets(kmmBuild.Secrets),
 					},
 				},
-				Output: buildv1.BuildOutput{
-					To: &v1.ObjectReference{
-						Kind: "DockerImage",
-						Name: containerImage,
-					},
-					PushSecret: mod.Spec.ImageRepoSecret,
-				},
+				Output:         buildTarget,
 				NodeSelector:   mod.Spec.Selector,
 				MountTrustedCA: pointer.Bool(true),
 			},

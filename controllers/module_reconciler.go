@@ -254,7 +254,7 @@ func (r *ModuleReconciler) handleBuild(ctx context.Context,
 
 	logger.Info("Image not pull-able; building in-cluster")
 
-	buildRes, err := r.buildAPI.Sync(log.IntoContext(ctx, logger), *mod, *km, kernelVersion)
+	buildRes, err := r.buildAPI.Sync(log.IntoContext(ctx, logger), *mod, *km, kernelVersion, true)
 	if err != nil {
 		return false, fmt.Errorf("could not synchronize the build: %w", err)
 	}

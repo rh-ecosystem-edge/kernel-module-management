@@ -31,7 +31,7 @@ func NewManager(client client.Client, maker Maker, ocpBuildsHelper OpenShiftBuil
 	}
 }
 
-func (bcm *buildConfigManager) Sync(ctx context.Context, mod kmmv1beta1.Module, m kmmv1beta1.KernelMapping, targetKernel string) (build.Result, error) {
+func (bcm *buildConfigManager) Sync(ctx context.Context, mod kmmv1beta1.Module, m kmmv1beta1.KernelMapping, targetKernel string, pushImage bool) (build.Result, error) {
 	logger := log.FromContext(ctx)
 
 	buildConfig, err := bcm.ocpBuildsHelper.GetBuildConfig(ctx, mod, targetKernel)
@@ -42,7 +42,7 @@ func (bcm *buildConfigManager) Sync(ctx context.Context, mod kmmv1beta1.Module, 
 
 		logger.Info("Creating BuildConfig")
 
-		buildConfig, err = bcm.maker.MakeBuildConfig(mod, m, targetKernel, m.ContainerImage)
+		buildConfig, err = bcm.maker.MakeBuildConfig(mod, m, targetKernel, m.ContainerImage, pushImage)
 		if err != nil {
 			return build.Result{}, fmt.Errorf("could not make BuildConfig: %v", err)
 		}

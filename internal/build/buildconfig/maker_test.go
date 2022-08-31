@@ -120,7 +120,7 @@ var _ = Describe("Maker_MakeBuildConfig", func() {
 			},
 		}
 
-		bc, err := NewMaker(build.NewHelper(), scheme).MakeBuildConfig(mod, mapping, targetKernel, containerImage)
+		bc, err := NewMaker(build.NewHelper(), scheme).MakeBuildConfig(mod, mapping, targetKernel, containerImage, true)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(

@@ -687,7 +687,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 				NewRegistryAuthGetterFrom(mod).
 				Return(authGetter),
 			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, authGetter).Return(false, nil),
-			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any()).Return(buildRes, nil),
+			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), true).Return(buildRes, nil),
 			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, kernelVersion, metrics.BuildStage, false),
 		)
 
@@ -728,7 +728,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 				NewRegistryAuthGetterFrom(mod).
 				Return(authGetter),
 			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, authGetter).Return(false, nil),
-			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any()).Return(buildRes, nil),
+			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), true).Return(buildRes, nil),
 			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, kernelVersion, metrics.BuildStage, false),
 		)
 
@@ -769,7 +769,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 				NewRegistryAuthGetterFrom(mod).
 				Return(authGetter),
 			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, authGetter).Return(false, nil),
-			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any()).Return(buildRes, nil),
+			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), true).Return(buildRes, nil),
 			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, kernelVersion, metrics.BuildStage, true),
 		)
 
