@@ -10,9 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	authn "github.com/google/go-containerregistry/pkg/authn"
-	types "k8s.io/apimachinery/pkg/types"
-	kubernetes "k8s.io/client-go/kubernetes"
-	client "sigs.k8s.io/controller-runtime/pkg/client"
+	v1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 )
 
 // MockRegistryAuthGetter is a mock of RegistryAuthGetter interface.
@@ -76,30 +74,16 @@ func (m *MockRegistryAuthGetterFactory) EXPECT() *MockRegistryAuthGetterFactoryM
 	return m.recorder
 }
 
-// NewRegistryAuthGetter mocks base method.
-func (m *MockRegistryAuthGetterFactory) NewRegistryAuthGetter(client client.Client, namespacedName types.NamespacedName) RegistryAuthGetter {
+// NewRegistryAuthGetterFrom mocks base method.
+func (m *MockRegistryAuthGetterFactory) NewRegistryAuthGetterFrom(mod *v1beta1.Module) RegistryAuthGetter {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NewRegistryAuthGetter", client, namespacedName)
+	ret := m.ctrl.Call(m, "NewRegistryAuthGetterFrom", mod)
 	ret0, _ := ret[0].(RegistryAuthGetter)
 	return ret0
 }
 
-// NewRegistryAuthGetter indicates an expected call of NewRegistryAuthGetter.
-func (mr *MockRegistryAuthGetterFactoryMockRecorder) NewRegistryAuthGetter(client, namespacedName interface{}) *gomock.Call {
+// NewRegistryAuthGetterFrom indicates an expected call of NewRegistryAuthGetterFrom.
+func (mr *MockRegistryAuthGetterFactoryMockRecorder) NewRegistryAuthGetterFrom(mod interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewRegistryAuthGetter", reflect.TypeOf((*MockRegistryAuthGetterFactory)(nil).NewRegistryAuthGetter), client, namespacedName)
-}
-
-// NewServiceAccountRegistryAuthGetter mocks base method.
-func (m *MockRegistryAuthGetterFactory) NewServiceAccountRegistryAuthGetter(coreClientSet kubernetes.Interface, namespace, serviceAccountName string) RegistryAuthGetter {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NewServiceAccountRegistryAuthGetter", coreClientSet, namespace, serviceAccountName)
-	ret0, _ := ret[0].(RegistryAuthGetter)
-	return ret0
-}
-
-// NewServiceAccountRegistryAuthGetter indicates an expected call of NewServiceAccountRegistryAuthGetter.
-func (mr *MockRegistryAuthGetterFactoryMockRecorder) NewServiceAccountRegistryAuthGetter(coreClientSet, namespace, serviceAccountName interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewServiceAccountRegistryAuthGetter", reflect.TypeOf((*MockRegistryAuthGetterFactory)(nil).NewServiceAccountRegistryAuthGetter), coreClientSet, namespace, serviceAccountName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewRegistryAuthGetterFrom", reflect.TypeOf((*MockRegistryAuthGetterFactory)(nil).NewRegistryAuthGetterFrom), mod)
 }

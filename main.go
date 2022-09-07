@@ -169,12 +169,11 @@ func main() {
 	moduleStatusUpdaterAPI := statusupdater.NewModuleStatusUpdater(client, daemonAPI, metricsAPI)
 	preflightStatusUpdaterAPI := statusupdater.NewPreflightStatusUpdater(client)
 	registryAPI := registry.NewRegistry()
-	authFactory := auth.NewRegistryAuthGetterFactory()
+	authFactory := auth.NewRegistryAuthGetterFactory(client, kubernetes.NewForConfigOrDie(restConfig))
 	preflightAPI := preflight.NewPreflightAPI(client, registryAPI, kernelAPI, authFactory)
 
 	mc := controllers.NewModuleReconciler(
 		client,
-		kubernetes.NewForConfigOrDie(restConfig),
 		buildAPI,
 		daemonAPI,
 		kernelAPI,
