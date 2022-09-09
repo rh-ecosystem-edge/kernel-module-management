@@ -20,9 +20,11 @@ import (
 	"context"
 	"fmt"
 
+	buildv1 "github.com/openshift/api/build/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/daemonset"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
@@ -30,13 +32,13 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	appsv1 "k8s.io/api/apps/v1"
-	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -50,7 +52,9 @@ import (
 type ModuleReconciler struct {
 	client.Client
 
+	authFactory      auth.RegistryAuthGetterFactory
 	buildAPI         build.Manager
+	coreClientSet    kubernetes.Interface
 	daemonAPI        daemonset.DaemonSetCreator
 	kernelAPI        module.KernelMapper
 	metricsAPI       metrics.Metrics
@@ -61,16 +65,20 @@ type ModuleReconciler struct {
 
 func NewModuleReconciler(
 	client client.Client,
+	coreClientSet kubernetes.Interface,
 	buildAPI build.Manager,
 	daemonAPI daemonset.DaemonSetCreator,
 	kernelAPI module.KernelMapper,
 	metricsAPI metrics.Metrics,
 	filter *filter.Filter,
 	registry registry.Registry,
+	authFactory auth.RegistryAuthGetterFactory,
 	statusUpdaterAPI statusupdater.ModuleStatusUpdater) *ModuleReconciler {
 	return &ModuleReconciler{
 		Client:           client,
+		authFactory:      authFactory,
 		buildAPI:         buildAPI,
+		coreClientSet:    coreClientSet,
 		daemonAPI:        daemonAPI,
 		kernelAPI:        kernelAPI,
 		metricsAPI:       metricsAPI,
@@ -86,7 +94,9 @@ func NewModuleReconciler(
 //+kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=create;delete;get;list;patch;watch
 //+kubebuilder:rbac:groups="core",resources=nodes,verbs=get;list;watch
 //+kubebuilder:rbac:groups="core",resources=secrets,verbs=get;list;watch
-//+kubebuilder:rbac:groups="batch",resources=jobs,verbs=create;list;watch
+//+kubebuilder:rbac:groups="core",resources=secrets,verbs=get;list;watch
+//+kubebuilder:rbac:groups="build.openshift.io",resources=buildconfigs,verbs=create;delete;get;list;patch;watch
+//+kubebuilder:rbac:groups="build.openshift.io",resources=builds,verbs=get;list;watch
 
 // Reconcile lists all nodes and looks for kernels that match its mappings.
 // For each mapping that matches at least one node in the cluster, it creates a DaemonSet running the container image
@@ -234,18 +244,22 @@ func (r *ModuleReconciler) handleBuild(ctx context.Context,
 	if mod.Spec.ModuleLoader.Container.Build == nil && km.Build == nil {
 		return false, nil
 	}
+
+	logger := log.FromContext(ctx, "kernel version", kernelVersion, "image", km.ContainerImage)
+	logger.Info("Trying to pull the output image")
+
 	exists, err := r.checkImageExists(ctx, mod, km)
 	if err != nil {
 		return false, fmt.Errorf("failed to check image existence for kernel %s: %w", kernelVersion, err)
 	}
 	if exists {
+		logger.Info("Image already exists; skipping build")
 		return false, nil
 	}
 
-	logger := log.FromContext(ctx).WithValues("kernel version", kernelVersion, "image", km.ContainerImage)
-	buildCtx := log.IntoContext(ctx, logger)
+	logger.Info("Image not pull-able; building in-cluster")
 
-	buildRes, err := r.buildAPI.Sync(buildCtx, *mod, *km, kernelVersion)
+	buildRes, err := r.buildAPI.Sync(log.IntoContext(ctx, logger), *mod, *km, kernelVersion)
 	if err != nil {
 		return false, fmt.Errorf("could not synchronize the build: %w", err)
 	}
@@ -262,13 +276,20 @@ func (r *ModuleReconciler) handleBuild(ctx context.Context,
 
 func (r *ModuleReconciler) checkImageExists(ctx context.Context, mod *kmmv1beta1.Module, km *kmmv1beta1.KernelMapping) (bool, error) {
 	var registryAuthGetter auth.RegistryAuthGetter
+
 	if irs := mod.Spec.ImageRepoSecret; irs != nil {
 		namespacedName := types.NamespacedName{
 			Name:      irs.Name,
 			Namespace: mod.Namespace,
 		}
-		registryAuthGetter = auth.NewRegistryAuthGetter(r.Client, namespacedName)
+		registryAuthGetter = r.authFactory.NewRegistryAuthGetter(r.Client, namespacedName)
+	} else {
+		registryAuthGetter = r.authFactory.NewServiceAccountRegistryAuthGetter(
+			r.coreClientSet,
+			mod.Namespace,
+			constants.OCPBuilderServiceAccountName)
 	}
+
 	pullOptions := module.GetRelevantPullOptions(mod, km)
 	imageAvailable, err := r.registry.ImageExists(ctx, km.ContainerImage, pullOptions, registryAuthGetter)
 	if err != nil {
@@ -365,7 +386,7 @@ func (r *ModuleReconciler) SetupWithManager(mgr ctrl.Manager, kernelLabel string
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&kmmv1beta1.Module{}).
 		Owns(&appsv1.DaemonSet{}).
-		Owns(&batchv1.Job{}).
+		Owns(&buildv1.BuildConfig{}).
 		Watches(
 			&source.Kind{Type: &v1.Node{}},
 			handler.EnqueueRequestsFromMapFunc(r.filter.FindModulesForNode),

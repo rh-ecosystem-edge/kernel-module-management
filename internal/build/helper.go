@@ -1,16 +1,16 @@
 package build
 
 import (
-	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 )
 
 //go:generate mockgen -source=helper.go -package=build -destination=mock_helper.go
 
 type Helper interface {
-	ApplyBuildArgOverrides(args []v1beta1.BuildArg, overrides ...v1beta1.BuildArg) []v1beta1.BuildArg
+	ApplyBuildArgOverrides(args []kmmv1beta1.BuildArg, overrides ...kmmv1beta1.BuildArg) []kmmv1beta1.BuildArg
 	GetRelevantBuild(mod kmmv1beta1.Module, km kmmv1beta1.KernelMapping) *kmmv1beta1.Build
 }
 
@@ -20,8 +20,8 @@ func NewHelper() Helper {
 	return &helper{}
 }
 
-func (m *helper) ApplyBuildArgOverrides(args []v1beta1.BuildArg, overrides ...v1beta1.BuildArg) []v1beta1.BuildArg {
-	overridesMap := make(map[string]v1beta1.BuildArg, len(overrides))
+func (m *helper) ApplyBuildArgOverrides(args []kmmv1beta1.BuildArg, overrides ...kmmv1beta1.BuildArg) []kmmv1beta1.BuildArg {
+	overridesMap := make(map[string]kmmv1beta1.BuildArg, len(overrides))
 
 	for _, o := range overrides {
 		overridesMap[o.Name] = o
@@ -66,4 +66,11 @@ func (m *helper) GetRelevantBuild(mod kmmv1beta1.Module, km kmmv1beta1.KernelMap
 	// secret and how to use, and if we need to take care of repeated secrets names
 	buildConfig.Secrets = append(buildConfig.Secrets, km.Build.Secrets...)
 	return buildConfig
+}
+
+func GetBuildLabels(mod kmmv1beta1.Module, targetKernel string) map[string]string {
+	return map[string]string{
+		constants.ModuleNameLabel:    mod.Name,
+		constants.TargetKernelTarget: targetKernel,
+	}
 }
