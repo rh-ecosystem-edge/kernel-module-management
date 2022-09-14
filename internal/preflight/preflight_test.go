@@ -11,9 +11,12 @@ import (
 	. "github.com/onsi/gomega"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -24,24 +27,23 @@ const (
 )
 
 var (
-	ctrl            *gomock.Controller
-	mockRegistryAPI *registry.MockRegistry
-	mockKernelAPI   *module.MockKernelMapper
-	mockAuthFactory *auth.MockRegistryAuthGetterFactory
-	clnt            *client.MockClient
-	p               *preflight
-	mod             *kmmv1beta1.Module
+	mod *kmmv1beta1.Module
+	pv  *kmmv1beta1.PreflightValidation
 )
 
 func TestPreflight(t *testing.T) {
 	RegisterFailHandler(Fail)
 
 	BeforeEach(func() {
-		ctrl = gomock.NewController(GinkgoT())
-		clnt = client.NewMockClient(ctrl)
-		mockRegistryAPI = registry.NewMockRegistry(ctrl)
-		mockKernelAPI = module.NewMockKernelMapper(ctrl)
-		mockAuthFactory = auth.NewMockRegistryAuthGetterFactory(ctrl)
+		pv = &kmmv1beta1.PreflightValidation{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "preflight-name",
+				Namespace: "preflight-namespace",
+			},
+			Spec: kmmv1beta1.PreflightValidationSpec{
+				KernelVersion: kernelVersion,
+			},
+		}
 		mod = &kmmv1beta1.Module{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: moduleName,
@@ -50,33 +52,49 @@ func TestPreflight(t *testing.T) {
 				ModuleLoader: kmmv1beta1.ModuleLoaderSpec{
 					Container: kmmv1beta1.ModuleLoaderContainerSpec{
 						Modprobe: kmmv1beta1.ModprobeSpec{
-							ModuleName: "simple-kmod.ko",
+							ModuleName: "simple-kmod",
 							DirName:    "/opt",
 						},
 					},
 				},
 			},
 		}
-		p = NewPreflightAPI(clnt,
-			mockRegistryAPI,
-			mockKernelAPI,
-			mockAuthFactory).(*preflight)
+	})
+
+	RunSpecs(t, "Preflight Suite")
+}
+
+var _ = Describe("preflight_PreflightUpgradeCheck", func() {
+	var (
+		ctrl              *gomock.Controller
+		mockKernelAPI     *module.MockKernelMapper
+		mockStatusUpdater *statusupdater.MockPreflightStatusUpdater
+		preflightHelper   *MockpreflightHelperAPI
+		p                 *preflight
+	)
+
+	BeforeEach(func() {
+		ctrl = gomock.NewController(GinkgoT())
+		mockKernelAPI = module.NewMockKernelMapper(ctrl)
+		mockStatusUpdater = statusupdater.NewMockPreflightStatusUpdater(ctrl)
+		preflightHelper = NewMockpreflightHelperAPI(ctrl)
+		p = &preflight{
+			kernelAPI:     mockKernelAPI,
+			helper:        preflightHelper,
+			statusUpdater: mockStatusUpdater,
+		}
+
 	})
 
 	AfterEach(func() {
 		ctrl.Finish()
 	})
 
-	RunSpecs(t, "Preflight Suite")
-}
-
-var _ = Describe("preflight upgrade", func() {
-
 	It("Failed to find mapping", func() {
 		mod.Spec.ModuleLoader.Container.KernelMappings = []kmmv1beta1.KernelMapping{}
 		mockKernelAPI.EXPECT().FindMappingForKernel(mod.Spec.ModuleLoader.Container.KernelMappings, kernelVersion).Return(nil, fmt.Errorf("some error"))
 
-		res, message := p.PreflightUpgradeCheck(context.Background(), mod, kernelVersion)
+		res, message := p.PreflightUpgradeCheck(context.Background(), pv, mod, "kernel version")
 
 		Expect(res).To(BeFalse())
 		Expect(message).To(Equal(fmt.Sprintf("Failed to find kernel mapping in the module %s for kernel version %s", mod.Name, kernelVersion)))
@@ -86,40 +104,144 @@ var _ = Describe("preflight upgrade", func() {
 		mapping := kmmv1beta1.KernelMapping{ContainerImage: containerImage}
 		mod.Spec.ModuleLoader.Container.KernelMappings = []kmmv1beta1.KernelMapping{}
 
-		mockKernelAPI.EXPECT().FindMappingForKernel(mod.Spec.ModuleLoader.Container.KernelMappings, kernelVersion).Return(&mapping, nil)
-		mockKernelAPI.EXPECT().PrepareKernelMapping(&mapping, gomock.Any()).Return(nil, fmt.Errorf("some error"))
+		gomock.InOrder(
+			mockKernelAPI.EXPECT().FindMappingForKernel(mod.Spec.ModuleLoader.Container.KernelMappings, kernelVersion).Return(&mapping, nil),
+			mockKernelAPI.EXPECT().PrepareKernelMapping(&mapping, gomock.Any()).Return(nil, fmt.Errorf("some error")),
+		)
 
-		res, message := p.PreflightUpgradeCheck(context.Background(), mod, kernelVersion)
+		res, message := p.PreflightUpgradeCheck(context.Background(), pv, mod, "kernel version")
 
 		Expect(res).To(BeFalse())
 		Expect(message).To(Equal(fmt.Sprintf("Failed to substitute template in kernel mapping in the module %s for kernel version %s", mod.Name, kernelVersion)))
 	})
+
+	It("verify image success, no build", func() {
+		mapping := kmmv1beta1.KernelMapping{ContainerImage: containerImage}
+		mod.Spec.ModuleLoader.Container.KernelMappings = []kmmv1beta1.KernelMapping{mapping}
+
+		gomock.InOrder(
+			mockKernelAPI.EXPECT().FindMappingForKernel(mod.Spec.ModuleLoader.Container.KernelMappings, kernelVersion).Return(&mapping, nil),
+			mockKernelAPI.EXPECT().PrepareKernelMapping(&mapping, gomock.Any()).Return(&mapping, nil),
+			mockStatusUpdater.EXPECT().PreflightSetVerificationStage(context.Background(), pv, mod.Name, kmmv1beta1.VerificationStageImage),
+			preflightHelper.EXPECT().verifyImage(context.Background(), &mapping, mod, kernelVersion).Return(true, "some message"),
+		)
+
+		res, message := p.PreflightUpgradeCheck(context.Background(), pv, mod, "kernel version")
+
+		Expect(res).To(BeTrue())
+		Expect(message).To(Equal("some message"))
+	})
+
+	It("verify image failed, no build", func() {
+		mapping := kmmv1beta1.KernelMapping{ContainerImage: containerImage}
+		mod.Spec.ModuleLoader.Container.KernelMappings = []kmmv1beta1.KernelMapping{mapping}
+
+		gomock.InOrder(
+			mockKernelAPI.EXPECT().FindMappingForKernel(mod.Spec.ModuleLoader.Container.KernelMappings, kernelVersion).Return(&mapping, nil),
+			mockKernelAPI.EXPECT().PrepareKernelMapping(&mapping, gomock.Any()).Return(&mapping, nil),
+			mockStatusUpdater.EXPECT().PreflightSetVerificationStage(context.Background(), pv, mod.Name, kmmv1beta1.VerificationStageImage),
+			preflightHelper.EXPECT().verifyImage(context.Background(), &mapping, mod, kernelVersion).Return(false, "some error message"),
+		)
+
+		res, message := p.PreflightUpgradeCheck(context.Background(), pv, mod, "kernel version")
+
+		Expect(res).To(BeFalse())
+		Expect(message).To(Equal("some error message"))
+	})
+
+	It("verify image failed, build exists, successful", func() {
+		mapping := kmmv1beta1.KernelMapping{ContainerImage: containerImage, Build: &kmmv1beta1.Build{}}
+		mod.Spec.ModuleLoader.Container.KernelMappings = []kmmv1beta1.KernelMapping{mapping}
+
+		gomock.InOrder(
+			mockKernelAPI.EXPECT().FindMappingForKernel(mod.Spec.ModuleLoader.Container.KernelMappings, kernelVersion).Return(&mapping, nil),
+			mockKernelAPI.EXPECT().PrepareKernelMapping(&mapping, gomock.Any()).Return(&mapping, nil),
+			mockStatusUpdater.EXPECT().PreflightSetVerificationStage(context.Background(), pv, mod.Name, kmmv1beta1.VerificationStageImage),
+			preflightHelper.EXPECT().verifyImage(context.Background(), &mapping, mod, kernelVersion).Return(false, "some error message"),
+			mockStatusUpdater.EXPECT().PreflightSetVerificationStage(context.Background(), pv, mod.Name, kmmv1beta1.VerificationStageBuild),
+			preflightHelper.EXPECT().verifyBuild(context.Background(), &mapping, mod, kernelVersion).Return(true, "some message"),
+		)
+
+		res, message := p.PreflightUpgradeCheck(context.Background(), pv, mod, "kernel version")
+
+		Expect(res).To(BeTrue())
+		Expect(message).To(Equal("some message"))
+	})
+
+	It("verify image failed, build exists, failed", func() {
+		mapping := kmmv1beta1.KernelMapping{ContainerImage: containerImage, Build: &kmmv1beta1.Build{}}
+		mod.Spec.ModuleLoader.Container.KernelMappings = []kmmv1beta1.KernelMapping{mapping}
+
+		gomock.InOrder(
+			mockKernelAPI.EXPECT().FindMappingForKernel(mod.Spec.ModuleLoader.Container.KernelMappings, kernelVersion).Return(&mapping, nil),
+			mockKernelAPI.EXPECT().PrepareKernelMapping(&mapping, gomock.Any()).Return(&mapping, nil),
+			mockStatusUpdater.EXPECT().PreflightSetVerificationStage(context.Background(), pv, mod.Name, kmmv1beta1.VerificationStageImage),
+			preflightHelper.EXPECT().verifyImage(context.Background(), &mapping, mod, kernelVersion).Return(false, "some error message"),
+			mockStatusUpdater.EXPECT().PreflightSetVerificationStage(context.Background(), pv, mod.Name, kmmv1beta1.VerificationStageBuild),
+			preflightHelper.EXPECT().verifyBuild(context.Background(), &mapping, mod, kernelVersion).Return(false, "some error message"),
+		)
+
+		res, message := p.PreflightUpgradeCheck(context.Background(), pv, mod, "kernel version")
+
+		Expect(res).To(BeFalse())
+		Expect(message).To(Equal("some error message"))
+	})
 })
 
-var _ = Describe("verifyImage", func() {
+var _ = Describe("preflightHelper_verifyImage", func() {
+	var (
+		ctrl            *gomock.Controller
+		mockRegistryAPI *registry.MockRegistry
+		mockAuthFactory *auth.MockRegistryAuthGetterFactory
+		authGetter      *auth.MockRegistryAuthGetter
+		clnt            *client.MockClient
+		ph              *preflightHelper
+	)
+
+	BeforeEach(func() {
+		ctrl = gomock.NewController(GinkgoT())
+		clnt = client.NewMockClient(ctrl)
+		mockRegistryAPI = registry.NewMockRegistry(ctrl)
+		mockAuthFactory = auth.NewMockRegistryAuthGetterFactory(ctrl)
+		authGetter = &auth.MockRegistryAuthGetter{}
+		ph = &preflightHelper{
+			client:      clnt,
+			registryAPI: mockRegistryAPI,
+			authFactory: mockAuthFactory,
+		}
+
+	})
+
+	AfterEach(func() {
+		ctrl.Finish()
+	})
 
 	It("good flow", func() {
 		mapping := kmmv1beta1.KernelMapping{ContainerImage: containerImage}
 		digests := []string{"digest0", "digest1"}
 		repoConfig := &registry.RepoPullConfig{}
 		digestLayer := v1stream.Layer{}
-		mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(mod)
-		mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, nil, gomock.Any()).Return(digests, repoConfig, nil)
-		mockRegistryAPI.EXPECT().GetLayerByDigest(digests[1], repoConfig).Return(&digestLayer, nil)
-		mockRegistryAPI.EXPECT().VerifyModuleExists(&digestLayer, "/opt", kernelVersion, "simple-kmod.ko").Return(true)
+		gomock.InOrder(
+			mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(mod).Return(authGetter),
+			mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, nil, authGetter).Return(digests, repoConfig, nil),
+			mockRegistryAPI.EXPECT().GetLayerByDigest(digests[1], repoConfig).Return(&digestLayer, nil),
+			mockRegistryAPI.EXPECT().VerifyModuleExists(&digestLayer, "/opt", kernelVersion, "simple-kmod.ko").Return(true),
+		)
 
-		res, message := p.verifyImage(context.Background(), &mapping, mod, kernelVersion)
+		res, message := ph.verifyImage(context.Background(), &mapping, mod, kernelVersion)
 
 		Expect(res).To(BeTrue())
-		Expect(message).To(Equal(VerificationStatusReasonVerified))
+		Expect(message).To(Equal(fmt.Sprintf(VerificationStatusReasonVerified, "image accessible and verified")))
 	})
 
 	It("get layers digest failed", func() {
 		mapping := kmmv1beta1.KernelMapping{ContainerImage: containerImage}
-		mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(mod)
-		mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, nil, gomock.Any()).Return(nil, nil, fmt.Errorf("some error"))
+		gomock.InOrder(
+			mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(mod).Return(authGetter),
+			mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, nil, authGetter).Return(nil, nil, fmt.Errorf("some error")),
+		)
 
-		res, message := p.verifyImage(context.Background(), &mapping, mod, kernelVersion)
+		res, message := ph.verifyImage(context.Background(), &mapping, mod, kernelVersion)
 
 		Expect(res).To(BeFalse())
 		Expect(message).To(Equal(fmt.Sprintf("image %s inaccessible or does not exists", containerImage)))
@@ -129,11 +251,13 @@ var _ = Describe("verifyImage", func() {
 		mapping := kmmv1beta1.KernelMapping{ContainerImage: containerImage}
 		digests := []string{"digest0", "digest1"}
 		repoConfig := &registry.RepoPullConfig{}
-		mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(mod)
-		mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, nil, gomock.Any()).Return(digests, repoConfig, nil)
-		mockRegistryAPI.EXPECT().GetLayerByDigest(digests[1], repoConfig).Return(nil, fmt.Errorf("some error"))
+		gomock.InOrder(
+			mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(mod).Return(authGetter),
+			mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, nil, authGetter).Return(digests, repoConfig, nil),
+			mockRegistryAPI.EXPECT().GetLayerByDigest(digests[1], repoConfig).Return(nil, fmt.Errorf("some error")),
+		)
 
-		res, message := p.verifyImage(context.Background(), &mapping, mod, kernelVersion)
+		res, message := ph.verifyImage(context.Background(), &mapping, mod, kernelVersion)
 
 		Expect(res).To(BeFalse())
 		Expect(message).To(Equal(fmt.Sprintf("image %s, layer %s is inaccessible", containerImage, digests[1])))
@@ -144,15 +268,80 @@ var _ = Describe("verifyImage", func() {
 		digests := []string{"digest0"}
 		repoConfig := &registry.RepoPullConfig{}
 		digestLayer := v1stream.Layer{}
-		mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(mod)
-		mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, nil, gomock.Any()).Return(digests, repoConfig, nil)
-		mockRegistryAPI.EXPECT().GetLayerByDigest(digests[0], repoConfig).Return(&digestLayer, nil)
-		mockRegistryAPI.EXPECT().VerifyModuleExists(&digestLayer, "/opt", kernelVersion, "simple-kmod.ko").Return(false)
+		gomock.InOrder(
+			mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(mod).Return(authGetter),
+			mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, nil, gomock.Any()).Return(digests, repoConfig, nil),
+			mockRegistryAPI.EXPECT().GetLayerByDigest(digests[0], repoConfig).Return(&digestLayer, nil),
+			mockRegistryAPI.EXPECT().VerifyModuleExists(&digestLayer, "/opt", kernelVersion, "simple-kmod.ko").Return(false),
+		)
 
-		res, message := p.verifyImage(context.Background(), &mapping, mod, kernelVersion)
+		res, message := ph.verifyImage(context.Background(), &mapping, mod, kernelVersion)
 
 		Expect(res).To(BeFalse())
 		Expect(message).To(Equal(fmt.Sprintf("image %s does not contain kernel module for kernel %s on any layer", containerImage, kernelVersion)))
 	})
 
+})
+
+var _ = Describe("preflightHelper_verifyBuild", func() {
+	var (
+		ctrl         *gomock.Controller
+		mockBuildAPI *build.MockManager
+		clnt         *client.MockClient
+		mockKODM     *syncronizedmap.MockKernelOsDtkMapping
+		ph           *preflightHelper
+	)
+
+	BeforeEach(func() {
+		ctrl = gomock.NewController(GinkgoT())
+		clnt = client.NewMockClient(ctrl)
+		mockBuildAPI = build.NewMockManager(ctrl)
+		mockKODM = syncronizedmap.NewMockKernelOsDtkMapping(ctrl)
+		ph = &preflightHelper{
+			client:             clnt,
+			buildAPI:           mockBuildAPI,
+			kernelOsDtkMapping: mockKODM,
+		}
+
+	})
+
+	AfterEach(func() {
+		ctrl.Finish()
+	})
+
+	It("sync failed", func() {
+		mod.Spec.ModuleLoader.Container.Build = &kmmv1beta1.Build{}
+		mapping := kmmv1beta1.KernelMapping{ContainerImage: containerImage}
+		mockBuildAPI.EXPECT().Sync(context.Background(), *mod, mapping, kernelVersion,
+			mapping.ContainerImage, false, mockKODM).Return(build.Result{}, fmt.Errorf("some error"))
+
+		res, msg := ph.verifyBuild(context.Background(), &mapping, mod, kernelVersion)
+		Expect(res).To(BeFalse())
+		Expect(msg).To(Equal(fmt.Sprintf("Failed to verify build for module %s, kernel version %s, error %s", mod.Name, kernelVersion, fmt.Errorf("some error"))))
+
+	})
+
+	It("sync completed", func() {
+		mod.Spec.ModuleLoader.Container.Build = &kmmv1beta1.Build{}
+		mapping := kmmv1beta1.KernelMapping{ContainerImage: containerImage}
+		mockBuildAPI.EXPECT().Sync(context.Background(), *mod, mapping, kernelVersion,
+			mapping.ContainerImage, false, mockKODM).Return(build.Result{Status: build.StatusCompleted}, nil)
+
+		res, msg := ph.verifyBuild(context.Background(), &mapping, mod, kernelVersion)
+		Expect(res).To(BeTrue())
+		Expect(msg).To(Equal(fmt.Sprintf(VerificationStatusReasonVerified, "build compiles")))
+
+	})
+
+	It("sync not completed yet", func() {
+		mod.Spec.ModuleLoader.Container.Build = &kmmv1beta1.Build{}
+		mapping := kmmv1beta1.KernelMapping{ContainerImage: containerImage}
+		mockBuildAPI.EXPECT().Sync(context.Background(), *mod, mapping, kernelVersion,
+			mapping.ContainerImage, false, mockKODM).Return(build.Result{Status: build.StatusInProgress}, nil)
+
+		res, msg := ph.verifyBuild(context.Background(), &mapping, mod, kernelVersion)
+		Expect(res).To(BeFalse())
+		Expect(msg).To(Equal("Waiting for build verification"))
+
+	})
 })
