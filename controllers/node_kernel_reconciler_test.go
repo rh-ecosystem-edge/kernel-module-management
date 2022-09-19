@@ -8,7 +8,7 @@ import (
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
+	clienttest "github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,26 +17,21 @@ import (
 )
 
 var _ = Describe("NodeKernelReconciler_Reconcile", func() {
-
+	var (
+		gCtrl     *gomock.Controller
+		clnt      *clienttest.MockClient
+		mockSKODM *syncronizedmap.MockKernelOsDtkMapping
+	)
+	BeforeEach(func() {
+		gCtrl = gomock.NewController(GinkgoT())
+		clnt = clienttest.NewMockClient(gCtrl)
+		mockSKODM = syncronizedmap.NewMockKernelOsDtkMapping(gCtrl)
+	})
 	const (
 		kernelVersion = "1.2.3"
-		osVersion     = "411.86.202210072320-0"
 		labelName     = "label-name"
 		nodeName      = "node-name"
 	)
-
-	var (
-		gCtrl     *gomock.Controller
-		clnt      *client.MockClient
-		mockSKODM *syncronizedmap.MockKernelOsDtkMapping
-		osImage   = fmt.Sprintf("Red Hat Enterprise Linux CoreOS %s (Ootpa)", osVersion)
-	)
-
-	BeforeEach(func() {
-		gCtrl = gomock.NewController(GinkgoT())
-		clnt = client.NewMockClient(gCtrl)
-		mockSKODM = syncronizedmap.NewMockKernelOsDtkMapping(gCtrl)
-	})
 
 	It("should return an error if the node cannot be found anymore", func() {
 		ctx := context.Background()
@@ -51,76 +46,54 @@ var _ = Describe("NodeKernelReconciler_Reconcile", func() {
 		Expect(err).To(HaveOccurred())
 	})
 
-	It("should set the label if it does not exist", func() {
-		node := v1.Node{
-			ObjectMeta: metav1.ObjectMeta{Name: nodeName},
-			Status: v1.NodeStatus{
-				NodeInfo: v1.NodeSystemInfo{
-					KernelVersion: kernelVersion,
-					OSImage:       osImage,
+	const osVersion = "411.86.202210072320-0"
+
+	validOSImage := fmt.Sprintf("Red Hat Enterprise Linux CoreOS %s (Ootpa)", osVersion)
+
+	DescribeTable(
+		"should set the label",
+		func(kv, expected, osImage string, alreadyLabeled bool) {
+			node := v1.Node{
+				ObjectMeta: metav1.ObjectMeta{Name: nodeName},
+				Status: v1.NodeStatus{
+					NodeInfo: v1.NodeSystemInfo{
+						KernelVersion: kv,
+						OSImage:       osImage,
+					},
 				},
-			},
-		}
+			}
 
-		ctx := context.Background()
-		gomock.InOrder(
-			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ interface{}, _ interface{}, n *v1.Node) error {
-					n.ObjectMeta = node.ObjectMeta
-					n.Status = node.Status
-					return nil
-				},
-			),
-			mockSKODM.EXPECT().SetNodeInfo(kernelVersion, osVersion),
-			clnt.EXPECT().Patch(ctx, gomock.Any(), gomock.Any()),
-		)
+			if alreadyLabeled {
+				node.SetLabels(map[string]string{labelName: "some-value"})
+			}
 
-		nkr := NewNodeKernelReconciler(clnt, labelName, nil, mockSKODM)
-		req := runtimectrl.Request{
-			NamespacedName: types.NamespacedName{Name: nodeName},
-		}
+			node.SetLabels(map[string]string{labelName: kernelVersion})
+			nsn := types.NamespacedName{Name: nodeName}
 
-		res, err := nkr.Reconcile(ctx, req)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(res))
-	})
+			ctx := context.Background()
+			gomock.InOrder(
+				clnt.EXPECT().Get(ctx, nsn, &v1.Node{}).DoAndReturn(
+					func(_ interface{}, _ interface{}, n *v1.Node) error {
+						n.ObjectMeta = node.ObjectMeta
+						n.Status = node.Status
+						return nil
+					},
+				),
+				mockSKODM.EXPECT().SetNodeInfo(kernelVersion, osVersion),
+				clnt.EXPECT().Patch(ctx, &node, gomock.Any()),
+			)
 
-	It("should set the label if it already exists", func() {
-		node := v1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   nodeName,
-				Labels: map[string]string{kernelVersion: "4.5.6"},
-			},
-			Status: v1.NodeStatus{
-				NodeInfo: v1.NodeSystemInfo{
-					KernelVersion: kernelVersion,
-					OSImage:       osImage,
-				},
-			},
-		}
+			nkr := NewNodeKernelReconciler(clnt, labelName, nil, mockSKODM)
+			req := runtimectrl.Request{NamespacedName: nsn}
 
-		ctx := context.Background()
-		gomock.InOrder(
-			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ interface{}, _ interface{}, n *v1.Node) error {
-					n.ObjectMeta = node.ObjectMeta
-					n.Status = node.Status
-					return nil
-				},
-			),
-			mockSKODM.EXPECT().SetNodeInfo(kernelVersion, osVersion),
-			clnt.EXPECT().Patch(ctx, gomock.Any(), gomock.Any()),
-		)
-
-		nkr := NewNodeKernelReconciler(clnt, labelName, nil, mockSKODM)
-		req := runtimectrl.Request{
-			NamespacedName: types.NamespacedName{Name: nodeName},
-		}
-
-		res, err := nkr.Reconcile(ctx, req)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(res))
-	})
+			res, err := nkr.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Requeue).To(BeFalse())
+		},
+		Entry(nil, kernelVersion, kernelVersion, validOSImage, false),
+		Entry(nil, kernelVersion, kernelVersion, validOSImage, true),
+		Entry(nil, kernelVersion+"+", kernelVersion, validOSImage, true),
+	)
 
 	It("should fail if it cannot parse the osImage version from the nodeInfo", func() {
 
