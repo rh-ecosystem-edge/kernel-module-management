@@ -29,7 +29,7 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 #
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
 # quay.io/edge-infrastructure/kernel-module-management-bundle:$VERSION and quay.io/edge-infrastructure/kernel-module-management-catalog:$VERSION.
-IMAGE_TAG_BASE ?= quay.io/edge-infrastructure/kernel-module-management
+IMAGE_TAG_BASE ?= quay.io/edge-infrastructure/kernel-module-management-operator
 
 # SIGNER_IMAGE_TAG_BASE and SIGNER_IMAGE_TAG together define SIGNER_IMG
 # SIGNER_IMG is the name given to the signer job image that is used to sign kernel modules
@@ -58,7 +58,7 @@ ifeq ($(USE_IMAGE_DIGESTS), true)
 endif
 
 # Image URL to use all building/pushing image targets
-IMG ?= quay.io/edge-infrastructure/kernel-module-management:latest
+IMG ?= quay.io/edge-infrastructure/kernel-module-management-operator:latest
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
