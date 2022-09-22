@@ -10,6 +10,7 @@ import (
 	kmmbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -72,7 +73,10 @@ func (bcm *buildManager) Sync(ctx context.Context, mod kmmv1beta1.Module, m kmmv
 
 	if changed {
 		logger.Info("The module's build spec has been changed, deleting the current Build so a new one can be created", "name", build.Name)
-		err = bcm.client.Delete(ctx, build)
+		opts := []client.DeleteOption{
+			client.PropagationPolicy(metav1.DeletePropagationBackground),
+		}
+		err = bcm.client.Delete(ctx, build, opts...)
 		if err != nil {
 			logger.Info(utils.WarnString(fmt.Sprintf("failed to delete Build %s: %v", build.Name, err)))
 		}
