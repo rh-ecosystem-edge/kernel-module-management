@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
@@ -24,6 +25,8 @@ const (
 	nodeLibModulesVolumeName       = "node-lib-modules"
 	nodeUsrLibModulesPath          = "/usr/lib/modules"
 	nodeUsrLibModulesVolumeName    = "node-usr-lib-modules"
+	nodeVarLibFirmwarePath         = "/var/lib/firmware"
+	nodeVarLibFirmwareVolumeName   = "node-var-lib-firmware"
 	devicePluginKernelVersion      = ""
 )
 
@@ -115,6 +118,91 @@ func (dc *daemonSetGenerator) SetDriverContainerAsDesired(ctx context.Context, d
 	nodeSelector[dc.kernelLabel] = kernelVersion
 
 	hostPathDirectory := v1.HostPathDirectory
+	hostPathDirectoryOrCreate := v1.HostPathDirectoryOrCreate
+
+	container := v1.Container{
+		Command:         []string{"sleep", "infinity"},
+		Name:            "module-loader",
+		Image:           image,
+		ImagePullPolicy: mod.Spec.ModuleLoader.Container.ImagePullPolicy,
+		Lifecycle: &v1.Lifecycle{
+			PostStart: &v1.LifecycleHandler{
+				Exec: &v1.ExecAction{
+					Command: MakeLoadCommand(mod.Spec.ModuleLoader.Container.Modprobe, mod.Name),
+				},
+			},
+			PreStop: &v1.LifecycleHandler{
+				Exec: &v1.ExecAction{
+					Command: MakeUnloadCommand(mod.Spec.ModuleLoader.Container.Modprobe, mod.Name),
+				},
+			},
+		},
+		SecurityContext: &v1.SecurityContext{
+			AllowPrivilegeEscalation: pointer.Bool(false),
+			Capabilities: &v1.Capabilities{
+				Add: []v1.Capability{"SYS_MODULE"},
+			},
+			RunAsUser: pointer.Int64(0),
+			SELinuxOptions: &v1.SELinuxOptions{
+				Type: "spc_t",
+			},
+		},
+		VolumeMounts: []v1.VolumeMount{
+			{
+				Name:      nodeLibModulesVolumeName,
+				ReadOnly:  true,
+				MountPath: nodeLibModulesPath,
+			},
+			{
+				Name:      nodeUsrLibModulesVolumeName,
+				ReadOnly:  true,
+				MountPath: nodeUsrLibModulesPath,
+			},
+		},
+	}
+
+	volumes := []v1.Volume{
+		{
+			Name: nodeLibModulesVolumeName,
+			VolumeSource: v1.VolumeSource{
+				HostPath: &v1.HostPathVolumeSource{
+					Path: nodeLibModulesPath,
+					Type: &hostPathDirectory,
+				},
+			},
+		},
+		{
+			Name: nodeUsrLibModulesVolumeName,
+			VolumeSource: v1.VolumeSource{
+				HostPath: &v1.HostPathVolumeSource{
+					Path: nodeUsrLibModulesPath,
+					Type: &hostPathDirectory,
+				},
+			},
+		},
+	}
+
+	if fw := mod.Spec.ModuleLoader.Container.Modprobe.FirmwarePath; fw != "" {
+		moduleFirmwarePath := fmt.Sprintf("%s/%s", nodeVarLibFirmwarePath, mod.Name)
+
+		firmwareVolume := v1.Volume{
+			Name: nodeVarLibFirmwareVolumeName,
+			VolumeSource: v1.VolumeSource{
+				HostPath: &v1.HostPathVolumeSource{
+					Path: moduleFirmwarePath,
+					Type: &hostPathDirectoryOrCreate,
+				},
+			},
+		}
+		volumes = append(volumes, firmwareVolume)
+
+		firmwareVolumeMount := v1.VolumeMount{
+			Name:      nodeVarLibFirmwareVolumeName,
+			MountPath: moduleFirmwarePath,
+		}
+
+		container.VolumeMounts = append(container.VolumeMounts, firmwareVolumeMount)
+	}
 
 	ds.Spec = appsv1.DaemonSetSpec{
 		Template: v1.PodTemplateSpec{
@@ -123,72 +211,12 @@ func (dc *daemonSetGenerator) SetDriverContainerAsDesired(ctx context.Context, d
 				Finalizers: []string{constants.NodeLabelerFinalizer},
 			},
 			Spec: v1.PodSpec{
-				Containers: []v1.Container{
-					{
-						Command:         []string{"sleep", "infinity"},
-						Name:            "module-loader",
-						Image:           image,
-						ImagePullPolicy: mod.Spec.ModuleLoader.Container.ImagePullPolicy,
-						Lifecycle: &v1.Lifecycle{
-							PostStart: &v1.LifecycleHandler{
-								Exec: &v1.ExecAction{
-									Command: MakeLoadCommand(mod.Spec.ModuleLoader.Container.Modprobe),
-								},
-							},
-							PreStop: &v1.LifecycleHandler{
-								Exec: &v1.ExecAction{
-									Command: MakeUnloadCommand(mod.Spec.ModuleLoader.Container.Modprobe),
-								},
-							},
-						},
-						SecurityContext: &v1.SecurityContext{
-							AllowPrivilegeEscalation: pointer.Bool(false),
-							Capabilities: &v1.Capabilities{
-								Add: []v1.Capability{"SYS_MODULE"},
-							},
-							RunAsUser: pointer.Int64(0),
-							SELinuxOptions: &v1.SELinuxOptions{
-								Type: "spc_t",
-							},
-						},
-						VolumeMounts: []v1.VolumeMount{
-							{
-								Name:      nodeLibModulesVolumeName,
-								ReadOnly:  true,
-								MountPath: nodeLibModulesPath,
-							},
-							{
-								Name:      nodeUsrLibModulesVolumeName,
-								ReadOnly:  true,
-								MountPath: nodeUsrLibModulesPath,
-							},
-						},
-					},
-				},
+				Containers:         []v1.Container{container},
 				ImagePullSecrets:   GetPodPullSecrets(mod.Spec.ImageRepoSecret),
 				NodeSelector:       nodeSelector,
 				PriorityClassName:  "system-node-critical",
 				ServiceAccountName: mod.Spec.ModuleLoader.ServiceAccountName,
-				Volumes: []v1.Volume{
-					{
-						Name: nodeLibModulesVolumeName,
-						VolumeSource: v1.VolumeSource{
-							HostPath: &v1.HostPathVolumeSource{
-								Path: nodeLibModulesPath,
-								Type: &hostPathDirectory,
-							},
-						},
-					},
-					{
-						Name: nodeUsrLibModulesVolumeName,
-						VolumeSource: v1.VolumeSource{
-							HostPath: &v1.HostPathVolumeSource{
-								Path: nodeUsrLibModulesPath,
-								Type: &hostPathDirectory,
-							},
-						},
-					},
-				},
+				Volumes:            volumes,
 			},
 		},
 		Selector: &metav1.LabelSelector{MatchLabels: standardLabels},
@@ -335,43 +363,92 @@ func OverrideLabels(labels, overrides map[string]string) map[string]string {
 	return labels
 }
 
-func MakeLoadCommand(spec kmmv1beta1.ModprobeSpec) []string {
-	loadCommand := []string{"modprobe"}
-
-	if ra := spec.RawArgs; ra != nil && len(ra.Load) > 0 {
-		return append(loadCommand, ra.Load...)
+func MakeLoadCommand(spec kmmv1beta1.ModprobeSpec, modName string) []string {
+	loadCommandShell := []string{
+		"/bin/sh",
+		"-c",
 	}
 
-	if a := spec.Args; a != nil && len(a.Load) > 0 {
-		loadCommand = append(loadCommand, a.Load...)
+	var loadCommand strings.Builder
+
+	if fw := spec.FirmwarePath; fw != "" {
+		fmt.Fprintf(&loadCommand, "cp -r %s %s/%s && ", fw, nodeVarLibFirmwarePath, modName)
+	}
+
+	loadCommand.WriteString("modprobe")
+
+	if rawArgs := spec.RawArgs; rawArgs != nil && len(rawArgs.Load) > 0 {
+		for _, arg := range rawArgs.Load {
+			loadCommand.WriteRune(' ')
+			loadCommand.WriteString(arg)
+		}
+		return append(loadCommandShell, loadCommand.String())
+	}
+
+	if args := spec.Args; args != nil && len(args.Load) > 0 {
+		for _, arg := range args.Load {
+			loadCommand.WriteRune(' ')
+			loadCommand.WriteString(arg)
+		}
 	} else {
-		loadCommand = append(loadCommand, "-v")
+		loadCommand.WriteString(" -v")
 	}
 
 	if dirName := spec.DirName; dirName != "" {
-		loadCommand = append(loadCommand, "-d", dirName)
+		loadCommand.WriteString(" -d " + dirName)
 	}
 
-	loadCommand = append(loadCommand, spec.ModuleName)
-	return append(loadCommand, spec.Parameters...)
+	loadCommand.WriteString(" " + spec.ModuleName)
+
+	if params := spec.Parameters; len(params) > 0 {
+		for _, param := range params {
+			loadCommand.WriteRune(' ')
+			loadCommand.WriteString(param)
+		}
+	}
+
+	return append(loadCommandShell, loadCommand.String())
 }
 
-func MakeUnloadCommand(spec kmmv1beta1.ModprobeSpec) []string {
-	unloadCommand := []string{"modprobe"}
-
-	if ra := spec.RawArgs; ra != nil && len(ra.Unload) > 0 {
-		return append(unloadCommand, ra.Unload...)
+func MakeUnloadCommand(spec kmmv1beta1.ModprobeSpec, modName string) []string {
+	unloadCommandShell := []string{
+		"/bin/sh",
+		"-c",
 	}
 
-	if a := spec.Args; a != nil && len(a.Unload) > 0 {
-		unloadCommand = append(unloadCommand, a.Unload...)
+	var unloadCommand strings.Builder
+	unloadCommand.WriteString("modprobe")
+
+	fwUnloadCommand := ""
+	if fw := spec.FirmwarePath; fw != "" {
+		fwUnloadCommand = fmt.Sprintf(" && rm -rf %s/%s", nodeVarLibFirmwarePath, modName)
+	}
+
+	if rawArgs := spec.RawArgs; rawArgs != nil && len(rawArgs.Unload) > 0 {
+		for _, arg := range rawArgs.Unload {
+			unloadCommand.WriteRune(' ')
+			unloadCommand.WriteString(arg)
+			unloadCommand.WriteString(fwUnloadCommand)
+		}
+
+		return append(unloadCommandShell, unloadCommand.String())
+	}
+
+	if args := spec.Args; args != nil && len(args.Unload) > 0 {
+		for _, arg := range args.Unload {
+			unloadCommand.WriteRune(' ')
+			unloadCommand.WriteString(arg)
+		}
 	} else {
-		unloadCommand = append(unloadCommand, "-rv")
+		unloadCommand.WriteString(" -rv")
 	}
 
 	if dirName := spec.DirName; dirName != "" {
-		unloadCommand = append(unloadCommand, "-d", dirName)
+		unloadCommand.WriteString(" -d " + dirName)
 	}
 
-	return append(unloadCommand, spec.ModuleName)
+	unloadCommand.WriteString(" " + spec.ModuleName)
+	unloadCommand.WriteString(fwUnloadCommand)
+
+	return append(unloadCommandShell, unloadCommand.String())
 }
