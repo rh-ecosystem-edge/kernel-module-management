@@ -13,8 +13,8 @@ require (
 	github.com/onsi/gomega v1.20.2
 	github.com/openshift/api v0.0.0-20220525145417-ee5b62754c68
 	github.com/prometheus/client_golang v1.13.0
-	k8s.io/api v0.25.0
-	k8s.io/apimachinery v0.25.0
+	k8s.io/api v0.25.2
+	k8s.io/apimachinery v0.25.2
 	k8s.io/client-go v0.25.0
 	k8s.io/klog/v2 v2.80.1
 	k8s.io/kubectl v0.24.4
