@@ -28,6 +28,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/rbac"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	appsv1 "k8s.io/api/apps/v1"
@@ -52,6 +53,7 @@ type ModuleReconciler struct {
 
 	authFactory      auth.RegistryAuthGetterFactory
 	buildAPI         build.Manager
+	rbacAPI          rbac.RBACCreator
 	daemonAPI        daemonset.DaemonSetCreator
 	kernelAPI        module.KernelMapper
 	metricsAPI       metrics.Metrics
@@ -63,6 +65,7 @@ type ModuleReconciler struct {
 func NewModuleReconciler(
 	client client.Client,
 	buildAPI build.Manager,
+	rbacAPI rbac.RBACCreator,
 	daemonAPI daemonset.DaemonSetCreator,
 	kernelAPI module.KernelMapper,
 	metricsAPI metrics.Metrics,
@@ -74,6 +77,7 @@ func NewModuleReconciler(
 		Client:           client,
 		authFactory:      authFactory,
 		buildAPI:         buildAPI,
+		rbacAPI:          rbacAPI,
 		daemonAPI:        daemonAPI,
 		kernelAPI:        kernelAPI,
 		metricsAPI:       metricsAPI,
@@ -89,7 +93,7 @@ func NewModuleReconciler(
 //+kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=create;delete;get;list;patch;watch
 //+kubebuilder:rbac:groups="core",resources=nodes,verbs=get;list;watch
 //+kubebuilder:rbac:groups="core",resources=secrets,verbs=get;list;watch
-//+kubebuilder:rbac:groups="core",resources=serviceaccounts,verbs=get
+//+kubebuilder:rbac:groups="core",resources=serviceaccounts,verbs=create;delete;get;list;patch;watch
 //+kubebuilder:rbac:groups="build.openshift.io",resources=buildconfigs,verbs=create;delete;get;list;patch;watch
 //+kubebuilder:rbac:groups="build.openshift.io",resources=builds,verbs=get;list;watch
 
@@ -112,6 +116,17 @@ func (r *ModuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	r.setKMMOMetrics(ctx)
+
+	if mod.Spec.ModuleLoader.ServiceAccountName == "" {
+		if err := r.rbacAPI.CreateModuleLoaderServiceAccount(ctx, *mod); err != nil {
+			return res, fmt.Errorf("could not create module-loader's ServiceAccount: %w", err)
+		}
+	}
+	if mod.Spec.DevicePlugin != nil && mod.Spec.DevicePlugin.ServiceAccountName == "" {
+		if err := r.rbacAPI.CreateDevicePluginServiceAccount(ctx, *mod); err != nil {
+			return res, fmt.Errorf("could not create device-plugin's ServiceAccount: %w", err)
+		}
+	}
 
 	targetedNodes, err := r.getNodesListBySelector(ctx, mod)
 	if err != nil {
@@ -368,6 +383,7 @@ func (r *ModuleReconciler) SetupWithManager(mgr ctrl.Manager, kernelLabel string
 		For(&kmmv1beta1.Module{}).
 		Owns(&appsv1.DaemonSet{}).
 		Owns(&buildv1.BuildConfig{}).
+		Owns(&v1.ServiceAccount{}).
 		Watches(
 			&source.Kind{Type: &v1.Node{}},
 			handler.EnqueueRequestsFromMapFunc(r.filter.FindModulesForNode),
