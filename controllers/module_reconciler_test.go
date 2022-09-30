@@ -131,8 +131,8 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 				},
 			),
 			mockMetrics.EXPECT().SetExistingKMMOModules(1),
-			mockRC.EXPECT().CreateModuleLoaderServiceAccount(ctx, gomock.Any()).Return(nil),
-			mockRC.EXPECT().CreateDevicePluginServiceAccount(ctx, gomock.Any()).Return(nil),
+			mockRC.EXPECT().CreateModuleLoaderRBAC(ctx, gomock.Any()).Return(nil),
+			mockRC.EXPECT().CreateDevicePluginRBAC(ctx, gomock.Any()).Return(nil),
 			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ interface{}, list *v1.NodeList, _ ...interface{}) error {
 					list.Items = []v1.Node{}
@@ -189,6 +189,71 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 
 		gomock.InOrder(
 			clnt.EXPECT().Get(ctx, req.NamespacedName, gomock.Any()).DoAndReturn(
+				func(_ interface{}, _ interface{}, m *kmmv1beta1.Module) error {
+					m.ObjectMeta = mod.ObjectMeta
+					m.Spec = mod.Spec
+					return nil
+				},
+			),
+			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ interface{}, list *kmmv1beta1.ModuleList, _ ...interface{}) error {
+					list.Items = []kmmv1beta1.Module{mod}
+					return nil
+				},
+			),
+			mockMetrics.EXPECT().SetExistingKMMOModules(1),
+			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ interface{}, list *v1.NodeList, _ ...interface{}) error {
+					list.Items = []v1.Node{}
+					return nil
+				},
+			),
+		)
+
+		mr := NewModuleReconciler(
+			clnt,
+			mockBM,
+			mockRC,
+			mockDC,
+			mockKM,
+			mockMetrics,
+			nil,
+			mockRegistry,
+			nil,
+			mockSU,
+		)
+
+		dsByKernelVersion := make(map[string]*appsv1.DaemonSet)
+
+		gomock.InOrder(
+			mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, moduleName, namespace).Return(dsByKernelVersion, nil),
+			mockDC.EXPECT().GarbageCollect(ctx, dsByKernelVersion, sets.NewString()),
+			mockSU.EXPECT().ModuleUpdateStatus(ctx, &mod, []v1.Node{}, []v1.Node{}, dsByKernelVersion).Return(nil),
+		)
+
+		res, err := mr.Reconcile(context.Background(), req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res).To(Equal(reconcile.Result{}))
+	})
+
+	It("should do nothing when no nodes match the selector", func() {
+		const serviceAccountName = "module-loader-service-account"
+
+		mod := kmmv1beta1.Module{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      moduleName,
+				Namespace: namespace,
+			},
+			Spec: kmmv1beta1.ModuleSpec{
+				Selector: map[string]string{"key": "value"},
+				ModuleLoader: kmmv1beta1.ModuleLoaderSpec{
+					ServiceAccountName: serviceAccountName,
+				},
+			},
+		}
+
+		gomock.InOrder(
+			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, m *kmmv1beta1.Module) error {
 					m.ObjectMeta = mod.ObjectMeta
 					m.Spec = mod.Spec
