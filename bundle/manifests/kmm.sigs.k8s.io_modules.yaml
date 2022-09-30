@@ -1871,7 +1871,7 @@ spec:
                             type: string
                           pull:
                             description: Pull contains settings determining how to
-                              check if the DriverContainer image already exists.
+                              pull the base images of the build process.
                             properties:
                               insecure:
                                 description: If Insecure is true, images can be pulled
@@ -1959,8 +1959,7 @@ spec:
                                   type: string
                                 pull:
                                   description: Pull contains settings determining
-                                    how to check if the DriverContainer image already
-                                    exists.
+                                    how to pull the base images of the build process.
                                   properties:
                                     insecure:
                                       description: If Insecure is true, images can
@@ -2017,6 +2016,20 @@ spec:
                               description: Literal defines a literal target kernel
                                 version to be matched exactly against node kernels.
                               type: string
+                            pull:
+                              description: Pull contains settings determining how
+                                to check if the ModuleLoader image already exists
+                                and allows overriding of the ModuleLoader's pull options
+                              properties:
+                                insecure:
+                                  description: If Insecure is true, images can be
+                                    pulled from an insecure (plain HTTP) registry.
+                                  type: boolean
+                                insecureSkipTLSVerify:
+                                  description: If InsecureSkipTLSVerify, the operator
+                                    will accept any certificate provided by the registry.
+                                  type: boolean
+                              type: object
                             regexp:
                               description: Regexp is a regular expression to be match
                                 against node kernels.
@@ -2056,6 +2069,11 @@ spec:
                             description: DirName is the root directory for modules.
                               It adds `-d ${DirName}` to the modprobe command-line.
                             type: string
+                          firmwarePath:
+                            description: FirmwarePath is the path of the firmware(s).
+                              The firmware(s) will be copied to the host for the kernel
+                              to find them.
+                            type: string
                           moduleName:
                             description: ModuleName is the name of the Module to be
                               loaded.
@@ -2092,6 +2110,19 @@ spec:
                             type: object
                         required:
                         - moduleName
+                        type: object
+                      pull:
+                        description: Pull contains settings determining how to check
+                          if the ModuleLoader image already exists.
+                        properties:
+                          insecure:
+                            description: If Insecure is true, images can be pulled
+                              from an insecure (plain HTTP) registry.
+                            type: boolean
+                          insecureSkipTLSVerify:
+                            description: If InsecureSkipTLSVerify, the operator will
+                              accept any certificate provided by the registry.
+                            type: boolean
                         type: object
                     required:
                     - kernelMappings
