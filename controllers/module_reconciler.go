@@ -24,7 +24,6 @@ import (
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/daemonset"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
@@ -38,7 +37,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -54,7 +52,6 @@ type ModuleReconciler struct {
 
 	authFactory      auth.RegistryAuthGetterFactory
 	buildAPI         build.Manager
-	coreClientSet    kubernetes.Interface
 	daemonAPI        daemonset.DaemonSetCreator
 	kernelAPI        module.KernelMapper
 	metricsAPI       metrics.Metrics
@@ -65,7 +62,6 @@ type ModuleReconciler struct {
 
 func NewModuleReconciler(
 	client client.Client,
-	coreClientSet kubernetes.Interface,
 	buildAPI build.Manager,
 	daemonAPI daemonset.DaemonSetCreator,
 	kernelAPI module.KernelMapper,
@@ -78,7 +74,6 @@ func NewModuleReconciler(
 		Client:           client,
 		authFactory:      authFactory,
 		buildAPI:         buildAPI,
-		coreClientSet:    coreClientSet,
 		daemonAPI:        daemonAPI,
 		kernelAPI:        kernelAPI,
 		metricsAPI:       metricsAPI,
@@ -275,21 +270,7 @@ func (r *ModuleReconciler) handleBuild(ctx context.Context,
 }
 
 func (r *ModuleReconciler) checkImageExists(ctx context.Context, mod *kmmv1beta1.Module, km *kmmv1beta1.KernelMapping) (bool, error) {
-	var registryAuthGetter auth.RegistryAuthGetter
-
-	if irs := mod.Spec.ImageRepoSecret; irs != nil {
-		namespacedName := types.NamespacedName{
-			Name:      irs.Name,
-			Namespace: mod.Namespace,
-		}
-		registryAuthGetter = r.authFactory.NewRegistryAuthGetter(r.Client, namespacedName)
-	} else {
-		registryAuthGetter = r.authFactory.NewServiceAccountRegistryAuthGetter(
-			r.coreClientSet,
-			mod.Namespace,
-			constants.OCPBuilderServiceAccountName)
-	}
-
+	registryAuthGetter := r.authFactory.NewRegistryAuthGetterFrom(mod)
 	pullOptions := module.GetRelevantPullOptions(mod, km)
 	imageAvailable, err := r.registry.ImageExists(ctx, km.ContainerImage, pullOptions, registryAuthGetter)
 	if err != nil {

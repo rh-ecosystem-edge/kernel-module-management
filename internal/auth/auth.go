@@ -6,6 +6,8 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/authn/kubernetes"
+	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	k8s "k8s.io/client-go/kubernetes"
@@ -59,27 +61,45 @@ func (sarag *serviceAccountRegistryAuthGetter) GetKeyChain(ctx context.Context) 
 }
 
 type RegistryAuthGetterFactory interface {
-	NewRegistryAuthGetter(client client.Client, namespacedName types.NamespacedName) RegistryAuthGetter
-	NewServiceAccountRegistryAuthGetter(coreClientSet k8s.Interface, namespace, serviceAccountName string) RegistryAuthGetter
+	NewRegistryAuthGetterFrom(mod *kmmv1beta1.Module) RegistryAuthGetter
 }
 
-type registryAuthGetterFactory struct{}
-
-func NewRegistryAuthGetterFactory() RegistryAuthGetterFactory {
-	return registryAuthGetterFactory{}
+type registryAuthGetterFactory struct {
+	client        client.Client
+	coreClientSet k8s.Interface
 }
 
-func (registryAuthGetterFactory) NewRegistryAuthGetter(client client.Client, namespacedName types.NamespacedName) RegistryAuthGetter {
+func NewRegistryAuthGetterFactory(client client.Client, coreClientSet k8s.Interface) RegistryAuthGetterFactory {
+	return &registryAuthGetterFactory{
+		client:        client,
+		coreClientSet: coreClientSet,
+	}
+}
+
+func (af *registryAuthGetterFactory) newRegistryAuthGetter(namespacedName types.NamespacedName) RegistryAuthGetter {
 	return &registrySecretAuthGetter{
-		client:         client,
+		client:         af.client,
 		namespacedName: namespacedName,
 	}
 }
 
-func (registryAuthGetterFactory) NewServiceAccountRegistryAuthGetter(coreClientSet k8s.Interface, namespace, serviceAccountName string) RegistryAuthGetter {
+func (af *registryAuthGetterFactory) newServiceAccountRegistryAuthGetter(namespace, serviceAccountName string) RegistryAuthGetter {
 	return &serviceAccountRegistryAuthGetter{
-		coreClientSet:      coreClientSet,
+		coreClientSet:      af.coreClientSet,
 		namespace:          namespace,
 		serviceAccountName: serviceAccountName,
 	}
+}
+
+func (af *registryAuthGetterFactory) NewRegistryAuthGetterFrom(mod *kmmv1beta1.Module) RegistryAuthGetter {
+	if mod.Spec.ImageRepoSecret != nil {
+		namespacedName := types.NamespacedName{
+			Name:      mod.Spec.ImageRepoSecret.Name,
+			Namespace: mod.Namespace,
+		}
+		return af.newRegistryAuthGetter(namespacedName)
+	}
+	return af.newServiceAccountRegistryAuthGetter(
+		mod.Namespace,
+		constants.OCPBuilderServiceAccountName)
 }

@@ -10,7 +10,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/daemonset"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
@@ -23,7 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/client-go/kubernetes/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -75,7 +73,6 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 
 		mr := NewModuleReconciler(
 			clnt,
-			nil,
 			mockBM,
 			mockDC,
 			mockKM,
@@ -128,7 +125,6 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 
 		mr := NewModuleReconciler(
 			clnt,
-			nil,
 			mockBM,
 			mockDC,
 			mockKM,
@@ -197,7 +193,6 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 
 		mr := NewModuleReconciler(
 			clnt,
-			nil,
 			mockBM,
 			mockDC,
 			mockKM,
@@ -269,7 +264,6 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 
 		mr := NewModuleReconciler(
 			clnt,
-			nil,
 			mockBM,
 			mockDC,
 			mockKM,
@@ -409,7 +403,6 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 
 		mr := NewModuleReconciler(
 			clnt,
-			nil,
 			mockBM,
 			mockDC,
 			mockKM,
@@ -471,7 +464,6 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 
 		mr := NewModuleReconciler(
 			clnt,
-			nil,
 			mockBM,
 			mockDC,
 			mockKM,
@@ -530,7 +522,6 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 		authGetter      = &auth.MockRegistryAuthGetter{}
 		ctrl            *gomock.Controller
 		clnt            *client.MockClient
-		fakeClientSet   = fake.NewSimpleClientset()
 		mockAuthFactory *auth.MockRegistryAuthGetterFactory
 		mockBM          *build.MockManager
 		mockDC          *daemonset.MockDaemonSetCreator
@@ -568,7 +559,6 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 
 		mr := NewModuleReconciler(
 			clnt,
-			nil,
 			mockBM,
 			mockDC,
 			mockKM,
@@ -607,7 +597,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 		gomock.InOrder(
 			mockAuthFactory.
 				EXPECT().
-				NewRegistryAuthGetter(clnt, types.NamespacedName{Name: secretName, Namespace: namespace}).
+				NewRegistryAuthGetterFrom(mod).
 				Return(authGetter),
 			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, authGetter).DoAndReturn(
 				func(_ interface{}, _ interface{}, _ interface{}, registryAuthGetter auth.RegistryAuthGetter) (bool, error) {
@@ -619,7 +609,6 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 
 		mr := NewModuleReconciler(
 			clnt,
-			fakeClientSet,
 			mockBM,
 			mockDC,
 			mockKM,
@@ -651,7 +640,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 		gomock.InOrder(
 			mockAuthFactory.
 				EXPECT().
-				NewServiceAccountRegistryAuthGetter(fakeClientSet, namespace, constants.OCPBuilderServiceAccountName).
+				NewRegistryAuthGetterFrom(mod).
 				Return(authGetter),
 			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, authGetter).DoAndReturn(
 				func(_ interface{}, _ interface{}, _ interface{}, registryAuthGetter auth.RegistryAuthGetter) (bool, error) {
@@ -663,7 +652,6 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 
 		mr := NewModuleReconciler(
 			clnt,
-			fakeClientSet,
 			mockBM,
 			mockDC,
 			mockKM,
@@ -696,7 +684,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 		gomock.InOrder(
 			mockAuthFactory.
 				EXPECT().
-				NewServiceAccountRegistryAuthGetter(fakeClientSet, namespace, constants.OCPBuilderServiceAccountName).
+				NewRegistryAuthGetterFrom(mod).
 				Return(authGetter),
 			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, authGetter).Return(false, nil),
 			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any()).Return(buildRes, nil),
@@ -705,7 +693,6 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 
 		mr := NewModuleReconciler(
 			clnt,
-			fakeClientSet,
 			mockBM,
 			mockDC,
 			mockKM,
@@ -738,7 +725,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 		gomock.InOrder(
 			mockAuthFactory.
 				EXPECT().
-				NewServiceAccountRegistryAuthGetter(fakeClientSet, namespace, constants.OCPBuilderServiceAccountName).
+				NewRegistryAuthGetterFrom(mod).
 				Return(authGetter),
 			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, authGetter).Return(false, nil),
 			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any()).Return(buildRes, nil),
@@ -747,7 +734,6 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 
 		mr := NewModuleReconciler(
 			clnt,
-			fakeClientSet,
 			mockBM,
 			mockDC,
 			mockKM,
@@ -780,7 +766,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 		gomock.InOrder(
 			mockAuthFactory.
 				EXPECT().
-				NewServiceAccountRegistryAuthGetter(fakeClientSet, namespace, constants.OCPBuilderServiceAccountName).
+				NewRegistryAuthGetterFrom(mod).
 				Return(authGetter),
 			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, authGetter).Return(false, nil),
 			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any()).Return(buildRes, nil),
@@ -789,7 +775,6 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 
 		mr := NewModuleReconciler(
 			clnt,
-			fakeClientSet,
 			mockBM,
 			mockDC,
 			mockKM,

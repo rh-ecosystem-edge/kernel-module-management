@@ -10,6 +10,8 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 var _ = Describe("registrySecretAuthGetter_GetKeyChain", func() {
@@ -19,16 +21,19 @@ var _ = Describe("registrySecretAuthGetter_GetKeyChain", func() {
 	)
 
 	var (
-		ctrl       *gomock.Controller
-		ctx        context.Context
-		factory    = NewRegistryAuthGetterFactory()
-		mockClient *client.MockClient
+		ctrl          *gomock.Controller
+		ctx           context.Context
+		factory       *registryAuthGetterFactory
+		mockClient    *client.MockClient
+		fakeClientSet kubernetes.Interface
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		ctx = context.TODO()
 		mockClient = client.NewMockClient(ctrl)
+		fakeClientSet = fake.NewSimpleClientset()
+		factory = NewRegistryAuthGetterFactory(mockClient, fakeClientSet).(*registryAuthGetterFactory)
 	})
 
 	AfterEach(func() {
@@ -43,7 +48,7 @@ var _ = Describe("registrySecretAuthGetter_GetKeyChain", func() {
 			Name:      secretName,
 			Namespace: secretNamespace,
 		}
-		registryAuthGetter := factory.NewRegistryAuthGetter(mockClient, namespacedNamespace)
+		registryAuthGetter := factory.newRegistryAuthGetter(namespacedNamespace)
 
 		_, err := registryAuthGetter.GetKeyChain(ctx)
 		Expect(err).To(HaveOccurred())
@@ -66,7 +71,7 @@ var _ = Describe("registrySecretAuthGetter_GetKeyChain", func() {
 			Name:      secretName,
 			Namespace: secretNamespace,
 		}
-		registryAuthGetter := factory.NewRegistryAuthGetter(mockClient, namespacedNamespace)
+		registryAuthGetter := factory.newRegistryAuthGetter(namespacedNamespace)
 
 		_, err := registryAuthGetter.GetKeyChain(ctx)
 		Expect(err).To(HaveOccurred())
@@ -81,7 +86,7 @@ var _ = Describe("registrySecretAuthGetter_GetKeyChain", func() {
 			Name:      secretName,
 			Namespace: secretNamespace,
 		}
-		registryAuthGetter := factory.NewRegistryAuthGetter(mockClient, namespacedNamespace)
+		registryAuthGetter := factory.newRegistryAuthGetter(namespacedNamespace)
 
 		_, err := registryAuthGetter.GetKeyChain(ctx)
 		Expect(err).NotTo(HaveOccurred())

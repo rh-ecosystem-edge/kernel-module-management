@@ -9,7 +9,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 
-	"k8s.io/apimachinery/pkg/types"
 	ctrlruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -68,15 +67,7 @@ func (p *preflight) verifyImage(ctx context.Context, mapping *kmmv1beta1.KernelM
 	moduleName := mod.Spec.ModuleLoader.Container.Modprobe.ModuleName
 	baseDir := mod.Spec.ModuleLoader.Container.Modprobe.DirName
 
-	var registryAuthGetter auth.RegistryAuthGetter
-	if mod.Spec.ImageRepoSecret != nil {
-		namespacedName := types.NamespacedName{
-			Name:      mod.Spec.ImageRepoSecret.Name,
-			Namespace: mod.Namespace,
-		}
-		registryAuthGetter = p.authFactory.NewRegistryAuthGetter(p.client, namespacedName)
-	}
-
+	registryAuthGetter := p.authFactory.NewRegistryAuthGetterFrom(mod)
 	digests, repoConfig, err := p.registryAPI.GetLayersDigests(ctx, image, registryAuthGetter)
 	if err != nil {
 		log.Info("image layers inaccessible, image probably does not exists", "module name", mod.Name, "image", image)
