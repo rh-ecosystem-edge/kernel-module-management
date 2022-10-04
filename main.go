@@ -32,6 +32,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/preflight"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/rbac"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -164,6 +165,7 @@ func main() {
 		buildconfig.NewMaker(helperAPI, scheme),
 		buildconfig.NewOpenShiftBuildsHelper(client),
 	)
+	rbacAPI := rbac.NewCreator(client, scheme)
 	daemonAPI := daemonset.NewCreator(client, kernelLabel, scheme)
 	kernelAPI := module.NewKernelMapper()
 	moduleStatusUpdaterAPI := statusupdater.NewModuleStatusUpdater(client, daemonAPI, metricsAPI)
@@ -175,6 +177,7 @@ func main() {
 	mc := controllers.NewModuleReconciler(
 		client,
 		buildAPI,
+		rbacAPI,
 		daemonAPI,
 		kernelAPI,
 		metricsAPI,
