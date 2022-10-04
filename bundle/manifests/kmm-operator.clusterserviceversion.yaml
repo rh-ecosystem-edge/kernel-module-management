@@ -14,7 +14,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    operators.operatorframework.io/builder: operator-sdk-v1.17.0+git
+    operators.operatorframework.io/builder: operator-sdk-v1.21.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
   name: kmm-operator.v0.0.1
   namespace: placeholder
@@ -26,6 +26,9 @@ spec:
       displayName: Module
       kind: Module
       name: modules.kmm.sigs.k8s.io
+      version: v1beta1
+    - kind: PreflightValidation
+      name: preflightvalidations.kmm.sigs.k8s.io
       version: v1beta1
   description: Kubernetes operator managing out of tree kernel modules
   displayName: OOT Operator
@@ -48,11 +51,22 @@ spec:
           - patch
           - watch
         - apiGroups:
-          - batch
+          - build.openshift.io
           resources:
-          - jobs
+          - buildconfigs
           verbs:
           - create
+          - delete
+          - get
+          - list
+          - patch
+          - watch
+        - apiGroups:
+          - build.openshift.io
+          resources:
+          - builds
+          verbs:
+          - get
           - list
           - watch
         - apiGroups:
@@ -82,6 +96,17 @@ spec:
           - list
           - watch
         - apiGroups:
+          - ""
+          resources:
+          - serviceaccounts
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - watch
+        - apiGroups:
           - kmm.sigs.k8s.io
           resources:
           - modules
@@ -108,6 +133,26 @@ spec:
           - patch
           - update
         - apiGroups:
+          - kmm.sigs.k8s.io
+          resources:
+          - preflightvalidations
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - kmm.sigs.k8s.io
+          resources:
+          - preflightvalidations/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
           - authentication.k8s.io
           resources:
           - tokenreviews
@@ -121,7 +166,9 @@ spec:
           - create
         serviceAccountName: kmm-operator-controller-manager
       deployments:
-      - name: kmm-operator-controller-manager
+      - label:
+          control-plane: controller-manager
+        name: kmm-operator-controller-manager
         spec:
           replicas: 1
           selector:
