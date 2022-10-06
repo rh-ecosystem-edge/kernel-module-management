@@ -35,30 +35,30 @@ func (m *MockRBACCreator) EXPECT() *MockRBACCreatorMockRecorder {
 	return m.recorder
 }
 
-// CreateDevicePluginServiceAccount mocks base method.
-func (m *MockRBACCreator) CreateDevicePluginServiceAccount(ctx context.Context, mod v1beta1.Module) error {
+// CreateDevicePluginRBAC mocks base method.
+func (m *MockRBACCreator) CreateDevicePluginRBAC(ctx context.Context, mod v1beta1.Module) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateDevicePluginServiceAccount", ctx, mod)
+	ret := m.ctrl.Call(m, "CreateDevicePluginRBAC", ctx, mod)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// CreateDevicePluginServiceAccount indicates an expected call of CreateDevicePluginServiceAccount.
-func (mr *MockRBACCreatorMockRecorder) CreateDevicePluginServiceAccount(ctx, mod interface{}) *gomock.Call {
+// CreateDevicePluginRBAC indicates an expected call of CreateDevicePluginRBAC.
+func (mr *MockRBACCreatorMockRecorder) CreateDevicePluginRBAC(ctx, mod interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDevicePluginServiceAccount", reflect.TypeOf((*MockRBACCreator)(nil).CreateDevicePluginServiceAccount), ctx, mod)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDevicePluginRBAC", reflect.TypeOf((*MockRBACCreator)(nil).CreateDevicePluginRBAC), ctx, mod)
 }
 
-// CreateModuleLoaderServiceAccount mocks base method.
-func (m *MockRBACCreator) CreateModuleLoaderServiceAccount(ctx context.Context, mod v1beta1.Module) error {
+// CreateModuleLoaderRBAC mocks base method.
+func (m *MockRBACCreator) CreateModuleLoaderRBAC(ctx context.Context, mod v1beta1.Module) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateModuleLoaderServiceAccount", ctx, mod)
+	ret := m.ctrl.Call(m, "CreateModuleLoaderRBAC", ctx, mod)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// CreateModuleLoaderServiceAccount indicates an expected call of CreateModuleLoaderServiceAccount.
-func (mr *MockRBACCreatorMockRecorder) CreateModuleLoaderServiceAccount(ctx, mod interface{}) *gomock.Call {
+// CreateModuleLoaderRBAC indicates an expected call of CreateModuleLoaderRBAC.
+func (mr *MockRBACCreatorMockRecorder) CreateModuleLoaderRBAC(ctx, mod interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateModuleLoaderServiceAccount", reflect.TypeOf((*MockRBACCreator)(nil).CreateModuleLoaderServiceAccount), ctx, mod)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateModuleLoaderRBAC", reflect.TypeOf((*MockRBACCreator)(nil).CreateModuleLoaderRBAC), ctx, mod)
 }

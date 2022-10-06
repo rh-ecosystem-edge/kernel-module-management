@@ -94,6 +94,9 @@ func NewModuleReconciler(
 //+kubebuilder:rbac:groups="core",resources=nodes,verbs=get;list;watch
 //+kubebuilder:rbac:groups="core",resources=secrets,verbs=get;list;watch
 //+kubebuilder:rbac:groups="core",resources=serviceaccounts,verbs=create;delete;get;list;patch;watch
+//+kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=use,resourceNames=privileged
+//+kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=create;delete;get;list;patch;watch
+//+kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=clusterroles,verbs=bind,resourceNames=module-loader;device-plugin
 //+kubebuilder:rbac:groups="build.openshift.io",resources=buildconfigs,verbs=create;delete;get;list;patch;watch
 //+kubebuilder:rbac:groups="build.openshift.io",resources=builds,verbs=get;list;watch
 
@@ -118,13 +121,13 @@ func (r *ModuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	r.setKMMOMetrics(ctx)
 
 	if mod.Spec.ModuleLoader.ServiceAccountName == "" {
-		if err := r.rbacAPI.CreateModuleLoaderServiceAccount(ctx, *mod); err != nil {
-			return res, fmt.Errorf("could not create module-loader's ServiceAccount: %w", err)
+		if err := r.rbacAPI.CreateModuleLoaderRBAC(ctx, *mod); err != nil {
+			return res, fmt.Errorf("could not create module-loader's RBAC: %w", err)
 		}
 	}
 	if mod.Spec.DevicePlugin != nil && mod.Spec.DevicePlugin.ServiceAccountName == "" {
-		if err := r.rbacAPI.CreateDevicePluginServiceAccount(ctx, *mod); err != nil {
-			return res, fmt.Errorf("could not create device-plugin's ServiceAccount: %w", err)
+		if err := r.rbacAPI.CreateDevicePluginRBAC(ctx, *mod); err != nil {
+			return res, fmt.Errorf("could not create device-plugin's RBAC: %w", err)
 		}
 	}
 
