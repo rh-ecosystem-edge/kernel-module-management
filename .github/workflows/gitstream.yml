@@ -2,11 +2,12 @@ name: GitStream
 
 on:
   push:
-    branches: '*'
+    branches:
+      - '*'
   pull_request:
     branches: [main]
   schedule:
-    - '*/5 * * * *'
+    - cron: '*/5 * * * *'
 
 jobs:
   gitstream:
