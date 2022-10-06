@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - '*'
-  pull_request:
-    branches: [main]
   schedule:
     - cron: '*/5 * * * *'
 
@@ -31,8 +29,8 @@ jobs:
           ${HOME}/go/bin/gitstream \
             sync \
             --dry-run \
+            --downstream-repo-name ${{ github.repository }} \
             --upstream-url https://github.com/qbarrand/test-upstream \
-            --downstream-since 2022-01-01 \
-            --downstream-repo-name ${{ github.repository }}
+            --since 2022-01-01
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
