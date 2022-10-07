@@ -33,6 +33,20 @@ IFS=" " read -r -a namespaces <<< "$(echo "${namespaces[@]}" | tr ' ' '\n' | sor
 for ns in "${namespaces[@]}"; do
   echo "Inspecting DaemonSet in '${ns}' namespace"
   oc adm inspect -n "$ns" daemonset.apps --dest-dir="$OUTPUT_DIR/inspect"
+
+  echo "Inspecting RBAC for DaemonSets in '${ns}' namespace"
+  for sa in $(oc get daemonset -n "${ns}" -l kmm.node.kubernetes.io/module.name --no-headers -o custom-columns="SA:.spec.template.spec.serviceAccountName"); do
+    oc adm inspect -n "${ns}" serviceaccounts "${sa}" --dest-dir="${OUTPUT_DIR}/inspect"
+
+    rbac=$(oc get rolebinding,clusterrolebinding -n simple-kmod \
+      -o jsonpath="{range .items[?(@.subjects[0].name=='${sa}')]}{.kind}{' '}{.metadata.name}{'\n'}{.roleRef.kind}{' '}{.roleRef.name}{'\n'}{end}")
+
+    echo "${rbac}" | while read -r line; do
+      resourceType="$(echo "${line}" | cut -d' ' -f1)"
+      name="$(echo "${line}" | cut -d' ' -f2)"
+      oc adm inspect -n "${ns}" "${resourceType}" "${name}" --dest-dir="${OUTPUT_DIR}/inspect"
+    done
+  done
 done
 
 for ns in $(oc get job -A -l kmm.node.kubernetes.io/module.name --no-headers -o custom-columns="NS:.metadata.namespace"); do
