@@ -28,7 +28,9 @@ oc adm inspect -A crd/modules.kmm.sigs.k8s.io  --dest-dir="$OUTPUT_DIR/inspect"
 echo "Inspecting all Modules in all namespaces"
 oc adm inspect -A modules.kmm.sigs.k8s.io --dest-dir="$OUTPUT_DIR/inspect"
 
-for ns in $(oc get daemonset -A -l kmm.node.kubernetes.io/module.name --no-headers -o custom-columns="NS:.metadata.namespace"); do
+namespaces=$(oc get daemonset -A -l kmm.node.kubernetes.io/module.name --no-headers -o custom-columns="NS:.metadata.namespace")
+IFS=" " read -r -a namespaces <<< "$(echo "${namespaces[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' ')"
+for ns in "${namespaces[@]}"; do
   echo "Inspecting DaemonSet in '${ns}' namespace"
   oc adm inspect -n "$ns" daemonset.apps --dest-dir="$OUTPUT_DIR/inspect"
 done
