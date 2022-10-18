@@ -67,8 +67,9 @@ func (p *preflight) verifyImage(ctx context.Context, mapping *kmmv1beta1.KernelM
 	moduleName := mod.Spec.ModuleLoader.Container.Modprobe.ModuleName
 	baseDir := mod.Spec.ModuleLoader.Container.Modprobe.DirName
 
+	pullOptions := module.GetRelevantPullOptions(mod, mapping)
 	registryAuthGetter := p.authFactory.NewRegistryAuthGetterFrom(mod)
-	digests, repoConfig, err := p.registryAPI.GetLayersDigests(ctx, image, registryAuthGetter)
+	digests, repoConfig, err := p.registryAPI.GetLayersDigests(ctx, image, pullOptions, registryAuthGetter)
 	if err != nil {
 		log.Info("image layers inaccessible, image probably does not exists", "module name", mod.Name, "image", image)
 		return false, fmt.Sprintf("image %s inaccessible or does not exists", image)

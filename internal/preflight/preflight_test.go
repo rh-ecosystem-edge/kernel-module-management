@@ -104,7 +104,7 @@ var _ = Describe("verifyImage", func() {
 		repoConfig := &registry.RepoPullConfig{}
 		digestLayer := v1stream.Layer{}
 		mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(mod)
-		mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, gomock.Any()).Return(digests, repoConfig, nil)
+		mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, nil, gomock.Any()).Return(digests, repoConfig, nil)
 		mockRegistryAPI.EXPECT().GetLayerByDigest(digests[1], repoConfig).Return(&digestLayer, nil)
 		mockRegistryAPI.EXPECT().VerifyModuleExists(&digestLayer, "/opt", kernelVersion, "simple-kmod.ko").Return(true)
 
@@ -117,7 +117,7 @@ var _ = Describe("verifyImage", func() {
 	It("get layers digest failed", func() {
 		mapping := kmmv1beta1.KernelMapping{ContainerImage: containerImage}
 		mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(mod)
-		mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, gomock.Any()).Return(nil, nil, fmt.Errorf("some error"))
+		mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, nil, gomock.Any()).Return(nil, nil, fmt.Errorf("some error"))
 
 		res, message := p.verifyImage(context.Background(), &mapping, mod, kernelVersion)
 
@@ -130,7 +130,7 @@ var _ = Describe("verifyImage", func() {
 		digests := []string{"digest0", "digest1"}
 		repoConfig := &registry.RepoPullConfig{}
 		mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(mod)
-		mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, gomock.Any()).Return(digests, repoConfig, nil)
+		mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, nil, gomock.Any()).Return(digests, repoConfig, nil)
 		mockRegistryAPI.EXPECT().GetLayerByDigest(digests[1], repoConfig).Return(nil, fmt.Errorf("some error"))
 
 		res, message := p.verifyImage(context.Background(), &mapping, mod, kernelVersion)
@@ -145,7 +145,7 @@ var _ = Describe("verifyImage", func() {
 		repoConfig := &registry.RepoPullConfig{}
 		digestLayer := v1stream.Layer{}
 		mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(mod)
-		mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, gomock.Any()).Return(digests, repoConfig, nil)
+		mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, nil, gomock.Any()).Return(digests, repoConfig, nil)
 		mockRegistryAPI.EXPECT().GetLayerByDigest(digests[0], repoConfig).Return(&digestLayer, nil)
 		mockRegistryAPI.EXPECT().VerifyModuleExists(&digestLayer, "/opt", kernelVersion, "simple-kmod.ko").Return(false)
 
