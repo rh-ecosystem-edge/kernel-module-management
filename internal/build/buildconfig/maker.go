@@ -3,6 +3,7 @@ package buildconfig
 import (
 	"fmt"
 
+	"github.com/mitchellh/hashstructure"
 	buildv1 "github.com/openshift/api/build/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
@@ -17,7 +18,7 @@ import (
 //go:generate mockgen -source=maker.go -package=buildconfig -destination=mock_maker.go
 
 type Maker interface {
-	MakeBuildConfig(mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string, pushImage bool) (*buildv1.BuildConfig, error)
+	MakeBuildConfigTemplate(mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string, pushImage bool) (*buildv1.BuildConfig, error)
 }
 
 type maker struct {
@@ -32,7 +33,7 @@ func NewMaker(helper build.Helper, scheme *runtime.Scheme) Maker {
 	}
 }
 
-func (m *maker) MakeBuildConfig(mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string, pushImage bool) (*buildv1.BuildConfig, error) {
+func (m *maker) MakeBuildConfigTemplate(mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string, pushImage bool) (*buildv1.BuildConfig, error) {
 	kmmBuild := m.helper.GetRelevantBuild(mod, mapping)
 
 	buildArgs := m.helper.ApplyBuildArgOverrides(
@@ -51,11 +52,22 @@ func (m *maker) MakeBuildConfig(mod kmmv1beta1.Module, mapping kmmv1beta1.Kernel
 		buildTarget = buildv1.BuildOutput{}
 	}
 
+	sourceConfig := buildv1.BuildSource{
+		Dockerfile: &kmmBuild.Dockerfile,
+		Type:       buildv1.BuildSourceDockerfile,
+	}
+
+	sourceConfigHash, err := hashstructure.Hash(sourceConfig, nil)
+	if err != nil {
+		return nil, fmt.Errorf("could not hash BuildConfig's Buildsource template: %v", err)
+	}
+
 	bc := buildv1.BuildConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: mod.Name + "-",
 			Namespace:    mod.Namespace,
 			Labels:       build.GetBuildLabels(mod, targetKernel),
+			Annotations:  map[string]string{buildConfigHashAnnotation: fmt.Sprintf("%d", sourceConfigHash)},
 		},
 		Spec: buildv1.BuildConfigSpec{
 			Triggers: []buildv1.BuildTriggerPolicy{
@@ -64,10 +76,7 @@ func (m *maker) MakeBuildConfig(mod kmmv1beta1.Module, mapping kmmv1beta1.Kernel
 			RunPolicy: buildv1.BuildRunPolicySerialLatestOnly,
 			CommonSpec: buildv1.CommonSpec{
 				ServiceAccount: constants.OCPBuilderServiceAccountName,
-				Source: buildv1.BuildSource{
-					Dockerfile: &kmmBuild.Dockerfile,
-					Type:       buildv1.BuildSourceDockerfile,
-				},
+				Source:         sourceConfig,
 				Strategy: buildv1.BuildStrategy{
 					Type: buildv1.DockerBuildStrategyType,
 					DockerStrategy: &buildv1.DockerBuildStrategy{
