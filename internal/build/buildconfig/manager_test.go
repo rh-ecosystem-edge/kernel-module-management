@@ -1,4 +1,4 @@
-package buildconfig_test
+package buildconfig
 
 import (
 	"context"
@@ -11,7 +11,6 @@ import (
 	buildv1 "github.com/openshift/api/build/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build/buildconfig"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,15 +27,15 @@ var _ = Describe("Manager_Sync", func() {
 
 	var (
 		mockKubeClient            *client.MockClient
-		mockMaker                 *buildconfig.MockMaker
-		mockOpenShiftBuildsHelper *buildconfig.MockOpenShiftBuildsHelper
+		mockMaker                 *MockMaker
+		mockOpenShiftBuildsHelper *MockOpenShiftBuildsHelper
 	)
 
 	BeforeEach(func() {
 		ctrl := gomock.NewController(GinkgoT())
 		mockKubeClient = client.NewMockClient(ctrl)
-		mockMaker = buildconfig.NewMockMaker(ctrl)
-		mockOpenShiftBuildsHelper = buildconfig.NewMockOpenShiftBuildsHelper(ctrl)
+		mockMaker = NewMockMaker(ctrl)
+		mockOpenShiftBuildsHelper = NewMockOpenShiftBuildsHelper(ctrl)
 	})
 
 	ctx := context.Background()
@@ -70,15 +69,15 @@ var _ = Describe("Manager_Sync", func() {
 			ContainerImage: containerImage,
 		}
 
-		m := buildconfig.NewManager(mockKubeClient, mockMaker, mockOpenShiftBuildsHelper)
+		m := NewManager(mockKubeClient, mockMaker, mockOpenShiftBuildsHelper)
 
 		buildConfig := buildv1.BuildConfig{
 			ObjectMeta: metav1.ObjectMeta{Name: buildConfigName},
 		}
 
 		gomock.InOrder(
-			mockOpenShiftBuildsHelper.EXPECT().GetBuildConfig(ctx, mod, targetKernel).Return(nil, buildconfig.ErrNoMatchingBuildConfig),
-			mockMaker.EXPECT().MakeBuildConfig(mod, mapping, targetKernel, containerImage, true).Return(&buildConfig, nil),
+			mockMaker.EXPECT().MakeBuildConfigTemplate(mod, mapping, targetKernel, containerImage, true).Return(&buildConfig, nil),
+			mockOpenShiftBuildsHelper.EXPECT().GetBuildConfig(ctx, mod, targetKernel).Return(nil, ErrNoMatchingBuildConfig),
 			mockKubeClient.EXPECT().Create(ctx, &buildConfig),
 		)
 
@@ -113,10 +112,13 @@ var _ = Describe("Manager_Sync", func() {
 				ContainerImage: containerImage,
 			}
 
-			m := buildconfig.NewManager(mockKubeClient, mockMaker, mockOpenShiftBuildsHelper)
+			m := NewManager(mockKubeClient, mockMaker, mockOpenShiftBuildsHelper)
 
 			buildConfig := buildv1.BuildConfig{
-				ObjectMeta: metav1.ObjectMeta{Name: buildConfigName},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        buildConfigName,
+					Annotations: map[string]string{buildConfigHashAnnotation: "some hash"},
+				},
 			}
 
 			b := buildv1.Build{
@@ -124,6 +126,7 @@ var _ = Describe("Manager_Sync", func() {
 			}
 
 			gomock.InOrder(
+				mockMaker.EXPECT().MakeBuildConfigTemplate(mod, mapping, targetKernel, containerImage, true).Return(&buildConfig, nil),
 				mockOpenShiftBuildsHelper.EXPECT().GetBuildConfig(ctx, mod, targetKernel).Return(&buildConfig, nil),
 				mockOpenShiftBuildsHelper.EXPECT().GetLatestBuild(ctx, namespace, buildConfigName).Return(&b, nil),
 			)
@@ -164,7 +167,7 @@ var _ = Describe("OpenShiftBuildsHelper_GetBuildConfig", func() {
 			List(ctx, &buildv1.BuildConfigList{}, gomock.Any(), gomock.Any()).
 			Return(errors.New("random error"))
 
-		osbh := buildconfig.NewOpenShiftBuildsHelper(mockKubeClient)
+		osbh := NewOpenShiftBuildsHelper(mockKubeClient)
 
 		_, err := osbh.GetBuildConfig(ctx, kmmv1beta1.Module{}, targetKernel)
 
@@ -179,7 +182,7 @@ var _ = Describe("OpenShiftBuildsHelper_GetBuildConfig", func() {
 				bcs.Items = make([]buildv1.BuildConfig, 2)
 			})
 
-		osbh := buildconfig.NewOpenShiftBuildsHelper(mockKubeClient)
+		osbh := NewOpenShiftBuildsHelper(mockKubeClient)
 
 		_, err := osbh.GetBuildConfig(ctx, kmmv1beta1.Module{}, targetKernel)
 
@@ -198,7 +201,7 @@ var _ = Describe("OpenShiftBuildsHelper_GetBuildConfig", func() {
 				bcs.Items = []buildv1.BuildConfig{*bc}
 			})
 
-		osbh := buildconfig.NewOpenShiftBuildsHelper(mockKubeClient)
+		osbh := NewOpenShiftBuildsHelper(mockKubeClient)
 
 		res, err := osbh.GetBuildConfig(ctx, kmmv1beta1.Module{}, targetKernel)
 
@@ -228,7 +231,7 @@ var _ = Describe("OpenShiftBuildsHelper_GetLatestBuild", func() {
 			List(ctx, &buildv1.BuildList{}, gomock.Any(), gomock.Any()).
 			Return(errors.New("random error"))
 
-		osbh := buildconfig.NewOpenShiftBuildsHelper(mockKubeClient)
+		osbh := NewOpenShiftBuildsHelper(mockKubeClient)
 
 		_, err := osbh.GetLatestBuild(ctx, namespace, buildConfigName)
 
@@ -240,7 +243,7 @@ var _ = Describe("OpenShiftBuildsHelper_GetLatestBuild", func() {
 			EXPECT().
 			List(ctx, &buildv1.BuildList{}, gomock.Any(), gomock.Any())
 
-		osbh := buildconfig.NewOpenShiftBuildsHelper(mockKubeClient)
+		osbh := NewOpenShiftBuildsHelper(mockKubeClient)
 
 		_, err := osbh.GetLatestBuild(ctx, namespace, buildConfigName)
 
@@ -274,7 +277,7 @@ var _ = Describe("OpenShiftBuildsHelper_GetLatestBuild", func() {
 				}
 			})
 
-		osbh := buildconfig.NewOpenShiftBuildsHelper(mockKubeClient)
+		osbh := NewOpenShiftBuildsHelper(mockKubeClient)
 
 		res, err := osbh.GetLatestBuild(ctx, namespace, buildConfigName)
 

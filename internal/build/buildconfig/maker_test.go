@@ -1,7 +1,10 @@
 package buildconfig
 
 import (
+	"fmt"
+
 	"github.com/google/go-cmp/cmp"
+	"github.com/mitchellh/hashstructure"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	buildv1 "github.com/openshift/api/build/v1"
@@ -13,7 +16,7 @@ import (
 	"k8s.io/utils/pointer"
 )
 
-var _ = Describe("Maker_MakeBuildConfig", func() {
+var _ = Describe("Maker_MakeBuildConfigTemplate", func() {
 	It("should work as expected", func() {
 		const (
 			containerImage = "container-image"
@@ -120,7 +123,12 @@ var _ = Describe("Maker_MakeBuildConfig", func() {
 			},
 		}
 
-		bc, err := NewMaker(build.NewHelper(), scheme).MakeBuildConfig(mod, mapping, targetKernel, containerImage, true)
+		hash, err := hashstructure.Hash(expected.Spec.CommonSpec.Source, nil)
+		Expect(err).NotTo(HaveOccurred())
+		annotations := map[string]string{buildConfigHashAnnotation: fmt.Sprintf("%d", hash)}
+		expected.SetAnnotations(annotations)
+
+		bc, err := NewMaker(build.NewHelper(), scheme).MakeBuildConfigTemplate(mod, mapping, targetKernel, containerImage, true)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(

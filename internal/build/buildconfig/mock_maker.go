@@ -35,17 +35,17 @@ func (m *MockMaker) EXPECT() *MockMakerMockRecorder {
 	return m.recorder
 }
 
-// MakeBuildConfig mocks base method.
-func (m *MockMaker) MakeBuildConfig(mod v1beta1.Module, mapping v1beta1.KernelMapping, targetKernel, containerImage string, pushImage bool) (*v1.BuildConfig, error) {
+// MakeBuildConfigTemplate mocks base method.
+func (m *MockMaker) MakeBuildConfigTemplate(mod v1beta1.Module, mapping v1beta1.KernelMapping, targetKernel, containerImage string, pushImage bool) (*v1.BuildConfig, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MakeBuildConfig", mod, mapping, targetKernel, containerImage, pushImage)
+	ret := m.ctrl.Call(m, "MakeBuildConfigTemplate", mod, mapping, targetKernel, containerImage, pushImage)
 	ret0, _ := ret[0].(*v1.BuildConfig)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// MakeBuildConfig indicates an expected call of MakeBuildConfig.
-func (mr *MockMakerMockRecorder) MakeBuildConfig(mod, mapping, targetKernel, containerImage, pushImage interface{}) *gomock.Call {
+// MakeBuildConfigTemplate indicates an expected call of MakeBuildConfigTemplate.
+func (mr *MockMakerMockRecorder) MakeBuildConfigTemplate(mod, mapping, targetKernel, containerImage, pushImage interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MakeBuildConfig", reflect.TypeOf((*MockMaker)(nil).MakeBuildConfig), mod, mapping, targetKernel, containerImage, pushImage)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MakeBuildConfigTemplate", reflect.TypeOf((*MockMaker)(nil).MakeBuildConfigTemplate), mod, mapping, targetKernel, containerImage, pushImage)
 }
