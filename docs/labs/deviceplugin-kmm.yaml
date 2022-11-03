@@ -6,7 +6,7 @@ metadata:
 spec:
   devicePlugin:
     container:
-      image: "quay.io/myrepo/oc-dummy-device-plugin:0.1"
+      image: "quay.io/<org>/oc-dummy-device-plugin:0.1"
   moduleLoader:
     container:
       modprobe:
