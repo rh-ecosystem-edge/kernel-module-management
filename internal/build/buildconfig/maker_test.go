@@ -1,8 +1,10 @@
 package buildconfig
 
 import (
+	"errors"
 	"fmt"
 
+	"github.com/golang/mock/gomock"
 	"github.com/google/go-cmp/cmp"
 	"github.com/mitchellh/hashstructure"
 	. "github.com/onsi/ginkgo/v2"
@@ -11,13 +13,16 @@ import (
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 )
 
 var _ = Describe("Maker_MakeBuildConfigTemplate", func() {
+
 	It("should work as expected", func() {
+
 		const (
 			containerImage = "container-image"
 			dockerFile     = "FROM some-image"
@@ -128,7 +133,8 @@ var _ = Describe("Maker_MakeBuildConfigTemplate", func() {
 		annotations := map[string]string{buildConfigHashAnnotation: fmt.Sprintf("%d", hash)}
 		expected.SetAnnotations(annotations)
 
-		bc, err := NewMaker(build.NewHelper(), scheme).MakeBuildConfigTemplate(mod, mapping, targetKernel, containerImage, true)
+		bc, err := NewMaker(build.NewHelper(), scheme).MakeBuildConfigTemplate(mod, mapping, targetKernel,
+			containerImage, true, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(
@@ -136,6 +142,66 @@ var _ = Describe("Maker_MakeBuildConfigTemplate", func() {
 		).To(
 			BeEmpty(),
 		)
+	})
+
+	Context(fmt.Sprintf("using %s", dtkBuildArg), func() {
+
+		var (
+			gCtrl           *gomock.Controller
+			mockBuildHelper *build.MockHelper
+			mockKODM        *syncronizedmap.MockKernelOsDtkMapping
+			maker           Maker
+		)
+
+		BeforeEach(func() {
+			gCtrl = gomock.NewController(GinkgoT())
+			mockBuildHelper = build.NewMockHelper(gCtrl)
+			mockKODM = syncronizedmap.NewMockKernelOsDtkMapping(gCtrl)
+			maker = NewMaker(mockBuildHelper, scheme)
+		})
+
+		It("should fail if we couldn't get the DTK image", func() {
+
+			build := &kmmv1beta1.Build{
+				Dockerfile: fmt.Sprintf("FROM %s", dtkBuildArg),
+			}
+
+			gomock.InOrder(
+				mockBuildHelper.EXPECT().GetRelevantBuild(gomock.Any(), gomock.Any()).Return(build),
+				mockKODM.EXPECT().GetImage(gomock.Any()).Return("", errors.New("random error")),
+			)
+
+			_, err := maker.MakeBuildConfigTemplate(kmmv1beta1.Module{}, kmmv1beta1.KernelMapping{}, "", "", false, mockKODM)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It(fmt.Sprintf("should add a build arg if %s is used in the Dockerfile", dtkBuildArg), func() {
+
+			const dtkImage = "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:111"
+
+			build := &kmmv1beta1.Build{
+				Dockerfile: fmt.Sprintf("FROM %s", dtkBuildArg),
+			}
+
+			buildArgs := []kmmv1beta1.BuildArg{
+				{
+					Name:  dtkBuildArg,
+					Value: dtkImage,
+				},
+			}
+
+			gomock.InOrder(
+				mockBuildHelper.EXPECT().GetRelevantBuild(gomock.Any(), gomock.Any()).Return(build),
+				mockKODM.EXPECT().GetImage(gomock.Any()).Return(dtkImage, nil),
+				mockBuildHelper.EXPECT().ApplyBuildArgOverrides(gomock.Any(), gomock.Any()).Return(buildArgs),
+			)
+
+			bct, err := maker.MakeBuildConfigTemplate(kmmv1beta1.Module{}, kmmv1beta1.KernelMapping{}, "", "", false, mockKODM)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(bct.Spec.CommonSpec.Strategy.DockerStrategy.BuildArgs)).To(Equal(1))
+			Expect(bct.Spec.CommonSpec.Strategy.DockerStrategy.BuildArgs[0].Name).To(Equal(buildArgs[0].Name))
+			Expect(bct.Spec.CommonSpec.Strategy.DockerStrategy.BuildArgs[0].Value).To(Equal(buildArgs[0].Value))
+		})
 	})
 })
 

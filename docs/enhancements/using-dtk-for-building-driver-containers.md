@@ -76,25 +76,30 @@ We can see that:
 * The `status` field of the imagestream keeps an array of images for each tag with the full digest history used for that tag
     * The latest tag was first pointing to `410.84.202207140725-0` tag and then move to point to `411.86.202207260413-0` tag.
 
-
-## Node reconciler flow
-Create and update an in-memory mapping `kernelVersion` → `rhcosVersion` (latest `rhcosVersion` with that kernel).
+## Controllers
+Will maintain a in-memory mapping `kernelVersion` -> `rhcosVersion` -> `dtkImage`
 * The `kernelVersion` can be found on the node object at `node.status.nodeInfo.kernelVersion`
 * The `rhcosVersion` can be found on the node object at `node.status.nodeInfo.osImage`
 
-## Module reconciler flow
+### Node reconciler flow
+Will update the `kernelVersion` -> `rhcosVersion` part each time it gets an event for the nodes.
+
+### ImageStream reconciler flow
+Will update the `rhcoVersion` -> `dtkImage` part each time it gets an event for the imagestream.
+
+### Module reconciler flow
 
 When a build pod is created, or when a cluster upgrade kicks, KMMO will get the list of kernels running in the cluster from the node labels.
-For each kernel in the cluster, if a build is required, get the matching `rhcosVersion` from the `kernelVersion` → `rhcosVersion` mapping.
-KMMO will use that RHCOS version as the imagestream tag in order to build/rebuild the driver container.
+For each kernel in the cluster, if a build is required, and the DTK_AUTO build arg is used, get the matching `dtkImage` from the mapping
+and inject it as a build arg for the dockerfile.
 
 ## Dockerfile examples
-If the user want us to pull the correct DTK image on builds/cluster-upgrade, he will need to put a placeholder in the Dockerfile for KMMO to substitute. In case this placeholder isn't present in the Dockerfile, KMMO will pull the base image specified by the user.
+If the user want us to pull the correct DTK image on builds/cluster-upgrade, he will need to use the DTK_AUTO build arg in the Dockerfile for KMMO to substitute. In case this buid arg isn't present in the Dockerfile, KMMO will pull the base image specified by the user.
 
 #### Dockerfile which let KMMO find the correct DTK image.
 ```
-ARG DTK-AUTO
-FROM ${DTK-AUTO}
+ARG DTK_AUTO
+FROM ${DTK_AUTO}
 RUN gcc ...
 ...
 ```

@@ -2,12 +2,14 @@ package buildconfig
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/mitchellh/hashstructure"
 	buildv1 "github.com/openshift/api/build/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -15,10 +17,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
+const dtkBuildArg = "DTK_AUTO"
+
 //go:generate mockgen -source=maker.go -package=buildconfig -destination=mock_maker.go
 
 type Maker interface {
-	MakeBuildConfigTemplate(mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string, pushImage bool) (*buildv1.BuildConfig, error)
+	MakeBuildConfigTemplate(mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string,
+		pushImage bool, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) (*buildv1.BuildConfig, error)
 }
 
 type maker struct {
@@ -33,12 +38,30 @@ func NewMaker(helper build.Helper, scheme *runtime.Scheme) Maker {
 	}
 }
 
-func (m *maker) MakeBuildConfigTemplate(mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string, pushImage bool) (*buildv1.BuildConfig, error) {
+func (m *maker) MakeBuildConfigTemplate(mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string,
+	pushImage bool, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) (*buildv1.BuildConfig, error) {
+
 	kmmBuild := m.helper.GetRelevantBuild(mod, mapping)
+
+	overrides := []kmmv1beta1.BuildArg{
+		{
+			Name:  "KERNEL_VERSION",
+			Value: targetKernel,
+		},
+	}
+
+	if strings.Contains(kmmBuild.Dockerfile, dtkBuildArg) {
+
+		dtkImage, err := kernelOsDtkMapping.GetImage(targetKernel)
+		if err != nil {
+			return nil, fmt.Errorf("could not get DTK image for kernel %v: %v", targetKernel, err)
+		}
+		overrides = append(overrides, kmmv1beta1.BuildArg{Name: dtkBuildArg, Value: dtkImage})
+	}
 
 	buildArgs := m.helper.ApplyBuildArgOverrides(
 		kmmBuild.BuildArgs,
-		kmmv1beta1.BuildArg{Name: "KERNEL_VERSION", Value: targetKernel},
+		overrides...,
 	)
 
 	buildTarget := buildv1.BuildOutput{

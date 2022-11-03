@@ -12,6 +12,7 @@ import (
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -76,12 +77,13 @@ var _ = Describe("Manager_Sync", func() {
 		}
 
 		gomock.InOrder(
-			mockMaker.EXPECT().MakeBuildConfigTemplate(mod, mapping, targetKernel, containerImage, true).Return(&buildConfig, nil),
+			mockMaker.EXPECT().MakeBuildConfigTemplate(mod, mapping, targetKernel, containerImage, true, gomock.Any()).Return(&buildConfig, nil),
 			mockOpenShiftBuildsHelper.EXPECT().GetBuildConfig(ctx, mod, targetKernel).Return(nil, ErrNoMatchingBuildConfig),
 			mockKubeClient.EXPECT().Create(ctx, &buildConfig),
 		)
 
-		res, err := m.Sync(ctx, mod, mapping, targetKernel, mapping.ContainerImage, true)
+		kernelOsDtkMapping := syncronizedmap.NewKernelOsDtkMapping()
+		res, err := m.Sync(ctx, mod, mapping, targetKernel, mapping.ContainerImage, true, kernelOsDtkMapping)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Status).To(BeEquivalentTo(build.StatusCreated))
 		Expect(res.Requeue).To(BeTrue())
@@ -126,12 +128,13 @@ var _ = Describe("Manager_Sync", func() {
 			}
 
 			gomock.InOrder(
-				mockMaker.EXPECT().MakeBuildConfigTemplate(mod, mapping, targetKernel, containerImage, true).Return(&buildConfig, nil),
+				mockMaker.EXPECT().MakeBuildConfigTemplate(mod, mapping, targetKernel, containerImage, true, gomock.Any()).Return(&buildConfig, nil),
 				mockOpenShiftBuildsHelper.EXPECT().GetBuildConfig(ctx, mod, targetKernel).Return(&buildConfig, nil),
 				mockOpenShiftBuildsHelper.EXPECT().GetLatestBuild(ctx, namespace, buildConfigName).Return(&b, nil),
 			)
 
-			res, err := m.Sync(ctx, mod, mapping, targetKernel, mapping.ContainerImage, true)
+			kernelOsDtkMapping := syncronizedmap.NewKernelOsDtkMapping()
+			res, err := m.Sync(ctx, mod, mapping, targetKernel, mapping.ContainerImage, true, kernelOsDtkMapping)
 
 			if expectError {
 				Expect(err).To(HaveOccurred())

@@ -73,6 +73,14 @@ rules:
   - patch
   - watch
 - apiGroups:
+  - image.openshift.io
+  resources:
+  - imagestreams
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - kmm.sigs.k8s.io
   resources:
   - modules
