@@ -71,6 +71,22 @@ type Build struct {
 	Secrets []v1.LocalObjectReference `json:"secrets"`
 }
 
+type Sign struct {
+	// +optional
+	// Image to sign, ignored if a Build is present, required otherwise
+	UnsignedImage string `json:"unsignedImage,omitempty"`
+
+	// a secret containing the private key used to sign kernel modules for secureboot
+	KeySecret *v1.LocalObjectReference `json:"keySecret"`
+
+	// a secret containing the public key used to sign kernel modules for secureboot
+	CertSecret *v1.LocalObjectReference `json:"certSecret"`
+
+	// +optional
+	// paths inside the image for the kernel modules to sign (if ommited all kmods are signed)
+	FilesToSign []string `json:"filesToSign,omitempty"`
+}
+
 // KernelMapping pairs kernel versions with a DriverContainer image.
 // Kernel versions can be matched literally or using a regular expression.
 type KernelMapping struct {
@@ -78,6 +94,10 @@ type KernelMapping struct {
 	// +optional
 	// Build enables in-cluster builds for this mapping and allows overriding the Module's build settings.
 	Build *Build `json:"build"`
+
+	// +optional
+	// Sign enables in-cluster signing for this mapping
+	Sign *Sign `json:"sign,omitempty"`
 
 	// ContainerImage is the name of the DriverContainer image that should be used to deploy the module.
 	ContainerImage string `json:"containerImage"`
@@ -141,6 +161,10 @@ type ModuleLoaderContainerSpec struct {
 	// Build contains build instructions.
 	// +optional
 	Build *Build `json:"build,omitempty"`
+
+	// +optional
+	// Sign provides default kmod signing settings
+	Sign *Sign `json:"sign,omitempty"`
 
 	// ContainerImage is a top-level field
 	// +optional
