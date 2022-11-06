@@ -81,7 +81,7 @@ var _ = Describe("Manager_Sync", func() {
 			mockKubeClient.EXPECT().Create(ctx, &buildConfig),
 		)
 
-		res, err := m.Sync(ctx, mod, mapping, targetKernel, true)
+		res, err := m.Sync(ctx, mod, mapping, targetKernel, mapping.ContainerImage, true)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Status).To(BeEquivalentTo(build.StatusCreated))
 		Expect(res.Requeue).To(BeTrue())
@@ -131,7 +131,7 @@ var _ = Describe("Manager_Sync", func() {
 				mockOpenShiftBuildsHelper.EXPECT().GetLatestBuild(ctx, namespace, buildConfigName).Return(&b, nil),
 			)
 
-			res, err := m.Sync(ctx, mod, mapping, targetKernel, true)
+			res, err := m.Sync(ctx, mod, mapping, targetKernel, mapping.ContainerImage, true)
 
 			if expectError {
 				Expect(err).To(HaveOccurred())

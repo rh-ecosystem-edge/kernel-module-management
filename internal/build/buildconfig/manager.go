@@ -34,10 +34,10 @@ func NewManager(client client.Client, maker Maker, ocpBuildsHelper OpenShiftBuil
 	}
 }
 
-func (bcm *buildConfigManager) Sync(ctx context.Context, mod kmmv1beta1.Module, m kmmv1beta1.KernelMapping, targetKernel string, pushImage bool) (build.Result, error) {
+func (bcm *buildConfigManager) Sync(ctx context.Context, mod kmmv1beta1.Module, m kmmv1beta1.KernelMapping, targetKernel, targetImage string, pushImage bool) (build.Result, error) {
 	logger := log.FromContext(ctx)
 
-	buildConfigTemplate, err := bcm.maker.MakeBuildConfigTemplate(mod, m, targetKernel, m.ContainerImage, pushImage)
+	buildConfigTemplate, err := bcm.maker.MakeBuildConfigTemplate(mod, m, targetKernel, targetImage, pushImage)
 	if err != nil {
 		return build.Result{}, fmt.Errorf("could not make BuildConfig template: %v", err)
 	}
