@@ -13,3 +13,6 @@ Install the bleeding edge KMMO in one command:
 ```shell
 oc apply -k https://github.com/rh-ecosystem-edge/kernel-module-management/config/default
 ```
+
+## Examples
+You can find examples on different use cases in [labs](https://github.com/rh-ecosystem-edge/kernel-module-management/tree/main/docs/labs).
