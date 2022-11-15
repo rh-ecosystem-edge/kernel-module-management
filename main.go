@@ -23,6 +23,7 @@ import (
 	"os"
 	"runtime/debug"
 
+	//"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	buildv1 "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
@@ -35,8 +36,11 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/preflight"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/rbac"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign/job"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2/klogr"
@@ -169,6 +173,13 @@ func main() {
 		buildconfig.NewMaker(helperAPI, scheme),
 		buildconfig.NewOpenShiftBuildsHelper(client),
 	)
+
+	signAPI := signjob.NewSignJobManager(
+		signjob.NewSigner(scheme),
+		sign.NewSignerHelper(),
+		utils.NewJobHelper(client),
+	)
+
 	rbacAPI := rbac.NewCreator(client, scheme)
 	daemonAPI := daemonset.NewCreator(client, kernelLabel, scheme)
 	kernelAPI := module.NewKernelMapper()
@@ -181,6 +192,7 @@ func main() {
 	mc := controllers.NewModuleReconciler(
 		client,
 		buildAPI,
+		signAPI,
 		rbacAPI,
 		daemonAPI,
 		kernelAPI,
