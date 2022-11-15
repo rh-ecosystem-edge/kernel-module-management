@@ -6,4 +6,5 @@ const (
 	NodeLabelerFinalizer         = "kmm.node.kubernetes.io/node-labeler"
 	TargetKernelTarget           = "kmm.node.kubernetes.io/target-kernel"
 	JobType                      = "kmm.node.kubernetes.io/job-type"
+	JobHashAnnotation            = "kmm.node.kubernetes.io/last-hash"
 )

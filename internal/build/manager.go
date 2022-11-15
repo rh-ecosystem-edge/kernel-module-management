@@ -25,4 +25,5 @@ type Result struct {
 type Manager interface {
 	Sync(ctx context.Context, mod kmmv1beta1.Module, m kmmv1beta1.KernelMapping, targetKernel string, targetImage string,
 		pushImage bool, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) (Result, error)
+	GarbageCollect(ctx context.Context, mod kmmv1beta1.Module) ([]string, error)
 }
