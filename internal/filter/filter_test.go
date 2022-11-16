@@ -7,6 +7,7 @@ import (
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	imagev1 "github.com/openshift/api/image/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	mockClient "github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	appsv1 "k8s.io/api/apps/v1"
@@ -155,13 +156,9 @@ var _ = Describe("NodeKernelReconcilerPredicate", func() {
 		p = New(nil, logr.Discard()).NodeKernelReconcilerPredicate(labelName)
 	})
 
-	It("should return true if the node has no labels", func() {
+	It("should return true on CREATE events", func() {
 		ev := event.CreateEvent{
-			Object: &v1.Node{
-				Status: v1.NodeStatus{
-					NodeInfo: v1.NodeSystemInfo{KernelVersion: kernelVersion},
-				},
-			},
+			Object: &v1.Node{},
 		}
 
 		Expect(
@@ -171,47 +168,12 @@ var _ = Describe("NodeKernelReconcilerPredicate", func() {
 		)
 	})
 
-	It("should return true if the node has the wrong label value", func() {
-		ev := event.CreateEvent{
-			Object: &v1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{labelName: "some-other-value"},
-				},
-				Status: v1.NodeStatus{
-					NodeInfo: v1.NodeSystemInfo{KernelVersion: kernelVersion},
-				},
-			},
-		}
+	It("should return false on UPDATE events if the data hasn't changed", func() {
 
-		Expect(
-			p.Create(ev),
-		).To(
-			BeTrue(),
-		)
-	})
+		By("kernel version in nodeInfo is the same as the label")
 
-	It("should return false if the node has the wrong label value but event is deletion", func() {
-		ev := event.DeleteEvent{
-			Object: &v1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{labelName: labelName},
-				},
-				Status: v1.NodeStatus{
-					NodeInfo: v1.NodeSystemInfo{KernelVersion: kernelVersion},
-				},
-			},
-		}
-
-		Expect(
-			p.Delete(ev),
-		).To(
-			BeFalse(),
-		)
-	})
-
-	It("should return false if the label is correctly set", func() {
-		ev := event.CreateEvent{
-			Object: &v1.Node{
+		ev := event.UpdateEvent{
+			ObjectNew: &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{labelName: kernelVersion},
 				},
@@ -219,10 +181,90 @@ var _ = Describe("NodeKernelReconcilerPredicate", func() {
 					NodeInfo: v1.NodeSystemInfo{KernelVersion: kernelVersion},
 				},
 			},
+			ObjectOld: &v1.Node{},
 		}
 
 		Expect(
-			p.Create(ev),
+			p.Update(ev),
+		).To(
+			BeFalse(),
+		)
+
+		By("os image version in nodeInfo hasn't changed")
+
+		const osImageVersion = "411.86"
+
+		ev = event.UpdateEvent{
+			ObjectNew: &v1.Node{
+				Status: v1.NodeStatus{
+					NodeInfo: v1.NodeSystemInfo{OSImage: osImageVersion},
+				},
+			},
+			ObjectOld: &v1.Node{
+				Status: v1.NodeStatus{
+					NodeInfo: v1.NodeSystemInfo{OSImage: osImageVersion},
+				},
+			},
+		}
+
+		Expect(
+			p.Update(ev),
+		).To(
+			BeFalse(),
+		)
+	})
+
+	It("should return true on UPDATE events if the data has changed", func() {
+
+		By("kernel version in nodeInfo is different than the label")
+
+		ev := event.UpdateEvent{
+			ObjectNew: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{labelName: labelName},
+				},
+				Status: v1.NodeStatus{
+					NodeInfo: v1.NodeSystemInfo{KernelVersion: kernelVersion},
+				},
+			},
+			ObjectOld: &v1.Node{},
+		}
+
+		Expect(
+			p.Update(ev),
+		).To(
+			BeTrue(),
+		)
+
+		By("os image version in nodeInfo has changed")
+
+		ev = event.UpdateEvent{
+			ObjectNew: &v1.Node{
+				Status: v1.NodeStatus{
+					NodeInfo: v1.NodeSystemInfo{OSImage: "412.86"},
+				},
+			},
+			ObjectOld: &v1.Node{
+				Status: v1.NodeStatus{
+					NodeInfo: v1.NodeSystemInfo{OSImage: "411.86"},
+				},
+			},
+		}
+
+		Expect(
+			p.Update(ev),
+		).To(
+			BeTrue(),
+		)
+	})
+
+	It("should return false on DELETE events", func() {
+		ev := event.DeleteEvent{
+			Object: &v1.Node{},
+		}
+
+		Expect(
+			p.Delete(ev),
 		).To(
 			BeFalse(),
 		)
@@ -429,4 +471,98 @@ var _ = Describe("FindPreflightsForModule", func() {
 		Expect(res).To(Equal(expectedRes))
 	})
 
+})
+
+var _ = Describe("ImageStreamReconcilerPredicate", func() {
+
+	var p predicate.Predicate = New(nil, logr.Discard()).ImageStreamReconcilerPredicate()
+
+	It("should return true on CREATE events", func() {
+		ev := event.CreateEvent{
+			Object: &imagev1.ImageStream{},
+		}
+
+		Expect(
+			p.Create(ev),
+		).To(
+			BeTrue(),
+		)
+	})
+
+	It("should return true on UPDATE events if any of the tags has changed", func() {
+
+		ev := event.UpdateEvent{
+			ObjectNew: &imagev1.ImageStream{
+				Spec: imagev1.ImageStreamSpec{
+					Tags: []imagev1.TagReference{
+						{
+							Name: "411.86.202210072320-0",
+							From: &v1.ObjectReference{
+								Name: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:111",
+							},
+						},
+					},
+				},
+			},
+			ObjectOld: &imagev1.ImageStream{
+				Spec: imagev1.ImageStreamSpec{
+					Tags: []imagev1.TagReference{
+						{
+							Name: "412.86.202210072320-0",
+							From: &v1.ObjectReference{
+								Name: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:222",
+							},
+						},
+					},
+				},
+			},
+		}
+
+		Expect(
+			p.Update(ev),
+		).To(
+			BeTrue(),
+		)
+	})
+
+	It("should return false on UPDATE events if non of the tags has changed", func() {
+
+		is := imagev1.ImageStream{
+			Status: imagev1.ImageStreamStatus{
+				Tags: []imagev1.NamedTagEventList{
+					{
+						Tag: "411.86.202210072320-0",
+						Items: []imagev1.TagEvent{
+							{
+								DockerImageReference: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:111",
+							},
+						},
+					},
+				},
+			},
+		}
+
+		ev := event.UpdateEvent{
+			ObjectNew: &is,
+			ObjectOld: &is,
+		}
+
+		Expect(
+			p.Update(ev),
+		).To(
+			BeFalse(),
+		)
+	})
+
+	It("should return true on DELETE events", func() {
+		ev := event.DeleteEvent{
+			Object: &imagev1.ImageStream{},
+		}
+
+		Expect(
+			p.Delete(ev),
+		).To(
+			BeTrue(),
+		)
+	})
 })

@@ -2,8 +2,10 @@ package filter
 
 import (
 	"context"
+	"reflect"
 
 	"github.com/go-logr/logr"
+	imagev1 "github.com/openshift/api/image/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -46,12 +48,38 @@ func (f *Filter) ModuleReconcilerNodePredicate(kernelLabel string) predicate.Pre
 	)
 }
 
+// NodeKernelReconcilePredicate will queue the request in the following cases:
+// CREATE: always, as we need to make sure we add a new entry to 'kernelToOS' mapping
+// UPDATE: only if the kernel version or the os image version changed
+// DELETE: never
 func (f *Filter) NodeKernelReconcilerPredicate(labelName string) predicate.Predicate {
-	labelMismatch := predicate.NewPredicateFuncs(func(o client.Object) bool {
-		return o.GetLabels()[labelName] != o.(*v1.Node).Status.NodeInfo.KernelVersion
-	})
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			kernelVersionChanged := e.ObjectNew.GetLabels()[labelName] != e.ObjectNew.(*v1.Node).Status.NodeInfo.KernelVersion
+			osImageChanged := e.ObjectNew.(*v1.Node).Status.NodeInfo.OSImage != e.ObjectOld.(*v1.Node).Status.NodeInfo.OSImage
+			return kernelVersionChanged || osImageChanged
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			return false
+		},
+	}
+}
 
-	return predicate.And(skipDeletions, labelMismatch)
+func (f *Filter) ImageStreamReconcilerPredicate() predicate.Predicate {
+
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			newTags := map[string]string{}
+			oldTags := map[string]string{}
+			for _, t := range e.ObjectNew.(*imagev1.ImageStream).Spec.Tags {
+				newTags[t.Name] = t.From.Name
+			}
+			for _, t := range e.ObjectOld.(*imagev1.ImageStream).Spec.Tags {
+				oldTags[t.Name] = t.From.Name
+			}
+			return !reflect.DeepEqual(newTags, oldTags)
+		},
+	}
 }
 
 func (f *Filter) FindModulesForNode(node client.Object) []reconcile.Request {

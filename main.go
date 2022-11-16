@@ -24,6 +24,7 @@ import (
 	"runtime/debug"
 
 	buildv1 "github.com/openshift/api/build/v1"
+	imagev1 "github.com/openshift/api/image/v1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build/buildconfig"
@@ -35,6 +36,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/rbac"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2/klogr"
@@ -71,6 +73,7 @@ func init() {
 
 	utilruntime.Must(kmmv1beta1.AddToScheme(scheme))
 	utilruntime.Must(buildv1.Install(scheme))
+	utilruntime.Must(imagev1.Install(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -133,12 +136,13 @@ func main() {
 	setupLogger.V(1).Info("Determining kernel labeling method", KernelLabelingMethodEnvVar, kernelLabelingMethod)
 
 	filter := filter.New(client, mgr.GetLogger())
+	kernelOsDtkMapping := syncronizedmap.NewKernelOsDtkMapping()
 
 	switch kernelLabelingMethod {
 	case KMMOKernelLabelingMethod:
 		kernelLabel = "kmm.node.kubernetes.io/kernel-version.full"
 
-		nodeKernelReconciler := controllers.NewNodeKernelReconciler(client, kernelLabel, filter)
+		nodeKernelReconciler := controllers.NewNodeKernelReconciler(client, kernelLabel, filter, kernelOsDtkMapping)
 
 		if err = nodeKernelReconciler.SetupWithManager(mgr); err != nil {
 			setupLogger.Error(err, "unable to create controller", "controller", "NodeKernel")
@@ -184,7 +188,9 @@ func main() {
 		filter,
 		registryAPI,
 		authFactory,
-		moduleStatusUpdaterAPI)
+		moduleStatusUpdaterAPI,
+		kernelOsDtkMapping,
+	)
 
 	if err = mc.SetupWithManager(mgr, kernelLabel); err != nil {
 		setupLogger.Error(err, "unable to create controller", "controller", "Module")
@@ -198,6 +204,11 @@ func main() {
 
 	if err = controllers.NewPreflightValidationReconciler(client, filter, preflightStatusUpdaterAPI, preflightAPI).SetupWithManager(mgr); err != nil {
 		setupLogger.Error(err, "unable to create controller", "controller", "Preflight")
+		os.Exit(1)
+	}
+
+	if err = controllers.NewImageStreamReconciler(client, filter, kernelOsDtkMapping).SetupWithManager(mgr); err != nil {
+		setupLogger.Error(err, "unable to create controller", "controller", "ImageStream")
 		os.Exit(1)
 	}
 

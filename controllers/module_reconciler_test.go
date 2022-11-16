@@ -84,7 +84,9 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			nil,
 			mockRegistry,
 			nil,
-			mockSU)
+			mockSU,
+			nil,
+		)
 
 		Expect(
 			mr.Reconcile(ctx, req),
@@ -156,7 +158,9 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			nil,
 			mockRegistry,
 			nil,
-			mockSU)
+			mockSU,
+			nil,
+		)
 
 		dsByKernelVersion := make(map[string]*appsv1.DaemonSet)
 
@@ -221,6 +225,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockRegistry,
 			nil,
 			mockSU,
+			nil,
 		)
 
 		dsByKernelVersion := make(map[string]*appsv1.DaemonSet)
@@ -286,6 +291,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockRegistry,
 			nil,
 			mockSU,
+			nil,
 		)
 
 		dsByKernelVersion := make(map[string]*appsv1.DaemonSet)
@@ -361,6 +367,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockRegistry,
 			nil,
 			mockSU,
+			nil,
 		)
 
 		dsByKernelVersion := map[string]*appsv1.DaemonSet{kernelVersion: &ds}
@@ -435,6 +442,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockRegistry,
 			nil,
 			mockSU,
+			nil,
 		)
 
 		ds := appsv1.DaemonSet{
@@ -577,6 +585,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockRegistry,
 			nil,
 			mockSU,
+			nil,
 		)
 
 		dsByKernelVersion := map[string]*appsv1.DaemonSet{kernelVersion: &ds}
@@ -645,6 +654,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockRegistry,
 			nil,
 			mockSU,
+			nil,
 		)
 
 		ds := appsv1.DaemonSet{
@@ -743,6 +753,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 			mockRegistry,
 			nil,
 			mockSU,
+			nil,
 		)
 
 		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion, km.ContainerImage)
@@ -794,6 +805,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 			mockRegistry,
 			mockAuthFactory,
 			mockSU,
+			nil,
 		)
 
 		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion, km.ContainerImage)
@@ -838,6 +850,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 			mockRegistry,
 			mockAuthFactory,
 			mockSU,
+			nil,
 		)
 
 		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion, km.ContainerImage)
@@ -865,7 +878,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 				NewRegistryAuthGetterFrom(mod).
 				Return(authGetter),
 			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, authGetter).Return(false, nil),
-			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), km.ContainerImage, true).Return(buildRes, nil),
+			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), km.ContainerImage, true, gomock.Any()).Return(buildRes, nil),
 			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, kernelVersion, metrics.BuildStage, false),
 		)
 
@@ -880,6 +893,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 			mockRegistry,
 			mockAuthFactory,
 			mockSU,
+			nil,
 		)
 
 		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion, km.ContainerImage)
@@ -907,7 +921,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 				NewRegistryAuthGetterFrom(mod).
 				Return(authGetter),
 			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, authGetter).Return(false, nil),
-			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), km.ContainerImage, true).Return(buildRes, nil),
+			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), km.ContainerImage, true, gomock.Any()).Return(buildRes, nil),
 			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, kernelVersion, metrics.BuildStage, false),
 		)
 
@@ -922,6 +936,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 			mockRegistry,
 			mockAuthFactory,
 			mockSU,
+			nil,
 		)
 
 		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion, km.ContainerImage)
@@ -949,7 +964,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 				NewRegistryAuthGetterFrom(mod).
 				Return(authGetter),
 			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, authGetter).Return(false, nil),
-			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), km.ContainerImage, true).Return(buildRes, nil),
+			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), km.ContainerImage, true, gomock.Any()).Return(buildRes, nil),
 			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, kernelVersion, metrics.BuildStage, true),
 		)
 
@@ -964,12 +979,14 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 			mockRegistry,
 			mockAuthFactory,
 			mockSU,
+			nil,
 		)
 
 		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion, km.ContainerImage)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(BeFalse())
 	})
+
 })
 
 var _ = Describe("ModuleReconciler_getNodesListBySelector", func() {
@@ -982,7 +999,7 @@ var _ = Describe("ModuleReconciler_getNodesListBySelector", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mr = NewModuleReconciler(clnt, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+		mr = NewModuleReconciler(clnt, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	})
 
 	ctx := context.Background()

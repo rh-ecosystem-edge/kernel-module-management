@@ -8,6 +8,7 @@ import (
 	buildv1 "github.com/openshift/api/build/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -34,10 +35,12 @@ func NewManager(client client.Client, maker Maker, ocpBuildsHelper OpenShiftBuil
 	}
 }
 
-func (bcm *buildConfigManager) Sync(ctx context.Context, mod kmmv1beta1.Module, m kmmv1beta1.KernelMapping, targetKernel, targetImage string, pushImage bool) (build.Result, error) {
+func (bcm *buildConfigManager) Sync(ctx context.Context, mod kmmv1beta1.Module, m kmmv1beta1.KernelMapping,
+	targetKernel, targetImage string, pushImage bool, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) (build.Result, error) {
+
 	logger := log.FromContext(ctx)
 
-	buildConfigTemplate, err := bcm.maker.MakeBuildConfigTemplate(mod, m, targetKernel, targetImage, pushImage)
+	buildConfigTemplate, err := bcm.maker.MakeBuildConfigTemplate(mod, m, targetKernel, targetImage, pushImage, kernelOsDtkMapping)
 	if err != nil {
 		return build.Result{}, fmt.Errorf("could not make BuildConfig template: %v", err)
 	}
