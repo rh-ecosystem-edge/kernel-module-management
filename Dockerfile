@@ -25,10 +25,9 @@ COPY .git .git
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 make manager
 
-FROM registry.ci.openshift.org/ocp/4.11:base
-WORKDIR /
-COPY --from=builder /workspace/manager .
-RUN useradd -r kmm
-USER kmm:kmm
+FROM registry.redhat.io/ubi8/ubi-micro:8.7
 
-ENTRYPOINT ["/manager"]
+COPY --from=builder /workspace/manager /usr/local/bin
+USER 65534:65534
+
+ENTRYPOINT ["/usr/local/bin/manager"]

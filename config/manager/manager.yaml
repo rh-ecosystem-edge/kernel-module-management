@@ -32,7 +32,7 @@ spec:
           type: RuntimeDefault
       containers:
       - command:
-        - /manager
+        - /usr/local/bin/manager
         args:
         - --leader-elect
         image: controller:latest
@@ -63,9 +63,20 @@ spec:
           requests:
             cpu: 10m
             memory: 64Mi
+        volumeMounts:
+          - name: trusted-ca
+            mountPath: /etc/pki/ca-trust/extracted/pem
+            readOnly: true
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
       tolerations:
         - key: node-role.kubernetes.io/master
           operator: Equal
           effect: NoSchedule
+      volumes:
+        - name: trusted-ca
+          configMap:
+            name: trusted-ca
+            items:
+              - key: ca-bundle.crt
+                path: tls-ca-bundle.pem

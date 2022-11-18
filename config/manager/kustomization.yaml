@@ -1,4 +1,5 @@
 resources:
+- configmap-ca.yaml
 - manager.yaml
 
 generatorOptions:

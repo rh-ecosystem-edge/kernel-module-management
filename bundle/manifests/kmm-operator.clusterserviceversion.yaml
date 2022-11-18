@@ -14,7 +14,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    operators.operatorframework.io/builder: operator-sdk-v1.21.0
+    operators.operatorframework.io/builder: operator-sdk-v1.25.2
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
   name: kmm-operator.v0.0.1
   namespace: placeholder
@@ -105,6 +105,14 @@ spec:
           - get
           - list
           - patch
+          - watch
+        - apiGroups:
+          - image.openshift.io
+          resources:
+          - imagestreams
+          verbs:
+          - get
+          - list
           - watch
         - apiGroups:
           - kmm.sigs.k8s.io
@@ -239,7 +247,7 @@ spec:
                 - --metrics-bind-address=127.0.0.1:8080
                 - --leader-elect
                 command:
-                - /manager
+                - /usr/local/bin/manager
                 image: quay.io/edge-infrastructure/kernel-module-management:latest
                 imagePullPolicy: Always
                 livenessProbe:
@@ -267,6 +275,10 @@ spec:
                   capabilities:
                     drop:
                     - ALL
+                volumeMounts:
+                - mountPath: /etc/pki/ca-trust/extracted/pem
+                  name: trusted-ca
+                  readOnly: true
               nodeSelector:
                 node-role.kubernetes.io/master: ""
               securityContext:
@@ -279,6 +291,13 @@ spec:
               - effect: NoSchedule
                 key: node-role.kubernetes.io/master
                 operator: Equal
+              volumes:
+              - configMap:
+                  items:
+                  - key: ca-bundle.crt
+                    path: tls-ca-bundle.pem
+                  name: kmm-operator-trusted-ca
+                name: trusted-ca
       permissions:
       - rules:
         - apiGroups:
