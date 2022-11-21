@@ -35,6 +35,12 @@ func NewManager(client client.Client, maker Maker, ocpBuildsHelper OpenShiftBuil
 	}
 }
 
+func (bcm *buildConfigManager) GarbageCollect(ctx context.Context, mod kmmv1beta1.Module) ([]string, error) {
+
+	//Garbage Collection noti (yet) implemented for BuildConfig
+	return nil, nil
+}
+
 func (bcm *buildConfigManager) Sync(ctx context.Context, mod kmmv1beta1.Module, m kmmv1beta1.KernelMapping,
 	targetKernel, targetImage string, pushImage bool, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) (build.Result, error) {
 
