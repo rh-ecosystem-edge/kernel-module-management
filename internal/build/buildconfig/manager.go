@@ -91,7 +91,7 @@ func (bcm *buildConfigManager) Sync(ctx context.Context, mod kmmv1beta1.Module, 
 	case buildv1.BuildPhaseNew, buildv1.BuildPhasePending, buildv1.BuildPhaseRunning:
 		return build.Result{Status: build.StatusInProgress, Requeue: true}, nil
 	case buildv1.BuildPhaseFailed:
-		return build.Result{}, fmt.Errorf("buildConfig failed: %v", err)
+		return build.Result{}, fmt.Errorf("buildConfig failed: %v", b.Status.LogSnippet)
 	default:
 		return build.Result{}, fmt.Errorf("unknown status: %v", buildConfig.Status)
 	}
