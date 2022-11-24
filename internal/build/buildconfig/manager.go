@@ -7,103 +7,97 @@ import (
 
 	buildv1 "github.com/openshift/api/build/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
+	kmmbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-const buildConfigHashAnnotation = "kmm.node.kubernetes.io/last-hash"
+const buildHashAnnotation = "kmm.node.kubernetes.io/last-hash"
 
 var (
-	ErrNoMatchingBuildConfig = errors.New("no matching BuildConfig")
-	errNoMatchingBuild       = errors.New("no matching Build")
+	errNoMatchingBuild = errors.New("no matching Build")
 )
 
-type buildConfigManager struct {
+type buildManager struct {
 	client          client.Client
 	maker           Maker
 	ocpBuildsHelper OpenShiftBuildsHelper
 }
 
-func NewManager(client client.Client, maker Maker, ocpBuildsHelper OpenShiftBuildsHelper) *buildConfigManager {
-	return &buildConfigManager{
+func NewManager(client client.Client, maker Maker, ocpBuildsHelper OpenShiftBuildsHelper) *buildManager {
+	return &buildManager{
 		client:          client,
 		maker:           maker,
 		ocpBuildsHelper: ocpBuildsHelper,
 	}
 }
 
-func (bcm *buildConfigManager) GarbageCollect(ctx context.Context, mod kmmv1beta1.Module) ([]string, error) {
+func (bcm *buildManager) GarbageCollect(ctx context.Context, mod kmmv1beta1.Module) ([]string, error) {
 
-	//Garbage Collection noti (yet) implemented for BuildConfig
+	//Garbage Collection noti (yet) implemented for Build
 	return nil, nil
 }
 
-func (bcm *buildConfigManager) Sync(ctx context.Context, mod kmmv1beta1.Module, m kmmv1beta1.KernelMapping,
-	targetKernel, targetImage string, pushImage bool, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) (build.Result, error) {
+func (bcm *buildManager) Sync(ctx context.Context, mod kmmv1beta1.Module, m kmmv1beta1.KernelMapping,
+	targetKernel, targetImage string, pushImage bool, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) (kmmbuild.Result, error) {
 
 	logger := log.FromContext(ctx)
 
-	buildConfigTemplate, err := bcm.maker.MakeBuildConfigTemplate(mod, m, targetKernel, targetImage, pushImage, kernelOsDtkMapping)
+	buildTemplate, err := bcm.maker.MakeBuildTemplate(mod, m, targetKernel, targetImage, pushImage, kernelOsDtkMapping)
 	if err != nil {
-		return build.Result{}, fmt.Errorf("could not make BuildConfig template: %v", err)
+		return kmmbuild.Result{}, fmt.Errorf("could not make Build template: %v", err)
 	}
 
-	buildConfig, err := bcm.ocpBuildsHelper.GetBuildConfig(ctx, mod, targetKernel)
+	build, err := bcm.ocpBuildsHelper.GetBuild(ctx, mod, targetKernel)
 	if err != nil {
-		if !errors.Is(err, ErrNoMatchingBuildConfig) {
-			return build.Result{}, fmt.Errorf("error getting the build: %v", err)
+		if !errors.Is(err, errNoMatchingBuild) {
+			return kmmbuild.Result{}, fmt.Errorf("error getting the build: %v", err)
 		}
 
-		logger.Info("Creating BuildConfig")
+		logger.Info("Creating Build")
 
-		if err = bcm.client.Create(ctx, buildConfigTemplate); err != nil {
-			return build.Result{}, fmt.Errorf("could not create BuildConfig: %v", err)
+		if err = bcm.client.Create(ctx, buildTemplate); err != nil {
+			return kmmbuild.Result{}, fmt.Errorf("could not create Build: %v", err)
 		}
 
-		return build.Result{Status: build.StatusCreated, Requeue: true}, nil
+		return kmmbuild.Result{Status: kmmbuild.StatusCreated, Requeue: true}, nil
 	}
 
-	changed, err := bcm.isBuildConfigChanged(buildConfig, buildConfigTemplate)
+	changed, err := bcm.isBuildChanged(build, buildTemplate)
 	if err != nil {
-		return build.Result{}, fmt.Errorf("could not determine if BuildConfig has changed: %v", err)
+		return kmmbuild.Result{}, fmt.Errorf("could not determine if Build has changed: %v", err)
 	}
 
 	if changed {
-		logger.Info("The module's build spec has been changed, deleting the current BuildConfig so a new one can be created", "name", buildConfig.Name)
-		err = bcm.client.Delete(ctx, buildConfig)
+		logger.Info("The module's build spec has been changed, deleting the current Build so a new one can be created", "name", build.Name)
+		err = bcm.client.Delete(ctx, build)
 		if err != nil {
-			logger.Info(utils.WarnString(fmt.Sprintf("failed to delete BuildConfig %s: %v", buildConfig.Name, err)))
+			logger.Info(utils.WarnString(fmt.Sprintf("failed to delete Build %s: %v", build.Name, err)))
 		}
-		return build.Result{Status: build.StatusInProgress, Requeue: true}, nil
+		return kmmbuild.Result{Status: kmmbuild.StatusInProgress, Requeue: true}, nil
 	}
 
-	b, err := bcm.ocpBuildsHelper.GetLatestBuild(ctx, mod.Namespace, buildConfig.Name)
-	if err != nil {
-		return build.Result{}, fmt.Errorf("could not find the latest build: %v", err)
-	}
-
-	switch b.Status.Phase {
+	switch build.Status.Phase {
 	case buildv1.BuildPhaseComplete:
-		return build.Result{Status: build.StatusCompleted}, nil
+		return kmmbuild.Result{Status: kmmbuild.StatusCompleted}, nil
 	case buildv1.BuildPhaseNew, buildv1.BuildPhasePending, buildv1.BuildPhaseRunning:
-		return build.Result{Status: build.StatusInProgress, Requeue: true}, nil
+		return kmmbuild.Result{Status: kmmbuild.StatusInProgress, Requeue: true}, nil
 	case buildv1.BuildPhaseFailed:
-		return build.Result{}, fmt.Errorf("buildConfig failed: %v", b.Status.LogSnippet)
+		return kmmbuild.Result{}, fmt.Errorf("build failed: %v", build.Status.LogSnippet)
 	default:
-		return build.Result{}, fmt.Errorf("unknown status: %v", buildConfig.Status)
+		return kmmbuild.Result{}, fmt.Errorf("unknown status: %v", build.Status)
 	}
 }
 
-func (bcm *buildConfigManager) isBuildConfigChanged(existingBuildConfig *buildv1.BuildConfig, newBuildConfig *buildv1.BuildConfig) (bool, error) {
-	existingAnnotations := existingBuildConfig.GetAnnotations()
-	newAnnotations := newBuildConfig.GetAnnotations()
+func (bcm *buildManager) isBuildChanged(existingBuild *buildv1.Build, newBuild *buildv1.Build) (bool, error) {
+	existingAnnotations := existingBuild.GetAnnotations()
+	newAnnotations := newBuild.GetAnnotations()
 	if existingAnnotations == nil {
-		return false, fmt.Errorf("annotations are not present in the existing BuildConfig %s", existingBuildConfig.Name)
+		return false, fmt.Errorf("annotations are not present in the existing Build %s", existingBuild.Name)
 	}
-	if existingAnnotations[buildConfigHashAnnotation] == newAnnotations[buildConfigHashAnnotation] {
+	if existingAnnotations[buildHashAnnotation] == newAnnotations[buildHashAnnotation] {
 		return false, nil
 	}
 	return true, nil
@@ -112,8 +106,7 @@ func (bcm *buildConfigManager) isBuildConfigChanged(existingBuildConfig *buildv1
 //go:generate mockgen -source=manager.go -package=buildconfig -destination=mock_manager.go
 
 type OpenShiftBuildsHelper interface {
-	GetBuildConfig(ctx context.Context, mod kmmv1beta1.Module, targetKernel string) (*buildv1.BuildConfig, error)
-	GetLatestBuild(ctx context.Context, namespace, buildConfigName string) (*buildv1.Build, error)
+	GetBuild(ctx context.Context, mod kmmv1beta1.Module, targetKernel string) (*buildv1.Build, error)
 }
 
 type openShiftBuildsHelper struct {
@@ -124,50 +117,23 @@ func NewOpenShiftBuildsHelper(client client.Client) OpenShiftBuildsHelper {
 	return &openShiftBuildsHelper{client: client}
 }
 
-func (osbh *openShiftBuildsHelper) GetBuildConfig(ctx context.Context, mod kmmv1beta1.Module, targetKernel string) (*buildv1.BuildConfig, error) {
-	buildConfigList := buildv1.BuildConfigList{}
+func (osbh *openShiftBuildsHelper) GetBuild(ctx context.Context, mod kmmv1beta1.Module, targetKernel string) (*buildv1.Build, error) {
+	buildList := buildv1.BuildList{}
 
 	opts := []client.ListOption{
-		client.MatchingLabels(build.GetBuildLabels(mod, targetKernel)),
+		client.MatchingLabels(kmmbuild.GetBuildLabels(mod, targetKernel)),
 		client.InNamespace(mod.Namespace),
 	}
 
-	if err := osbh.client.List(ctx, &buildConfigList, opts...); err != nil {
-		return nil, fmt.Errorf("could not list BuildConfigs: %v", err)
+	if err := osbh.client.List(ctx, &buildList, opts...); err != nil {
+		return nil, fmt.Errorf("could not list Build: %v", err)
 	}
 
-	if n := len(buildConfigList.Items); n == 0 {
-		return nil, ErrNoMatchingBuildConfig
-	} else if n > 1 {
-		return nil, fmt.Errorf("expected 0 or 1 BuildConfigs, got %d", n)
-	}
-
-	return &buildConfigList.Items[0], nil
-}
-
-func (osbh *openShiftBuildsHelper) GetLatestBuild(ctx context.Context, namespace, buildConfigName string) (*buildv1.Build, error) {
-	builds := buildv1.BuildList{}
-
-	opts := []client.ListOption{
-		client.MatchingLabels(map[string]string{"openshift.io/build-config.name": buildConfigName}),
-		client.InNamespace(namespace),
-	}
-
-	if err := osbh.client.List(ctx, &builds, opts...); err != nil {
-		return nil, fmt.Errorf("could not list builds: %v", err)
-	}
-
-	if len(builds.Items) == 0 {
+	if n := len(buildList.Items); n == 0 {
 		return nil, errNoMatchingBuild
+	} else if n > 1 {
+		return nil, fmt.Errorf("expected 0 or 1 Builds, got %d", n)
 	}
 
-	latest := buildv1.Build{}
-
-	for _, b := range builds.Items {
-		if b.CreationTimestamp.After(latest.CreationTimestamp.Time) {
-			latest = b
-		}
-	}
-
-	return &latest, nil
+	return &buildList.Items[0], nil
 }

@@ -19,7 +19,7 @@ import (
 	"k8s.io/utils/pointer"
 )
 
-var _ = Describe("Maker_MakeBuildConfigTemplate", func() {
+var _ = Describe("Maker_MakeBuildTemplate", func() {
 
 	It("should work as expected", func() {
 
@@ -76,7 +76,7 @@ var _ = Describe("Maker_MakeBuildConfigTemplate", func() {
 			},
 		}
 
-		expected := buildv1.BuildConfig{
+		expected := buildv1.Build{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: moduleName + "-",
 				Namespace:    namespace,
@@ -94,11 +94,7 @@ var _ = Describe("Maker_MakeBuildConfigTemplate", func() {
 					},
 				},
 			},
-			Spec: buildv1.BuildConfigSpec{
-				Triggers: []buildv1.BuildTriggerPolicy{
-					{Type: buildv1.ConfigChangeBuildTriggerType},
-				},
-				RunPolicy: buildv1.BuildRunPolicySerialLatestOnly,
+			Spec: buildv1.BuildSpec{
 				CommonSpec: buildv1.CommonSpec{
 					ServiceAccount: "builder",
 					Source: buildv1.BuildSource{
@@ -130,10 +126,10 @@ var _ = Describe("Maker_MakeBuildConfigTemplate", func() {
 
 		hash, err := hashstructure.Hash(expected.Spec.CommonSpec.Source, nil)
 		Expect(err).NotTo(HaveOccurred())
-		annotations := map[string]string{buildConfigHashAnnotation: fmt.Sprintf("%d", hash)}
+		annotations := map[string]string{buildHashAnnotation: fmt.Sprintf("%d", hash)}
 		expected.SetAnnotations(annotations)
 
-		bc, err := NewMaker(build.NewHelper(), scheme).MakeBuildConfigTemplate(mod, mapping, targetKernel,
+		bc, err := NewMaker(build.NewHelper(), scheme).MakeBuildTemplate(mod, mapping, targetKernel,
 			containerImage, true, nil)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -171,7 +167,7 @@ var _ = Describe("Maker_MakeBuildConfigTemplate", func() {
 				mockKODM.EXPECT().GetImage(gomock.Any()).Return("", errors.New("random error")),
 			)
 
-			_, err := maker.MakeBuildConfigTemplate(kmmv1beta1.Module{}, kmmv1beta1.KernelMapping{}, "", "", false, mockKODM)
+			_, err := maker.MakeBuildTemplate(kmmv1beta1.Module{}, kmmv1beta1.KernelMapping{}, "", "", false, mockKODM)
 			Expect(err).To(HaveOccurred())
 		})
 
@@ -196,7 +192,7 @@ var _ = Describe("Maker_MakeBuildConfigTemplate", func() {
 				mockBuildHelper.EXPECT().ApplyBuildArgOverrides(gomock.Any(), gomock.Any()).Return(buildArgs),
 			)
 
-			bct, err := maker.MakeBuildConfigTemplate(kmmv1beta1.Module{}, kmmv1beta1.KernelMapping{}, "", "", false, mockKODM)
+			bct, err := maker.MakeBuildTemplate(kmmv1beta1.Module{}, kmmv1beta1.KernelMapping{}, "", "", false, mockKODM)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(bct.Spec.CommonSpec.Strategy.DockerStrategy.BuildArgs)).To(Equal(1))
 			Expect(bct.Spec.CommonSpec.Strategy.DockerStrategy.BuildArgs[0].Name).To(Equal(buildArgs[0].Name))

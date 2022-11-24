@@ -8,7 +8,7 @@ ENV GOARCH=amd64
 
 RUN yum install -y which
 RUN yum install -y podman docker
-RUN go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.6.1
+RUN go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.9.2
 RUN curl -L --retry 5 "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv4.3.0/kustomize_v4.3.0_linux_amd64.tar.gz" | \
     tar -zx -C /usr/bin
 RUN go install github.com/golang/mock/mockgen@v1.5.0

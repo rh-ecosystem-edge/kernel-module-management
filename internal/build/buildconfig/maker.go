@@ -7,7 +7,7 @@ import (
 	"github.com/mitchellh/hashstructure"
 	buildv1 "github.com/openshift/api/build/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
+	kmmbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	v1 "k8s.io/api/core/v1"
@@ -22,24 +22,24 @@ const dtkBuildArg = "DTK_AUTO"
 //go:generate mockgen -source=maker.go -package=buildconfig -destination=mock_maker.go
 
 type Maker interface {
-	MakeBuildConfigTemplate(mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string,
-		pushImage bool, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) (*buildv1.BuildConfig, error)
+	MakeBuildTemplate(mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string,
+		pushImage bool, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) (*buildv1.Build, error)
 }
 
 type maker struct {
-	helper build.Helper
+	helper kmmbuild.Helper
 	scheme *runtime.Scheme
 }
 
-func NewMaker(helper build.Helper, scheme *runtime.Scheme) Maker {
+func NewMaker(helper kmmbuild.Helper, scheme *runtime.Scheme) Maker {
 	return &maker{
 		helper: helper,
 		scheme: scheme,
 	}
 }
 
-func (m *maker) MakeBuildConfigTemplate(mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string,
-	pushImage bool, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) (*buildv1.BuildConfig, error) {
+func (m *maker) MakeBuildTemplate(mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string,
+	pushImage bool, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) (*buildv1.Build, error) {
 
 	kmmBuild := m.helper.GetRelevantBuild(mod, mapping)
 
@@ -82,21 +82,17 @@ func (m *maker) MakeBuildConfigTemplate(mod kmmv1beta1.Module, mapping kmmv1beta
 
 	sourceConfigHash, err := hashstructure.Hash(sourceConfig, nil)
 	if err != nil {
-		return nil, fmt.Errorf("could not hash BuildConfig's Buildsource template: %v", err)
+		return nil, fmt.Errorf("could not hash Build's Buildsource template: %v", err)
 	}
 
-	bc := buildv1.BuildConfig{
+	bc := buildv1.Build{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: mod.Name + "-",
 			Namespace:    mod.Namespace,
-			Labels:       build.GetBuildLabels(mod, targetKernel),
-			Annotations:  map[string]string{buildConfigHashAnnotation: fmt.Sprintf("%d", sourceConfigHash)},
+			Labels:       kmmbuild.GetBuildLabels(mod, targetKernel),
+			Annotations:  map[string]string{buildHashAnnotation: fmt.Sprintf("%d", sourceConfigHash)},
 		},
-		Spec: buildv1.BuildConfigSpec{
-			Triggers: []buildv1.BuildTriggerPolicy{
-				{Type: buildv1.ConfigChangeBuildTriggerType},
-			},
-			RunPolicy: buildv1.BuildRunPolicySerialLatestOnly,
+		Spec: buildv1.BuildSpec{
 			CommonSpec: buildv1.CommonSpec{
 				ServiceAccount: constants.OCPBuilderServiceAccountName,
 				Source:         sourceConfig,
