@@ -57,10 +57,10 @@ var _ = Describe("Manager_Sync", func() {
 			},
 		}
 
-		pullOptions := kmmv1beta1.PullOptions{}
+		tlsOptions := kmmv1beta1.TLSOptions{}
 
 		buildCfg := kmmv1beta1.Build{
-			Pull: pullOptions,
+			BaseImageRegistryTLS: tlsOptions,
 		}
 
 		mapping := kmmv1beta1.KernelMapping{
@@ -100,10 +100,10 @@ var _ = Describe("Manager_Sync", func() {
 				},
 			}
 
-			pullOptions := kmmv1beta1.PullOptions{}
+			tlsOptions := kmmv1beta1.TLSOptions{}
 
 			buildCfg := kmmv1beta1.Build{
-				Pull: pullOptions,
+				BaseImageRegistryTLS: tlsOptions,
 			}
 
 			mapping := kmmv1beta1.KernelMapping{
