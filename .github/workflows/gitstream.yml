@@ -1,0 +1,41 @@
+name: GitStream
+
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+
+jobs:
+  gitstream:
+    name: Install and run GitStream
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Checkout the downstream repo
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: main
+          path: _gitstream_downstream
+
+      - uses: actions/setup-go@v3
+        with:
+          go-version: 1.19
+
+      - name: Install GitStream
+        run: go install github.com/qbarrand/gitstream@main
+        env:
+          GOPROXY: direct
+
+      - name: Bring upstream commits
+        run: ${HOME}/go/bin/gitstream sync
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Make the oldest draft PR ready for review
+        run: ${HOME}/go/bin/gitstream make-oldest-draft-pr-ready
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
