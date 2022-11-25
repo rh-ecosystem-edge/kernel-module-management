@@ -16,6 +16,8 @@ jobs:
   gitstream:
     name: Run GitStream
     runs-on: ubuntu-latest
+    env:
+      GO_RELEASE: go1.19.3.linux-amd64.tar.gz
 
     container:
       image: ghcr.io/qbarrand/gitstream:main
@@ -35,10 +37,21 @@ jobs:
           ref: main
           path: _gitstream_downstream
 
-      - name: Setup Go
-        uses: actions/setup-go@v3
+      - name: Cache the Go archive
+        id: cache-go
+        uses: actions/cache@v3
         with:
-          go-version: '1.19'
+          path: /usr/local/go
+          key: ${{ env.GO_RELEASE }}
+
+      - name: Download and install Go
+        run: |
+          rm -rf /usr/local/go
+          wget -O- https://go.dev/dl/${GO_RELEASE} | tar -C /usr/local -xz
+        if: steps.cache-go.outputs.cache-hit != 'true'
+
+      - name: Add Go to PATH
+        run: echo "PATH=${PATH}" >> $GITHUB_ENV
 
       - name: Bring upstream commits
         run: gitstream sync
