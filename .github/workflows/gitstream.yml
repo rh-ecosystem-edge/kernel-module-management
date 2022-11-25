@@ -35,6 +35,11 @@ jobs:
           ref: main
           path: _gitstream_downstream
 
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.19'
+
       - name: Bring upstream commits
         run: gitstream sync
         env:
