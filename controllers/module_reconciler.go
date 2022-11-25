@@ -107,8 +107,7 @@ func NewModuleReconciler(
 //+kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=use,resourceNames=privileged
 //+kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=create;delete;get;list;patch;watch
 //+kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=clusterroles,verbs=bind,resourceNames=module-loader;device-plugin
-//+kubebuilder:rbac:groups="build.openshift.io",resources=buildconfigs,verbs=create;delete;get;list;patch;watch
-//+kubebuilder:rbac:groups="build.openshift.io",resources=builds,verbs=get;list;watch
+//+kubebuilder:rbac:groups="build.openshift.io",resources=builds,verbs=get;list;create;delete;watch;patch
 
 // Reconcile lists all nodes and looks for kernels that match its mappings.
 // For each mapping that matches at least one node in the cluster, it creates a DaemonSet running the container image
@@ -518,7 +517,7 @@ func (r *ModuleReconciler) SetupWithManager(mgr ctrl.Manager, kernelLabel string
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&kmmv1beta1.Module{}).
 		Owns(&appsv1.DaemonSet{}).
-		Owns(&buildv1.BuildConfig{}).
+		Owns(&buildv1.Build{}).
 		Owns(&v1.ServiceAccount{}).
 		Watches(
 			&source.Kind{Type: &v1.Node{}},

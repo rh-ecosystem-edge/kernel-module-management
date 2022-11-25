@@ -3,14 +3,13 @@ package buildconfig
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	buildv1 "github.com/openshift/api/build/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
+	kmmbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	v1 "k8s.io/api/core/v1"
@@ -41,10 +40,10 @@ var _ = Describe("Manager_Sync", func() {
 
 	ctx := context.Background()
 
-	It("should create a BuildConfig when none is present", func() {
+	It("should create a Build when none is present", func() {
 		const (
-			buildConfigName = "some-build-config"
-			repoSecretName  = "repo-secret"
+			buildName      = "some-build-config"
+			repoSecretName = "repo-secret"
 		)
 
 		By("Authenticating with a secret")
@@ -72,27 +71,27 @@ var _ = Describe("Manager_Sync", func() {
 
 		m := NewManager(mockKubeClient, mockMaker, mockOpenShiftBuildsHelper)
 
-		buildConfig := buildv1.BuildConfig{
-			ObjectMeta: metav1.ObjectMeta{Name: buildConfigName},
+		build := buildv1.Build{
+			ObjectMeta: metav1.ObjectMeta{Name: buildName},
 		}
 
 		gomock.InOrder(
-			mockMaker.EXPECT().MakeBuildConfigTemplate(mod, mapping, targetKernel, containerImage, true, gomock.Any()).Return(&buildConfig, nil),
-			mockOpenShiftBuildsHelper.EXPECT().GetBuildConfig(ctx, mod, targetKernel).Return(nil, ErrNoMatchingBuildConfig),
-			mockKubeClient.EXPECT().Create(ctx, &buildConfig),
+			mockMaker.EXPECT().MakeBuildTemplate(mod, mapping, targetKernel, containerImage, true, gomock.Any()).Return(&build, nil),
+			mockOpenShiftBuildsHelper.EXPECT().GetBuild(ctx, mod, targetKernel).Return(nil, errNoMatchingBuild),
+			mockKubeClient.EXPECT().Create(ctx, &build),
 		)
 
 		kernelOsDtkMapping := syncronizedmap.NewKernelOsDtkMapping()
 		res, err := m.Sync(ctx, mod, mapping, targetKernel, mapping.ContainerImage, true, kernelOsDtkMapping)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Status).To(BeEquivalentTo(build.StatusCreated))
+		Expect(res.Status).To(BeEquivalentTo(kmmbuild.StatusCreated))
 		Expect(res.Requeue).To(BeTrue())
 	})
 
 	DescribeTable(
-		"should return the Build status when a BuildConfig is present",
-		func(phase buildv1.BuildPhase, expectedResult build.Result, expectError bool) {
-			const buildConfigName = "some-build-config"
+		"should return the Build status when a Build is present",
+		func(phase buildv1.BuildPhase, expectedResult kmmbuild.Result, expectError bool) {
+			const buildName = "some-build"
 
 			By("Authenticating with the ServiceAccount's pull secret")
 
@@ -116,21 +115,17 @@ var _ = Describe("Manager_Sync", func() {
 
 			m := NewManager(mockKubeClient, mockMaker, mockOpenShiftBuildsHelper)
 
-			buildConfig := buildv1.BuildConfig{
+			build := buildv1.Build{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:        buildConfigName,
-					Annotations: map[string]string{buildConfigHashAnnotation: "some hash"},
+					Name:        buildName,
+					Annotations: map[string]string{buildHashAnnotation: "some hash"},
 				},
-			}
-
-			b := buildv1.Build{
 				Status: buildv1.BuildStatus{Phase: phase},
 			}
 
 			gomock.InOrder(
-				mockMaker.EXPECT().MakeBuildConfigTemplate(mod, mapping, targetKernel, containerImage, true, gomock.Any()).Return(&buildConfig, nil),
-				mockOpenShiftBuildsHelper.EXPECT().GetBuildConfig(ctx, mod, targetKernel).Return(&buildConfig, nil),
-				mockOpenShiftBuildsHelper.EXPECT().GetLatestBuild(ctx, namespace, buildConfigName).Return(&b, nil),
+				mockMaker.EXPECT().MakeBuildTemplate(mod, mapping, targetKernel, containerImage, true, gomock.Any()).Return(&build, nil),
+				mockOpenShiftBuildsHelper.EXPECT().GetBuild(ctx, mod, targetKernel).Return(&build, nil),
 			)
 
 			kernelOsDtkMapping := syncronizedmap.NewKernelOsDtkMapping()
@@ -143,16 +138,16 @@ var _ = Describe("Manager_Sync", func() {
 				Expect(res).To(BeEquivalentTo(expectedResult))
 			}
 		},
-		Entry(nil, buildv1.BuildPhaseComplete, build.Result{Status: build.StatusCompleted}, false),
-		Entry(nil, buildv1.BuildPhaseNew, build.Result{Status: build.StatusInProgress, Requeue: true}, false),
-		Entry(nil, buildv1.BuildPhasePending, build.Result{Status: build.StatusInProgress, Requeue: true}, false),
-		Entry(nil, buildv1.BuildPhaseRunning, build.Result{Status: build.StatusInProgress, Requeue: true}, false),
-		Entry(nil, buildv1.BuildPhaseFailed, build.Result{}, true),
-		Entry(nil, buildv1.BuildPhaseCancelled, build.Result{}, true),
+		Entry(nil, buildv1.BuildPhaseComplete, kmmbuild.Result{Status: kmmbuild.StatusCompleted}, false),
+		Entry(nil, buildv1.BuildPhaseNew, kmmbuild.Result{Status: kmmbuild.StatusInProgress, Requeue: true}, false),
+		Entry(nil, buildv1.BuildPhasePending, kmmbuild.Result{Status: kmmbuild.StatusInProgress, Requeue: true}, false),
+		Entry(nil, buildv1.BuildPhaseRunning, kmmbuild.Result{Status: kmmbuild.StatusInProgress, Requeue: true}, false),
+		Entry(nil, buildv1.BuildPhaseFailed, kmmbuild.Result{}, true),
+		Entry(nil, buildv1.BuildPhaseCancelled, kmmbuild.Result{}, true),
 	)
 })
 
-var _ = Describe("OpenShiftBuildsHelper_GetBuildConfig", func() {
+var _ = Describe("OpenShiftBuildsHelper_GetBuild", func() {
 	const targetKernel = "target-kernels"
 
 	var mockKubeClient *client.MockClient
@@ -167,124 +162,48 @@ var _ = Describe("OpenShiftBuildsHelper_GetBuildConfig", func() {
 	It("should return an error if an error occurred", func() {
 		mockKubeClient.
 			EXPECT().
-			List(ctx, &buildv1.BuildConfigList{}, gomock.Any(), gomock.Any()).
+			List(ctx, &buildv1.BuildList{}, gomock.Any(), gomock.Any()).
 			Return(errors.New("random error"))
 
 		osbh := NewOpenShiftBuildsHelper(mockKubeClient)
 
-		_, err := osbh.GetBuildConfig(ctx, kmmv1beta1.Module{}, targetKernel)
+		_, err := osbh.GetBuild(ctx, kmmv1beta1.Module{}, targetKernel)
 
 		Expect(err).To(HaveOccurred())
 	})
 
-	It("should return an error if there are two BuildConfigs with the same labels", func() {
+	It("should return an error if there are two Builids with the same labels", func() {
 		mockKubeClient.
 			EXPECT().
-			List(ctx, &buildv1.BuildConfigList{}, gomock.Any(), gomock.Any()).
-			Do(func(_ context.Context, bcs *buildv1.BuildConfigList, _ ...ctrlclient.ListOption) {
-				bcs.Items = make([]buildv1.BuildConfig, 2)
+			List(ctx, &buildv1.BuildList{}, gomock.Any(), gomock.Any()).
+			Do(func(_ context.Context, bcs *buildv1.BuildList, _ ...ctrlclient.ListOption) {
+				bcs.Items = make([]buildv1.Build, 2)
 			})
 
 		osbh := NewOpenShiftBuildsHelper(mockKubeClient)
 
-		_, err := osbh.GetBuildConfig(ctx, kmmv1beta1.Module{}, targetKernel)
+		_, err := osbh.GetBuild(ctx, kmmv1beta1.Module{}, targetKernel)
 
 		Expect(err).To(HaveOccurred())
 	})
 
 	It("should work as expected", func() {
-		bc := &buildv1.BuildConfig{
+		bc := &buildv1.Build{
 			ObjectMeta: metav1.ObjectMeta{Name: "test"},
 		}
 
 		mockKubeClient.
 			EXPECT().
-			List(ctx, &buildv1.BuildConfigList{}, gomock.Any(), gomock.Any()).
-			Do(func(_ context.Context, bcs *buildv1.BuildConfigList, _ ...ctrlclient.ListOption) {
-				bcs.Items = []buildv1.BuildConfig{*bc}
+			List(ctx, &buildv1.BuildList{}, gomock.Any(), gomock.Any()).
+			Do(func(_ context.Context, bcs *buildv1.BuildList, _ ...ctrlclient.ListOption) {
+				bcs.Items = []buildv1.Build{*bc}
 			})
 
 		osbh := NewOpenShiftBuildsHelper(mockKubeClient)
 
-		res, err := osbh.GetBuildConfig(ctx, kmmv1beta1.Module{}, targetKernel)
+		res, err := osbh.GetBuild(ctx, kmmv1beta1.Module{}, targetKernel)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(Equal(bc))
-	})
-})
-
-var _ = Describe("OpenShiftBuildsHelper_GetLatestBuild", func() {
-	const (
-		buildConfigName = "some-buildconfig"
-		namespace       = "some-namespace"
-	)
-
-	var mockKubeClient *client.MockClient
-
-	ctx := context.Background()
-
-	BeforeEach(func() {
-		ctrl := gomock.NewController(GinkgoT())
-		mockKubeClient = client.NewMockClient(ctrl)
-	})
-
-	It("should return an error if an error occurred", func() {
-		mockKubeClient.
-			EXPECT().
-			List(ctx, &buildv1.BuildList{}, gomock.Any(), gomock.Any()).
-			Return(errors.New("random error"))
-
-		osbh := NewOpenShiftBuildsHelper(mockKubeClient)
-
-		_, err := osbh.GetLatestBuild(ctx, namespace, buildConfigName)
-
-		Expect(err).To(HaveOccurred())
-	})
-
-	It("should return an error no build was found", func() {
-		mockKubeClient.
-			EXPECT().
-			List(ctx, &buildv1.BuildList{}, gomock.Any(), gomock.Any())
-
-		osbh := NewOpenShiftBuildsHelper(mockKubeClient)
-
-		_, err := osbh.GetLatestBuild(ctx, namespace, buildConfigName)
-
-		Expect(err).To(HaveOccurred())
-	})
-
-	It("should return the latest of two builds", func() {
-		now := metav1.Now()
-
-		b := buildv1.Build{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:              "newer",
-				CreationTimestamp: now,
-			},
-		}
-
-		mockKubeClient.
-			EXPECT().
-			List(ctx, &buildv1.BuildList{}, gomock.Any(), gomock.Any()).
-			Do(func(_ context.Context, bl *buildv1.BuildList, _ ...ctrlclient.ListOption) {
-				bl.Items = []buildv1.Build{
-					b,
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "older",
-							CreationTimestamp: metav1.NewTime(
-								now.Add(-1 * time.Minute),
-							),
-						},
-					},
-				}
-			})
-
-		osbh := NewOpenShiftBuildsHelper(mockKubeClient)
-
-		res, err := osbh.GetLatestBuild(ctx, namespace, buildConfigName)
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(&b))
 	})
 })

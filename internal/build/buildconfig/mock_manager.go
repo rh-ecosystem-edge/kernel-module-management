@@ -36,32 +36,17 @@ func (m *MockOpenShiftBuildsHelper) EXPECT() *MockOpenShiftBuildsHelperMockRecor
 	return m.recorder
 }
 
-// GetBuildConfig mocks base method.
-func (m *MockOpenShiftBuildsHelper) GetBuildConfig(ctx context.Context, mod v1beta1.Module, targetKernel string) (*v1.BuildConfig, error) {
+// GetBuild mocks base method.
+func (m *MockOpenShiftBuildsHelper) GetBuild(ctx context.Context, mod v1beta1.Module, targetKernel string) (*v1.Build, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBuildConfig", ctx, mod, targetKernel)
-	ret0, _ := ret[0].(*v1.BuildConfig)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetBuildConfig indicates an expected call of GetBuildConfig.
-func (mr *MockOpenShiftBuildsHelperMockRecorder) GetBuildConfig(ctx, mod, targetKernel interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBuildConfig", reflect.TypeOf((*MockOpenShiftBuildsHelper)(nil).GetBuildConfig), ctx, mod, targetKernel)
-}
-
-// GetLatestBuild mocks base method.
-func (m *MockOpenShiftBuildsHelper) GetLatestBuild(ctx context.Context, namespace, buildConfigName string) (*v1.Build, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLatestBuild", ctx, namespace, buildConfigName)
+	ret := m.ctrl.Call(m, "GetBuild", ctx, mod, targetKernel)
 	ret0, _ := ret[0].(*v1.Build)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetLatestBuild indicates an expected call of GetLatestBuild.
-func (mr *MockOpenShiftBuildsHelperMockRecorder) GetLatestBuild(ctx, namespace, buildConfigName interface{}) *gomock.Call {
+// GetBuild indicates an expected call of GetBuild.
+func (mr *MockOpenShiftBuildsHelperMockRecorder) GetBuild(ctx, mod, targetKernel interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLatestBuild", reflect.TypeOf((*MockOpenShiftBuildsHelper)(nil).GetLatestBuild), ctx, namespace, buildConfigName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBuild", reflect.TypeOf((*MockOpenShiftBuildsHelper)(nil).GetBuild), ctx, mod, targetKernel)
 }

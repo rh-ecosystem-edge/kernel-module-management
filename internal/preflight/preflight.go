@@ -14,10 +14,10 @@ import (
 )
 
 const (
-	VerificationStatusReasonBuildConfigPresent = "Verification successful, all driver-containers have paired BuildConfigs in the recipe"
-	VerificationStatusReasonNoDaemonSet        = "Verification successful, no driver-container present in the recipe"
-	VerificationStatusReasonUnknown            = "Verification has not started yet"
-	VerificationStatusReasonVerified           = "Verification successful, this Module would be verified again in this Preflight CR"
+	VerificationStatusReasonBuildConfigurationPresent = "Verification successful, all driver-containers have paired Build Configurations in the recipe"
+	VerificationStatusReasonNoDaemonSet               = "Verification successful, no driver-container present in the recipe"
+	VerificationStatusReasonUnknown                   = "Verification has not started yet"
+	VerificationStatusReasonVerified                  = "Verification successful, this Module would be verified again in this Preflight CR"
 )
 
 //go:generate mockgen -source=preflight.go -package=preflight -destination=mock_preflight_api.go
