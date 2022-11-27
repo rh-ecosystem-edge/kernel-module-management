@@ -56,9 +56,7 @@ func (m *helper) GetRelevantBuild(mod kmmv1beta1.Module, km kmmv1beta1.KernelMap
 	}
 
 	buildConfig := mod.Spec.ModuleLoader.Container.Build.DeepCopy()
-	if km.Build.Dockerfile != "" {
-		buildConfig.Dockerfile = km.Build.Dockerfile
-	}
+	buildConfig.DockerfileConfigMap = km.Build.DockerfileConfigMap
 
 	buildConfig.BuildArgs = m.ApplyBuildArgOverrides(buildConfig.BuildArgs, km.Build.BuildArgs...)
 

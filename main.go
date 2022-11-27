@@ -170,7 +170,7 @@ func main() {
 	helperAPI := build.NewHelper()
 	buildAPI := buildconfig.NewManager(
 		client,
-		buildconfig.NewMaker(helperAPI, scheme),
+		buildconfig.NewMaker(client, helperAPI, scheme),
 		buildconfig.NewOpenShiftBuildsHelper(client),
 	)
 

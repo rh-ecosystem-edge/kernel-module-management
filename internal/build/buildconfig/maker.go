@@ -1,6 +1,7 @@
 package buildconfig
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -10,10 +11,13 @@ import (
 	kmmbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
@@ -22,23 +26,25 @@ const dtkBuildArg = "DTK_AUTO"
 //go:generate mockgen -source=maker.go -package=buildconfig -destination=mock_maker.go
 
 type Maker interface {
-	MakeBuildTemplate(mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string,
+	MakeBuildTemplate(ctx context.Context, mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string,
 		pushImage bool, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) (*buildv1.Build, error)
 }
 
 type maker struct {
+	client client.Client
 	helper kmmbuild.Helper
 	scheme *runtime.Scheme
 }
 
-func NewMaker(helper kmmbuild.Helper, scheme *runtime.Scheme) Maker {
+func NewMaker(client client.Client, helper kmmbuild.Helper, scheme *runtime.Scheme) Maker {
 	return &maker{
+		client: client,
 		helper: helper,
 		scheme: scheme,
 	}
 }
 
-func (m *maker) MakeBuildTemplate(mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string,
+func (m *maker) MakeBuildTemplate(ctx context.Context, mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string,
 	pushImage bool, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) (*buildv1.Build, error) {
 
 	kmmBuild := m.helper.GetRelevantBuild(mod, mapping)
@@ -50,7 +56,12 @@ func (m *maker) MakeBuildTemplate(mod kmmv1beta1.Module, mapping kmmv1beta1.Kern
 		},
 	}
 
-	if strings.Contains(kmmBuild.Dockerfile, dtkBuildArg) {
+	dockerfileData, err := m.getDockerfileData(ctx, kmmBuild, mod.Namespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get dockerfile data from configmap: %v", err)
+	}
+
+	if strings.Contains(dockerfileData, dtkBuildArg) {
 
 		dtkImage, err := kernelOsDtkMapping.GetImage(targetKernel)
 		if err != nil {
@@ -76,7 +87,7 @@ func (m *maker) MakeBuildTemplate(mod kmmv1beta1.Module, mapping kmmv1beta1.Kern
 	}
 
 	sourceConfig := buildv1.BuildSource{
-		Dockerfile: &kmmBuild.Dockerfile,
+		Dockerfile: &dockerfileData,
 		Type:       buildv1.BuildSourceDockerfile,
 	}
 
@@ -115,6 +126,20 @@ func (m *maker) MakeBuildTemplate(mod kmmv1beta1.Module, mapping kmmv1beta1.Kern
 	}
 
 	return &bc, nil
+}
+
+func (m *maker) getDockerfileData(ctx context.Context, buildConfig *kmmv1beta1.Build, namespace string) (string, error) {
+	dockerfileCM := &corev1.ConfigMap{}
+	namespacedName := types.NamespacedName{Name: buildConfig.DockerfileConfigMap.Name, Namespace: namespace}
+	err := m.client.Get(ctx, namespacedName, dockerfileCM)
+	if err != nil {
+		return "", fmt.Errorf("failed to get dockerfile ConfigMap %s: %v", namespacedName, err)
+	}
+	data, ok := dockerfileCM.Data[constants.DockerfileCMKey]
+	if !ok {
+		return "", fmt.Errorf("invalid Dockerfile ConfigMap %s format, %s key is missing", namespacedName, constants.DockerfileCMKey)
+	}
+	return data, nil
 }
 
 func envVarsFromKMMBuildArgs(args []kmmv1beta1.BuildArg) []v1.EnvVar {
