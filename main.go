@@ -187,7 +187,7 @@ func main() {
 	preflightStatusUpdaterAPI := statusupdater.NewPreflightStatusUpdater(client)
 	registryAPI := registry.NewRegistry()
 	authFactory := auth.NewRegistryAuthGetterFactory(client, kubernetes.NewForConfigOrDie(restConfig))
-	preflightAPI := preflight.NewPreflightAPI(client, registryAPI, kernelAPI, authFactory)
+	preflightAPI := preflight.NewPreflightAPI(client, buildAPI, registryAPI, kernelAPI, preflightStatusUpdaterAPI, authFactory, kernelOsDtkMapping)
 
 	mc := controllers.NewModuleReconciler(
 		client,
