@@ -45,7 +45,7 @@ func (bcm *buildManager) Sync(ctx context.Context, mod kmmv1beta1.Module, m kmmv
 
 	logger := log.FromContext(ctx)
 
-	buildTemplate, err := bcm.maker.MakeBuildTemplate(mod, m, targetKernel, targetImage, pushImage, kernelOsDtkMapping)
+	buildTemplate, err := bcm.maker.MakeBuildTemplate(ctx, mod, m, targetKernel, targetImage, pushImage, kernelOsDtkMapping)
 	if err != nil {
 		return kmmbuild.Result{}, fmt.Errorf("could not make Build template: %v", err)
 	}

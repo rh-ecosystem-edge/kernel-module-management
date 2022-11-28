@@ -86,9 +86,8 @@ var _ = Describe("PrepareKernelMapping", func() {
 
 	It("should only substitute the ContainerImage field", func() {
 		const (
-			dockerfile = "RUN echo $MYVAR"
-			literal    = "some literal:${KERNEL_XYZ"
-			regexp     = "some regexp:${KERNEL_XYZ"
+			literal = "some literal:${KERNEL_XYZ"
+			regexp  = "some regexp:${KERNEL_XYZ"
 		)
 
 		mapping := kmmv1beta1.KernelMapping{
@@ -100,7 +99,7 @@ var _ = Describe("PrepareKernelMapping", func() {
 					{Name: "name1", Value: "value1"},
 					{Name: "kernel version", Value: "${KERNEL_FULL_VERSION}"},
 				},
-				Dockerfile: dockerfile,
+				DockerfileConfigMap: &v1.LocalObjectReference{},
 			},
 		}
 		expectMapping := kmmv1beta1.KernelMapping{
@@ -112,7 +111,7 @@ var _ = Describe("PrepareKernelMapping", func() {
 					{Name: "name1", Value: "value1"},
 					{Name: "kernel version", Value: "${KERNEL_FULL_VERSION}"},
 				},
-				Dockerfile: dockerfile,
+				DockerfileConfigMap: &v1.LocalObjectReference{},
 			},
 		}
 
