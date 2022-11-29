@@ -23,8 +23,11 @@ jobs:
       image: ghcr.io/qbarrand/gitstream:main
 
     steps:
-      - name: Install Git
-        run: apk add git
+      # gcompat: glibc compatibility layer on alpine for Go
+      # git: to check out the repos
+      # tar: to save and restore /usr/local/go to / from the GitHub cache (need GNU)
+      - name: Install dependencies
+        run: apk add gcompat git tar
 
       - uses: actions/checkout@v3
         with:
@@ -51,7 +54,7 @@ jobs:
         if: steps.cache-go.outputs.cache-hit != 'true'
 
       - name: Add Go to PATH
-        run: echo "PATH=${PATH}" >> $GITHUB_ENV
+        run: echo "PATH=/usr/local/go/bin:${PATH}" >> $GITHUB_ENV
 
       - name: Bring upstream commits
         run: gitstream sync
