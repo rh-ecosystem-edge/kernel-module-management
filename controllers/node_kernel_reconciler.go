@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
@@ -45,7 +46,7 @@ func (r *NodeKernelReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, fmt.Errorf("could not get node: %v", err)
 	}
 
-	kernelVersion := node.Status.NodeInfo.KernelVersion
+	kernelVersion := strings.TrimSuffix(node.Status.NodeInfo.KernelVersion, "+")
 	osImageVersion := osVersionRegexp.FindString(node.Status.NodeInfo.OSImage)
 	if osImageVersion == "" {
 		return ctrl.Result{}, fmt.Errorf("could not get node %s osImageVersion", node.Name)
