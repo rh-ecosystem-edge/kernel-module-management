@@ -74,6 +74,20 @@ func (m *MockRegistryAuthGetterFactory) EXPECT() *MockRegistryAuthGetterFactoryM
 	return m.recorder
 }
 
+// NewClusterAuthGetter mocks base method.
+func (m *MockRegistryAuthGetterFactory) NewClusterAuthGetter() RegistryAuthGetter {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewClusterAuthGetter")
+	ret0, _ := ret[0].(RegistryAuthGetter)
+	return ret0
+}
+
+// NewClusterAuthGetter indicates an expected call of NewClusterAuthGetter.
+func (mr *MockRegistryAuthGetterFactoryMockRecorder) NewClusterAuthGetter() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewClusterAuthGetter", reflect.TypeOf((*MockRegistryAuthGetterFactory)(nil).NewClusterAuthGetter))
+}
+
 // NewRegistryAuthGetterFrom mocks base method.
 func (m *MockRegistryAuthGetterFactory) NewRegistryAuthGetterFrom(mod *v1beta1.Module) RegistryAuthGetter {
 	m.ctrl.T.Helper()

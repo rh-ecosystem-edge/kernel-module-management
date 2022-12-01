@@ -14,6 +14,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	pullSecretNamespace = "openshift-config"
+	pullSecretName      = "pull-secret"
+)
+
 //go:generate mockgen -source=auth.go -package=auth -destination=mock_auth.go
 
 type RegistryAuthGetter interface {
@@ -62,6 +67,7 @@ func (sarag *serviceAccountRegistryAuthGetter) GetKeyChain(ctx context.Context) 
 
 type RegistryAuthGetterFactory interface {
 	NewRegistryAuthGetterFrom(mod *kmmv1beta1.Module) RegistryAuthGetter
+	NewClusterAuthGetter() RegistryAuthGetter
 }
 
 type registryAuthGetterFactory struct {
@@ -102,4 +108,12 @@ func (af *registryAuthGetterFactory) NewRegistryAuthGetterFrom(mod *kmmv1beta1.M
 	return af.newServiceAccountRegistryAuthGetter(
 		mod.Namespace,
 		constants.OCPBuilderServiceAccountName)
+}
+
+func (af *registryAuthGetterFactory) NewClusterAuthGetter() RegistryAuthGetter {
+	namespacedName := types.NamespacedName{
+		Name:      pullSecretName,
+		Namespace: pullSecretNamespace,
+	}
+	return af.newRegistryAuthGetter(namespacedName)
 }
