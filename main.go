@@ -170,7 +170,7 @@ func main() {
 	helperAPI := build.NewHelper()
 	buildAPI := buildconfig.NewManager(
 		client,
-		buildconfig.NewMaker(client, helperAPI, scheme),
+		buildconfig.NewMaker(client, helperAPI, scheme, kernelOsDtkMapping),
 		buildconfig.NewOpenShiftBuildsHelper(client),
 	)
 
@@ -187,7 +187,7 @@ func main() {
 	preflightStatusUpdaterAPI := statusupdater.NewPreflightStatusUpdater(client)
 	registryAPI := registry.NewRegistry()
 	authFactory := auth.NewRegistryAuthGetterFactory(client, kubernetes.NewForConfigOrDie(restConfig))
-	preflightAPI := preflight.NewPreflightAPI(client, buildAPI, registryAPI, kernelAPI, preflightStatusUpdaterAPI, authFactory, kernelOsDtkMapping)
+	preflightAPI := preflight.NewPreflightAPI(client, buildAPI, registryAPI, kernelAPI, preflightStatusUpdaterAPI, authFactory)
 
 	mc := controllers.NewModuleReconciler(
 		client,
@@ -201,7 +201,6 @@ func main() {
 		registryAPI,
 		authFactory,
 		moduleStatusUpdaterAPI,
-		kernelOsDtkMapping,
 	)
 
 	if err = mc.SetupWithManager(mgr, kernelLabel); err != nil {

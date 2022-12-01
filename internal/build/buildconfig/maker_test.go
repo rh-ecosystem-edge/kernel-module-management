@@ -32,18 +32,20 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 	)
 
 	var (
-		ctrl            *gomock.Controller
-		clnt            *client.MockClient
-		maker           Maker
-		mockBuildHelper *build.MockHelper
-		ctx             context.Context
+		ctrl                   *gomock.Controller
+		clnt                   *client.MockClient
+		maker                  Maker
+		mockBuildHelper        *build.MockHelper
+		mockKernelOSDTKMapping *syncronizedmap.MockKernelOsDtkMapping
+		ctx                    context.Context
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
 		mockBuildHelper = build.NewMockHelper(ctrl)
-		maker = NewMaker(clnt, mockBuildHelper, scheme)
+		mockKernelOSDTKMapping = syncronizedmap.NewMockKernelOsDtkMapping(ctrl)
+		maker = NewMaker(clnt, mockBuildHelper, scheme, mockKernelOSDTKMapping)
 		ctx = context.Background()
 	})
 
@@ -171,7 +173,7 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 			mockBuildHelper.EXPECT().ApplyBuildArgOverrides(buildArgs, overrides).Return(append(buildArgs, kmmv1beta1.BuildArg{Name: "KERNEL_VERSION", Value: targetKernel})),
 		)
 
-		bc, err := maker.MakeBuildTemplate(ctx, mod, mapping, targetKernel, containerImage, true, nil)
+		bc, err := maker.MakeBuildTemplate(ctx, mod, mapping, targetKernel, containerImage, true)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(
@@ -182,15 +184,6 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 	})
 
 	Context(fmt.Sprintf("using %s", dtkBuildArg), func() {
-
-		var (
-			mockKODM *syncronizedmap.MockKernelOsDtkMapping
-		)
-
-		BeforeEach(func() {
-			mockKODM = syncronizedmap.NewMockKernelOsDtkMapping(ctrl)
-		})
-
 		It("should fail if we couldn't get the DTK image", func() {
 
 			build := &kmmv1beta1.Build{
@@ -206,10 +199,10 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 						return nil
 					},
 				),
-				mockKODM.EXPECT().GetImage(gomock.Any()).Return("", errors.New("random error")),
+				mockKernelOSDTKMapping.EXPECT().GetImage(gomock.Any()).Return("", errors.New("random error")),
 			)
 
-			_, err := maker.MakeBuildTemplate(ctx, kmmv1beta1.Module{}, kmmv1beta1.KernelMapping{}, "", "", false, mockKODM)
+			_, err := maker.MakeBuildTemplate(ctx, kmmv1beta1.Module{}, kmmv1beta1.KernelMapping{}, "", "", false)
 			Expect(err).To(HaveOccurred())
 		})
 
@@ -237,11 +230,11 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 						return nil
 					},
 				),
-				mockKODM.EXPECT().GetImage(gomock.Any()).Return(dtkImage, nil),
+				mockKernelOSDTKMapping.EXPECT().GetImage(gomock.Any()).Return(dtkImage, nil),
 				mockBuildHelper.EXPECT().ApplyBuildArgOverrides(gomock.Any(), gomock.Any()).Return(buildArgs),
 			)
 
-			bct, err := maker.MakeBuildTemplate(ctx, kmmv1beta1.Module{}, kmmv1beta1.KernelMapping{}, "", "", false, mockKODM)
+			bct, err := maker.MakeBuildTemplate(ctx, kmmv1beta1.Module{}, kmmv1beta1.KernelMapping{}, "", "", false)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(bct.Spec.CommonSpec.Strategy.DockerStrategy.BuildArgs)).To(Equal(1))
 			Expect(bct.Spec.CommonSpec.Strategy.DockerStrategy.BuildArgs[0].Name).To(Equal(buildArgs[0].Name))

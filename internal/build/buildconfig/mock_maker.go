@@ -11,7 +11,6 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	v1 "github.com/openshift/api/build/v1"
 	v1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
-	syncronizedmap "github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 )
 
 // MockMaker is a mock of Maker interface.
@@ -38,16 +37,16 @@ func (m *MockMaker) EXPECT() *MockMakerMockRecorder {
 }
 
 // MakeBuildTemplate mocks base method.
-func (m *MockMaker) MakeBuildTemplate(ctx context.Context, mod v1beta1.Module, mapping v1beta1.KernelMapping, targetKernel, containerImage string, pushImage bool, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) (*v1.Build, error) {
+func (m *MockMaker) MakeBuildTemplate(ctx context.Context, mod v1beta1.Module, mapping v1beta1.KernelMapping, targetKernel, containerImage string, pushImage bool) (*v1.Build, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MakeBuildTemplate", ctx, mod, mapping, targetKernel, containerImage, pushImage, kernelOsDtkMapping)
+	ret := m.ctrl.Call(m, "MakeBuildTemplate", ctx, mod, mapping, targetKernel, containerImage, pushImage)
 	ret0, _ := ret[0].(*v1.Build)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // MakeBuildTemplate indicates an expected call of MakeBuildTemplate.
-func (mr *MockMakerMockRecorder) MakeBuildTemplate(ctx, mod, mapping, targetKernel, containerImage, pushImage, kernelOsDtkMapping interface{}) *gomock.Call {
+func (mr *MockMakerMockRecorder) MakeBuildTemplate(ctx, mod, mapping, targetKernel, containerImage, pushImage interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MakeBuildTemplate", reflect.TypeOf((*MockMaker)(nil).MakeBuildTemplate), ctx, mod, mapping, targetKernel, containerImage, pushImage, kernelOsDtkMapping)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MakeBuildTemplate", reflect.TypeOf((*MockMaker)(nil).MakeBuildTemplate), ctx, mod, mapping, targetKernel, containerImage, pushImage)
 }
