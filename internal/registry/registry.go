@@ -61,6 +61,8 @@ type Registry interface {
 	ParseReference(imageName string) (name.Reference, error)
 	ExtractBytesFromTar(size int64, tarreader io.Reader) ([]byte, error)
 	ExtractFileToFile(destination string, header *tar.Header, tarreader io.Reader) error
+	LastLayer(ctx context.Context, image string, po *kmmv1beta1.PullOptions, registryAuthGetter auth.RegistryAuthGetter) (v1.Layer, error)
+	GetHeaderDataFromLayer(layer v1.Layer, headerName string) ([]byte, error)
 }
 
 type registry struct {
@@ -100,10 +102,18 @@ func (r *registry) GetLayerByDigest(digest string, pullConfig *RepoPullConfig) (
 	return crane.PullLayer(pullConfig.repo+"@"+digest, pullConfig.authOptions...)
 }
 
+func (r *registry) LastLayer(ctx context.Context, image string, po *kmmv1beta1.PullOptions, registryAuthGetter auth.RegistryAuthGetter) (v1.Layer, error) {
+	digests, repoConfig, err := r.GetLayersDigests(ctx, image, po, registryAuthGetter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get layers digests from image %s: %v", image, err)
+	}
+	return r.GetLayerByDigest(digests[len(digests)-1], repoConfig)
+}
+
 func (r *registry) VerifyModuleExists(layer v1.Layer, pathPrefix, kernelVersion, moduleFileName string) bool {
 	// in layers headers, there is no root prefix
 	fullPath := filepath.Join(strings.TrimPrefix(pathPrefix, "/"), modulesLocationPath, kernelVersion, moduleFileName)
-	_, err := r.getHeaderStreamFromLayer(layer, fullPath)
+	_, err := r.GetHeaderDataFromLayer(layer, fullPath)
 	return err == nil
 }
 
@@ -213,7 +223,7 @@ func (r *registry) getLayersDigestsFromManifestStream(manifestStream []byte) ([]
 	return digests, nil
 }
 
-func (r *registry) getHeaderStreamFromLayer(layer v1.Layer, headerName string) (io.Reader, error) {
+func (r *registry) GetHeaderDataFromLayer(layer v1.Layer, headerName string) ([]byte, error) {
 
 	targz, err := layer.Compressed()
 	if err != nil {
@@ -241,7 +251,11 @@ func (r *registry) getHeaderStreamFromLayer(layer v1.Layer, headerName string) (
 			return nil, fmt.Errorf("failed to get next entry from targz: %w", err)
 		}
 		if header.Name == headerName {
-			return tr, nil
+			buff, err := io.ReadAll(tr)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read tar entry: %v", err)
+			}
+			return buff, nil
 		}
 	}
 
