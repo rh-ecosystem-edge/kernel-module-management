@@ -8,7 +8,6 @@ import (
 	buildv1 "github.com/openshift/api/build/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	kmmbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -41,12 +40,18 @@ func (bcm *buildManager) GarbageCollect(ctx context.Context, mod kmmv1beta1.Modu
 	return nil, nil
 }
 
-func (bcm *buildManager) Sync(ctx context.Context, mod kmmv1beta1.Module, m kmmv1beta1.KernelMapping,
-	targetKernel, targetImage string, pushImage bool, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) (kmmbuild.Result, error) {
+func (bcm *buildManager) Sync(
+	ctx context.Context,
+	mod kmmv1beta1.Module,
+	m kmmv1beta1.KernelMapping,
+	targetKernel,
+	targetImage string,
+	pushImage bool,
+) (kmmbuild.Result, error) {
 
 	logger := log.FromContext(ctx)
 
-	buildTemplate, err := bcm.maker.MakeBuildTemplate(ctx, mod, m, targetKernel, targetImage, pushImage, kernelOsDtkMapping)
+	buildTemplate, err := bcm.maker.MakeBuildTemplate(ctx, mod, m, targetKernel, targetImage, pushImage)
 	if err != nil {
 		return kmmbuild.Result{}, fmt.Errorf("could not make Build template: %v", err)
 	}

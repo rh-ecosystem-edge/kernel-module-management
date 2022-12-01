@@ -16,7 +16,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -288,7 +287,6 @@ var _ = Describe("preflightHelper_verifyBuild", func() {
 		ctrl         *gomock.Controller
 		mockBuildAPI *build.MockManager
 		clnt         *client.MockClient
-		mockKODM     *syncronizedmap.MockKernelOsDtkMapping
 		ph           *preflightHelper
 	)
 
@@ -296,11 +294,9 @@ var _ = Describe("preflightHelper_verifyBuild", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
 		mockBuildAPI = build.NewMockManager(ctrl)
-		mockKODM = syncronizedmap.NewMockKernelOsDtkMapping(ctrl)
 		ph = &preflightHelper{
-			client:             clnt,
-			buildAPI:           mockBuildAPI,
-			kernelOsDtkMapping: mockKODM,
+			client:   clnt,
+			buildAPI: mockBuildAPI,
 		}
 
 	})
@@ -313,7 +309,7 @@ var _ = Describe("preflightHelper_verifyBuild", func() {
 		mod.Spec.ModuleLoader.Container.Build = &kmmv1beta1.Build{}
 		mapping := kmmv1beta1.KernelMapping{ContainerImage: containerImage}
 		mockBuildAPI.EXPECT().Sync(context.Background(), *mod, mapping, kernelVersion,
-			mapping.ContainerImage, false, mockKODM).Return(build.Result{}, fmt.Errorf("some error"))
+			mapping.ContainerImage, false).Return(build.Result{}, fmt.Errorf("some error"))
 
 		res, msg := ph.verifyBuild(context.Background(), pv, &mapping, mod)
 		Expect(res).To(BeFalse())
@@ -325,7 +321,7 @@ var _ = Describe("preflightHelper_verifyBuild", func() {
 		mod.Spec.ModuleLoader.Container.Build = &kmmv1beta1.Build{}
 		mapping := kmmv1beta1.KernelMapping{ContainerImage: containerImage}
 		mockBuildAPI.EXPECT().Sync(context.Background(), *mod, mapping, kernelVersion,
-			mapping.ContainerImage, false, mockKODM).Return(build.Result{Status: build.StatusCompleted}, nil)
+			mapping.ContainerImage, false).Return(build.Result{Status: build.StatusCompleted}, nil)
 
 		res, msg := ph.verifyBuild(context.Background(), pv, &mapping, mod)
 		Expect(res).To(BeTrue())
@@ -337,7 +333,7 @@ var _ = Describe("preflightHelper_verifyBuild", func() {
 		mod.Spec.ModuleLoader.Container.Build = &kmmv1beta1.Build{}
 		mapping := kmmv1beta1.KernelMapping{ContainerImage: containerImage}
 		mockBuildAPI.EXPECT().Sync(context.Background(), *mod, mapping, kernelVersion,
-			mapping.ContainerImage, false, mockKODM).Return(build.Result{Status: build.StatusInProgress}, nil)
+			mapping.ContainerImage, false).Return(build.Result{Status: build.StatusInProgress}, nil)
 
 		res, msg := ph.verifyBuild(context.Background(), pv, &mapping, mod)
 		Expect(res).To(BeFalse())

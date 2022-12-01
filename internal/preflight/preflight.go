@@ -10,7 +10,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 
 	ctrlruntime "sigs.k8s.io/controller-runtime"
@@ -37,8 +36,8 @@ func NewPreflightAPI(
 	kernelAPI module.KernelMapper,
 	statusUpdater statusupdater.PreflightStatusUpdater,
 	authFactory auth.RegistryAuthGetterFactory,
-	kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) PreflightAPI {
-	helper := newPreflightHelper(client, buildAPI, registryAPI, authFactory, kernelOsDtkMapping)
+) PreflightAPI {
+	helper := newPreflightHelper(client, buildAPI, registryAPI, authFactory)
 	return &preflight{
 		kernelAPI:     kernelAPI,
 		statusUpdater: statusUpdater,
@@ -90,21 +89,18 @@ type preflightHelperAPI interface {
 }
 
 type preflightHelper struct {
-	client             client.Client
-	registryAPI        registry.Registry
-	buildAPI           build.Manager
-	authFactory        auth.RegistryAuthGetterFactory
-	kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping
+	client      client.Client
+	registryAPI registry.Registry
+	buildAPI    build.Manager
+	authFactory auth.RegistryAuthGetterFactory
 }
 
-func newPreflightHelper(client client.Client, buildAPI build.Manager, registryAPI registry.Registry,
-	authFactory auth.RegistryAuthGetterFactory, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) preflightHelperAPI {
+func newPreflightHelper(client client.Client, buildAPI build.Manager, registryAPI registry.Registry, authFactory auth.RegistryAuthGetterFactory) preflightHelperAPI {
 	return &preflightHelper{
-		client:             client,
-		buildAPI:           buildAPI,
-		registryAPI:        registryAPI,
-		authFactory:        authFactory,
-		kernelOsDtkMapping: kernelOsDtkMapping,
+		client:      client,
+		buildAPI:    buildAPI,
+		registryAPI: registryAPI,
+		authFactory: authFactory,
 	}
 }
 
@@ -145,7 +141,7 @@ func (p *preflightHelper) verifyBuild(ctx context.Context,
 	mapping *kmmv1beta1.KernelMapping,
 	mod *kmmv1beta1.Module) (bool, string) {
 	// at this stage we know that eiher mapping Build or Container build are defined
-	buildRes, err := p.buildAPI.Sync(ctx, *mod, *mapping, pv.Spec.KernelVersion, mapping.ContainerImage, pv.Spec.PushBuiltImage, p.kernelOsDtkMapping)
+	buildRes, err := p.buildAPI.Sync(ctx, *mod, *mapping, pv.Spec.KernelVersion, mapping.ContainerImage, pv.Spec.PushBuiltImage)
 	if err != nil {
 		return false, fmt.Sprintf("Failed to verify build for module %s, kernel version %s, error %s", mod.Name, pv.Spec.KernelVersion, err)
 	}

@@ -33,7 +33,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -55,17 +54,16 @@ import (
 type ModuleReconciler struct {
 	client.Client
 
-	authFactory        auth.RegistryAuthGetterFactory
-	buildAPI           build.Manager
-	signAPI            sign.SignManager
-	rbacAPI            rbac.RBACCreator
-	daemonAPI          daemonset.DaemonSetCreator
-	kernelAPI          module.KernelMapper
-	metricsAPI         metrics.Metrics
-	registry           registry.Registry
-	filter             *filter.Filter
-	statusUpdaterAPI   statusupdater.ModuleStatusUpdater
-	kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping
+	authFactory      auth.RegistryAuthGetterFactory
+	buildAPI         build.Manager
+	signAPI          sign.SignManager
+	rbacAPI          rbac.RBACCreator
+	daemonAPI        daemonset.DaemonSetCreator
+	kernelAPI        module.KernelMapper
+	metricsAPI       metrics.Metrics
+	registry         registry.Registry
+	filter           *filter.Filter
+	statusUpdaterAPI statusupdater.ModuleStatusUpdater
 }
 
 func NewModuleReconciler(
@@ -79,21 +77,19 @@ func NewModuleReconciler(
 	filter *filter.Filter,
 	registry registry.Registry,
 	authFactory auth.RegistryAuthGetterFactory,
-	statusUpdaterAPI statusupdater.ModuleStatusUpdater,
-	kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) *ModuleReconciler {
+	statusUpdaterAPI statusupdater.ModuleStatusUpdater) *ModuleReconciler {
 	return &ModuleReconciler{
-		Client:             client,
-		authFactory:        authFactory,
-		buildAPI:           buildAPI,
-		signAPI:            signAPI,
-		rbacAPI:            rbacAPI,
-		daemonAPI:          daemonAPI,
-		kernelAPI:          kernelAPI,
-		metricsAPI:         metricsAPI,
-		filter:             filter,
-		registry:           registry,
-		statusUpdaterAPI:   statusUpdaterAPI,
-		kernelOsDtkMapping: kernelOsDtkMapping,
+		Client:           client,
+		authFactory:      authFactory,
+		buildAPI:         buildAPI,
+		signAPI:          signAPI,
+		rbacAPI:          rbacAPI,
+		daemonAPI:        daemonAPI,
+		kernelAPI:        kernelAPI,
+		metricsAPI:       metricsAPI,
+		filter:           filter,
+		registry:         registry,
+		statusUpdaterAPI: statusUpdaterAPI,
 	}
 }
 
@@ -306,7 +302,7 @@ func (r *ModuleReconciler) handleBuild(ctx context.Context,
 	logger.Info("Image not pull-able; building in-cluster")
 
 	buildRes, err := r.buildAPI.Sync(log.IntoContext(ctx, logger), *mod, *km, kernelVersion,
-		containerImage, true, r.kernelOsDtkMapping)
+		containerImage, true)
 	if err != nil {
 		return false, fmt.Errorf("could not synchronize the build: %w", err)
 	}

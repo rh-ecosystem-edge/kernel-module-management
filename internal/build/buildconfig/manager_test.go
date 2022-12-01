@@ -11,7 +11,6 @@ import (
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	kmmbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -76,13 +75,12 @@ var _ = Describe("Manager_Sync", func() {
 		}
 
 		gomock.InOrder(
-			mockMaker.EXPECT().MakeBuildTemplate(ctx, mod, mapping, targetKernel, containerImage, true, gomock.Any()).Return(&build, nil),
+			mockMaker.EXPECT().MakeBuildTemplate(ctx, mod, mapping, targetKernel, containerImage, true).Return(&build, nil),
 			mockOpenShiftBuildsHelper.EXPECT().GetBuild(ctx, mod, targetKernel).Return(nil, errNoMatchingBuild),
 			mockKubeClient.EXPECT().Create(ctx, &build),
 		)
 
-		kernelOsDtkMapping := syncronizedmap.NewKernelOsDtkMapping()
-		res, err := m.Sync(ctx, mod, mapping, targetKernel, mapping.ContainerImage, true, kernelOsDtkMapping)
+		res, err := m.Sync(ctx, mod, mapping, targetKernel, mapping.ContainerImage, true)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Status).To(BeEquivalentTo(kmmbuild.StatusCreated))
 		Expect(res.Requeue).To(BeTrue())
@@ -124,12 +122,11 @@ var _ = Describe("Manager_Sync", func() {
 			}
 
 			gomock.InOrder(
-				mockMaker.EXPECT().MakeBuildTemplate(ctx, mod, mapping, targetKernel, containerImage, true, gomock.Any()).Return(&build, nil),
+				mockMaker.EXPECT().MakeBuildTemplate(ctx, mod, mapping, targetKernel, containerImage, true).Return(&build, nil),
 				mockOpenShiftBuildsHelper.EXPECT().GetBuild(ctx, mod, targetKernel).Return(&build, nil),
 			)
 
-			kernelOsDtkMapping := syncronizedmap.NewKernelOsDtkMapping()
-			res, err := m.Sync(ctx, mod, mapping, targetKernel, mapping.ContainerImage, true, kernelOsDtkMapping)
+			res, err := m.Sync(ctx, mod, mapping, targetKernel, mapping.ContainerImage, true)
 
 			if expectError {
 				Expect(err).To(HaveOccurred())

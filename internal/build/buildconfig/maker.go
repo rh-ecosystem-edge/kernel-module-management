@@ -26,26 +26,33 @@ const dtkBuildArg = "DTK_AUTO"
 //go:generate mockgen -source=maker.go -package=buildconfig -destination=mock_maker.go
 
 type Maker interface {
-	MakeBuildTemplate(ctx context.Context, mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string,
-		pushImage bool, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) (*buildv1.Build, error)
+	MakeBuildTemplate(ctx context.Context, mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string, pushImage bool) (*buildv1.Build, error)
 }
 
 type maker struct {
-	client client.Client
-	helper kmmbuild.Helper
-	scheme *runtime.Scheme
+	client             client.Client
+	helper             kmmbuild.Helper
+	kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping
+	scheme             *runtime.Scheme
 }
 
-func NewMaker(client client.Client, helper kmmbuild.Helper, scheme *runtime.Scheme) Maker {
+func NewMaker(client client.Client, helper kmmbuild.Helper, scheme *runtime.Scheme, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) Maker {
 	return &maker{
-		client: client,
-		helper: helper,
-		scheme: scheme,
+		client:             client,
+		helper:             helper,
+		kernelOsDtkMapping: kernelOsDtkMapping,
+		scheme:             scheme,
 	}
 }
 
-func (m *maker) MakeBuildTemplate(ctx context.Context, mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string,
-	pushImage bool, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) (*buildv1.Build, error) {
+func (m *maker) MakeBuildTemplate(
+	ctx context.Context,
+	mod kmmv1beta1.Module,
+	mapping kmmv1beta1.KernelMapping,
+	targetKernel,
+	containerImage string,
+	pushImage bool,
+) (*buildv1.Build, error) {
 
 	kmmBuild := m.helper.GetRelevantBuild(mod, mapping)
 
@@ -63,7 +70,7 @@ func (m *maker) MakeBuildTemplate(ctx context.Context, mod kmmv1beta1.Module, ma
 
 	if strings.Contains(dockerfileData, dtkBuildArg) {
 
-		dtkImage, err := kernelOsDtkMapping.GetImage(targetKernel)
+		dtkImage, err := m.kernelOsDtkMapping.GetImage(targetKernel)
 		if err != nil {
 			return nil, fmt.Errorf("could not get DTK image for kernel %v: %v", targetKernel, err)
 		}
