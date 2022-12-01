@@ -92,3 +92,35 @@ var _ = Describe("registrySecretAuthGetter_GetKeyChain", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 })
+
+var _ = Describe("NewClusterAuthGetter", func() {
+	var (
+		ctrl       *gomock.Controller
+		ctx        context.Context
+		factory    *registryAuthGetterFactory
+		mockClient *client.MockClient
+	)
+
+	BeforeEach(func() {
+		ctrl = gomock.NewController(GinkgoT())
+		ctx = context.TODO()
+		mockClient = client.NewMockClient(ctrl)
+		factory = NewRegistryAuthGetterFactory(mockClient, nil).(*registryAuthGetterFactory)
+	})
+
+	AfterEach(func() {
+		ctrl.Finish()
+	})
+
+	It("shoudl work as expected", func() {
+		namespacedNamespace := types.NamespacedName{
+			Name:      pullSecretName,
+			Namespace: pullSecretNamespace,
+		}
+		mockClient.EXPECT().Get(ctx, namespacedNamespace, gomock.Any()).Return(nil)
+
+		registryAuthGetter := factory.NewClusterAuthGetter()
+		_, err := registryAuthGetter.GetKeyChain(ctx)
+		Expect(err).NotTo(HaveOccurred())
+	})
+})
