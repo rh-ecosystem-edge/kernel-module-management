@@ -1,24 +1,25 @@
-FROM registry.fedoraproject.org/fedora as ksource
-RUN yum install -y kernel-devel
+FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.18-openshift-4.11 as ksource
 
-FROM golang:1.19 as builder
+RUN dnf install -y kernel-devel
+
+FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.18-openshift-4.11 as builder
 
 WORKDIR /workspace
 
+COPY go.mod go.mod
+COPY go.sum go.sum
 COPY cmd cmd
 COPY api api
 COPY internal internal
 COPY Makefile Makefile
-COPY docs.mk docs.mk
-COPY go.mod go.mod
-COPY go.sum go.sum
-RUN go mod download
+COPY vendor vendor
+
 # Build
 RUN make signimage
 
-FROM registry.fedoraproject.org/fedora
+FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.18-openshift-4.11
 
-COPY --from=builder /workspace/cmd/signimage/signimage /
+COPY --from=builder /workspace/signimage /
 COPY --from=ksource /usr/src/kernels/*/scripts/sign-file /sign-file
 
 ENTRYPOINT ["/signimage"]
