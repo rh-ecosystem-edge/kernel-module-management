@@ -11,7 +11,7 @@ import (
 
 type Helper interface {
 	ApplyBuildArgOverrides(args []kmmv1beta1.BuildArg, overrides ...kmmv1beta1.BuildArg) []kmmv1beta1.BuildArg
-	GetRelevantBuild(mod kmmv1beta1.Module, km kmmv1beta1.KernelMapping) *kmmv1beta1.Build
+	GetRelevantBuild(modSpec kmmv1beta1.ModuleSpec, km kmmv1beta1.KernelMapping) *kmmv1beta1.Build
 }
 
 type helper struct{}
@@ -45,17 +45,16 @@ func (m *helper) ApplyBuildArgOverrides(args []kmmv1beta1.BuildArg, overrides ..
 	return args
 }
 
-func (m *helper) GetRelevantBuild(mod kmmv1beta1.Module, km kmmv1beta1.KernelMapping) *kmmv1beta1.Build {
-	if mod.Spec.ModuleLoader.Container.Build == nil {
-		// km.Build cannot be nil in case mod.Build is nil, checked above
+func (m *helper) GetRelevantBuild(modSpec kmmv1beta1.ModuleSpec, km kmmv1beta1.KernelMapping) *kmmv1beta1.Build {
+	if modSpec.ModuleLoader.Container.Build == nil {
 		return km.Build.DeepCopy()
 	}
 
 	if km.Build == nil {
-		return mod.Spec.ModuleLoader.Container.Build.DeepCopy()
+		return modSpec.ModuleLoader.Container.Build.DeepCopy()
 	}
 
-	buildConfig := mod.Spec.ModuleLoader.Container.Build.DeepCopy()
+	buildConfig := modSpec.ModuleLoader.Container.Build.DeepCopy()
 	buildConfig.DockerfileConfigMap = km.Build.DockerfileConfigMap
 
 	buildConfig.BuildArgs = m.ApplyBuildArgOverrides(buildConfig.BuildArgs, km.Build.BuildArgs...)
