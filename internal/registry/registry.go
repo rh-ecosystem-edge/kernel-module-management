@@ -2,7 +2,6 @@ package registry
 
 import (
 	"archive/tar"
-	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -113,8 +112,15 @@ func (r *registry) LastLayer(ctx context.Context, image string, po *kmmv1beta1.P
 func (r *registry) VerifyModuleExists(layer v1.Layer, pathPrefix, kernelVersion, moduleFileName string) bool {
 	// in layers headers, there is no root prefix
 	fullPath := filepath.Join(strings.TrimPrefix(pathPrefix, "/"), modulesLocationPath, kernelVersion, moduleFileName)
-	_, err := r.GetHeaderDataFromLayer(layer, fullPath)
-	return err == nil
+
+	// if getHeaderReaderFromLayer does not return an error, it means that the file exists in the layer,
+	// and that's all the indication that we need
+	_, readerCloser, err := r.getHeaderReaderFromLayer(layer, fullPath)
+	if err != nil {
+		return false
+	}
+	readerCloser.Close()
+	return true
 }
 
 func (r *registry) getPullOptions(ctx context.Context, image string, po *kmmv1beta1.PullOptions, registryAuthGetter auth.RegistryAuthGetter) (*RepoPullConfig, error) {
@@ -224,22 +230,31 @@ func (r *registry) getLayersDigestsFromManifestStream(manifestStream []byte) ([]
 }
 
 func (r *registry) GetHeaderDataFromLayer(layer v1.Layer, headerName string) ([]byte, error) {
-
-	targz, err := layer.Compressed()
+	reader, readerCloser, err := r.getHeaderReaderFromLayer(layer, headerName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get targz from layer: %w", err)
+		return nil, fmt.Errorf("failed to get reader for the header %s in the layer: %v", headerName, err)
+	}
+	defer readerCloser.Close()
+	buff, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read header %s data: %v", headerName, err)
+	}
+	return buff, nil
+}
+
+func (r *registry) getHeaderReaderFromLayer(layer v1.Layer, headerName string) (io.Reader, io.ReadCloser, error) {
+	layerreader, err := layer.Uncompressed()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get layerreader from layer: %v", err)
 	}
 	// err ignored because we're only reading
-	defer targz.Close()
+	defer func() {
+		if err != nil {
+			layerreader.Close()
+		}
+	}()
 
-	gr, err := gzip.NewReader(targz)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create reader from targz: %w", err)
-	}
-	// err ignored because we're only reading
-	defer gr.Close()
-
-	tr := tar.NewReader(gr)
+	tr := tar.NewReader(layerreader)
 
 	for {
 		header, err := tr.Next()
@@ -248,18 +263,14 @@ func (r *registry) GetHeaderDataFromLayer(layer v1.Layer, headerName string) ([]
 				break
 			}
 
-			return nil, fmt.Errorf("failed to get next entry from targz: %w", err)
+			return nil, nil, fmt.Errorf("failed to get next entry from targz: %w", err)
 		}
 		if header.Name == headerName {
-			buff, err := io.ReadAll(tr)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read tar entry: %v", err)
-			}
-			return buff, nil
+			return tr, layerreader, nil
 		}
 	}
 
-	return nil, fmt.Errorf("header %s not found in the layer", headerName)
+	return nil, nil, fmt.Errorf("header %s not found in the layer", headerName)
 }
 
 func (r *registry) getImageDigestFromMultiImage(manifestListStream []byte) (string, error) {
