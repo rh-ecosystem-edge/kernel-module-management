@@ -86,6 +86,21 @@ func (mr *MockRegistryMockRecorder) ExtractFileToFile(destination, header, tarre
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExtractFileToFile", reflect.TypeOf((*MockRegistry)(nil).ExtractFileToFile), destination, header, tarreader)
 }
 
+// GetHeaderDataFromLayer mocks base method.
+func (m *MockRegistry) GetHeaderDataFromLayer(layer v1.Layer, headerName string) ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHeaderDataFromLayer", layer, headerName)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetHeaderDataFromLayer indicates an expected call of GetHeaderDataFromLayer.
+func (mr *MockRegistryMockRecorder) GetHeaderDataFromLayer(layer, headerName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeaderDataFromLayer", reflect.TypeOf((*MockRegistry)(nil).GetHeaderDataFromLayer), layer, headerName)
+}
+
 // GetImageByName mocks base method.
 func (m *MockRegistry) GetImageByName(imageName string, auth authn.Authenticator) (v1.Image, error) {
 	m.ctrl.T.Helper()
@@ -160,6 +175,21 @@ func (m *MockRegistry) ImageExists(ctx context.Context, image string, po *v1beta
 func (mr *MockRegistryMockRecorder) ImageExists(ctx, image, po, registryAuthGetter interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ImageExists", reflect.TypeOf((*MockRegistry)(nil).ImageExists), ctx, image, po, registryAuthGetter)
+}
+
+// LastLayer mocks base method.
+func (m *MockRegistry) LastLayer(ctx context.Context, image string, po *v1beta1.PullOptions, registryAuthGetter auth.RegistryAuthGetter) (v1.Layer, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LastLayer", ctx, image, po, registryAuthGetter)
+	ret0, _ := ret[0].(v1.Layer)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LastLayer indicates an expected call of LastLayer.
+func (mr *MockRegistryMockRecorder) LastLayer(ctx, image, po, registryAuthGetter interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastLayer", reflect.TypeOf((*MockRegistry)(nil).LastLayer), ctx, image, po, registryAuthGetter)
 }
 
 // ParseReference mocks base method.
