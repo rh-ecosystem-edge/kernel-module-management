@@ -74,7 +74,7 @@ var _ = Describe("JobManager", func() {
 
 			gomock.InOrder(
 				authFactory.EXPECT().NewRegistryAuthGetterFrom(&mod),
-				reg.EXPECT().ImageExists(ctx, imageName, nil, gomock.Any()).Return(true, nil),
+				reg.EXPECT().ImageExists(ctx, imageName, gomock.Any(), gomock.Any()).Return(true, nil),
 			)
 
 			mgr := NewSignJobManager(nil, nil, authFactory, reg)
@@ -105,7 +105,7 @@ var _ = Describe("JobManager", func() {
 
 			gomock.InOrder(
 				authFactory.EXPECT().NewRegistryAuthGetterFrom(&mod),
-				reg.EXPECT().ImageExists(ctx, imageName, nil, gomock.Any()).Return(false, errors.New("generic-registry-error")),
+				reg.EXPECT().ImageExists(ctx, imageName, gomock.Any(), gomock.Any()).Return(false, errors.New("generic-registry-error")),
 			)
 
 			mgr := NewSignJobManager(nil, nil, authFactory, reg)
@@ -137,7 +137,7 @@ var _ = Describe("JobManager", func() {
 
 			gomock.InOrder(
 				authFactory.EXPECT().NewRegistryAuthGetterFrom(&mod),
-				reg.EXPECT().ImageExists(ctx, imageName, nil, gomock.Any()).Return(false, nil),
+				reg.EXPECT().ImageExists(ctx, imageName, gomock.Any(), gomock.Any()).Return(false, nil),
 			)
 
 			mgr := NewSignJobManager(nil, nil, authFactory, reg)
