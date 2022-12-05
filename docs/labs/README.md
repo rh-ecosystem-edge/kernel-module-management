@@ -32,11 +32,14 @@ Driver Toolkit image version should correspond to our Openshift server version. 
 
 1) [In-cluster build from sources (Multi step)](multistepbuild-kmm.yaml)
 
-   Create a Module called `kmm-ci-a` which will build a kernel module from sources in a remote git repository if kernel version in the node matches the kernel version set in the literal/regexp field. Once the module is built, copy it in a next step and create the definitive image which will be uploaded to the Internal OpenShift Registry and used as the Module Loader in the selected nodes. This multi step example could be useful if you need the use of extra software which is not present at DTK image but it is in the destination image on which the module files are copied. 
+   Create a Module called `kmm-ci-a` which will build a kernel module from sources in a remote git repository if kernel version in the node matches the kernel version set in the literal/regexp field. Once the module is built, copy it in a next step and create the definitive image which will be uploaded to the Internal OpenShift Registry and used as the Module Loader in the selected nodes. This multi step example could be useful if you need the use of extra software which is not present at DTK image but it is in the destination image on which the module files are copied.
+
+All `Dockerfile` steps needed in order to build a module from sources should be configured in a `ConfigMap` defined previous to the Module object creation. Example for this Multi step build can be found [here](configmap-multi-step.yaml).
    
 2) [In-cluster build from sources (Single step)](singlebuild-kmm.yaml)
  
    Create a Module called `kmm-ci-a` which will build a kernel module from sources in a remote git repository if kernel version in the node matches the kernel version set in the literal/regexp field. Once the module is built using the same DTK image as a base the definitive image will be uploaded to the Internal OpenShift Registry and used as the Module Loader in the selected nodes.
+   As in previous example, we are in-cluster building a module from sources so we need to define a previous [`ConfigMap`](configmap-single.yaml) with this `Dockerfile` information.
 
 3) [Load a Pre-built driver image](prebuilt-kmm.yaml)
 
