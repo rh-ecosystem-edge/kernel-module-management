@@ -47,7 +47,7 @@ func NewManager(
 	}
 }
 
-func (bcm *buildManager) GarbageCollect(ctx context.Context, modName, namespace string) ([]string, error) {
+func (bcm *buildManager) GarbageCollect(ctx context.Context, modName, namespace string, owner metav1.Object) ([]string, error) {
 
 	//Garbage Collection noti (yet) implemented for Build
 	return nil, nil
