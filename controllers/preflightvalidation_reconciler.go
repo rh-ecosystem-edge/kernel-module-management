@@ -39,7 +39,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 )
 
-const reconcileRequeueInSeconds = 60
+const reconcileRequeueInSeconds = 180
 
 // ClusterPreflightReconciler reconciles a PreflightValidation object
 type PreflightValidationReconciler struct {
@@ -107,6 +107,10 @@ func (r *PreflightValidationReconciler) Reconcile(ctx context.Context, req ctrl.
 		log.Info("PreflightValidation reconciliation success")
 		return ctrl.Result{}, nil
 	}
+	// if not all the modules has been reconciled, then maybe there is a problem with build
+	// configuration. Since build configuration is stored in the ConfigMap, and we cannot watch
+	// ConfigMap (since we don't know which ones to watch), then we need a requeue in order to run
+	// reconciliation again
 	log.Info("PreflightValidation reconciliation requeue")
 	return ctrl.Result{RequeueAfter: time.Second * reconcileRequeueInSeconds}, nil
 }
