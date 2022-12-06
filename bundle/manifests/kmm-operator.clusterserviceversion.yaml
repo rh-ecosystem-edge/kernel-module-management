@@ -51,23 +51,24 @@ spec:
           - patch
           - watch
         - apiGroups:
-          - build.openshift.io
+          - batch
           resources:
-          - buildconfigs
+          - jobs
           verbs:
           - create
           - delete
-          - get
           - list
-          - patch
           - watch
         - apiGroups:
           - build.openshift.io
           resources:
           - builds
           verbs:
+          - create
+          - delete
           - get
           - list
+          - patch
           - watch
         - apiGroups:
           - ""

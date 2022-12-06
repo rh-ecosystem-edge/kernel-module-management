@@ -17,6 +17,15 @@ rules:
   - patch
   - watch
 - apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - create
+  - delete
+  - list
+  - watch
+- apiGroups:
   - build.openshift.io
   resources:
   - builds
