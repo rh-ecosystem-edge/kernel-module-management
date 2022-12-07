@@ -365,6 +365,33 @@ var _ = Describe("DeletingPredicate", func() {
 	)
 })
 
+var _ = Describe("MatchesNamespacedNamePredicate", func() {
+	const (
+		name      = "name"
+		namespace = "namespace"
+	)
+
+	p := MatchesNamespacedNamePredicate(types.NamespacedName{Name: name, Namespace: namespace})
+
+	DescribeTable("should return the expected value",
+		func(nsn types.NamespacedName, expected bool) {
+			cm := v1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: nsn.Name, Namespace: nsn.Namespace},
+			}
+
+			Expect(
+				p.Create(event.CreateEvent{Object: &cm}),
+			).To(
+				Equal(expected),
+			)
+		},
+		Entry("bad name", types.NamespacedName{Name: "other-name", Namespace: namespace}, false),
+		Entry("bad namespace", types.NamespacedName{Name: name, Namespace: "other-namespace"}, false),
+		Entry("both bad", types.NamespacedName{Name: "other-name", Namespace: "other-namespace"}, false),
+		Entry("both good", types.NamespacedName{Name: name, Namespace: namespace}, true),
+	)
+})
+
 var _ = Describe("PodHasSpecNodeName", func() {
 	p := PodHasSpecNodeName()
 

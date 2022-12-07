@@ -164,6 +164,12 @@ func DeletingPredicate() predicate.Predicate {
 	})
 }
 
+func MatchesNamespacedNamePredicate(nsn types.NamespacedName) predicate.Predicate {
+	return predicate.NewPredicateFuncs(func(object client.Object) bool {
+		return object.GetName() == nsn.Name && object.GetNamespace() == nsn.Namespace
+	})
+}
+
 // PodHasSpecNodeName returns a predicate that returns true if the object is a *v1.Pod and its .spec.nodeName
 // property is set.
 func PodHasSpecNodeName() predicate.Predicate {

@@ -23,7 +23,6 @@ import (
 	"os"
 	"runtime/debug"
 
-	//"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	buildv1 "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
@@ -41,9 +40,11 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2/klogr"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -218,7 +219,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = controllers.NewImageStreamReconciler(client, filter, kernelOsDtkMapping).SetupWithManager(mgr); err != nil {
+	const dtkImageStreamNamespace = "openshift"
+
+	dtkNSN := types.NamespacedName{
+		Namespace: dtkImageStreamNamespace,
+		Name:      "driver-toolkit",
+	}
+
+	dtkClient := ctrlclient.NewNamespacedClient(client, dtkImageStreamNamespace)
+
+	if err = controllers.NewImageStreamReconciler(dtkClient, kernelOsDtkMapping, dtkNSN).SetupWithManager(mgr, filter); err != nil {
 		setupLogger.Error(err, "unable to create controller", "controller", "ImageStream")
 		os.Exit(1)
 	}
