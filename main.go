@@ -204,7 +204,7 @@ func main() {
 	moduleStatusUpdaterAPI := statusupdater.NewModuleStatusUpdater(client, daemonAPI, metricsAPI)
 	preflightStatusUpdaterAPI := statusupdater.NewPreflightStatusUpdater(client)
 	preflightOCPStatusUpdaterAPI := statusupdater.NewPreflightOCPStatusUpdater(client)
-	preflightAPI := preflight.NewPreflightAPI(client, buildAPI, registryAPI, kernelAPI, preflightStatusUpdaterAPI, authFactory)
+	preflightAPI := preflight.NewPreflightAPI(client, buildAPI, signAPI, registryAPI, kernelAPI, preflightStatusUpdaterAPI, authFactory)
 
 	mc := controllers.NewModuleReconciler(
 		client,
