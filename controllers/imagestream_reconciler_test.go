@@ -11,6 +11,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	runtimectrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -21,6 +22,7 @@ var _ = Describe("ImageStreamReconciler_Reconcile", func() {
 		gCtrl     *gomock.Controller
 		clnt      *client.MockClient
 		mockSKODM *syncronizedmap.MockKernelOsDtkMapping
+		nsn       = types.NamespacedName{Namespace: "namespace", Name: "name"}
 	)
 
 	BeforeEach(func() {
@@ -32,9 +34,9 @@ var _ = Describe("ImageStreamReconciler_Reconcile", func() {
 
 	It("should return an error if the imagestream isn't reachable", func() {
 
-		isr := NewImageStreamReconciler(clnt, nil, nil)
+		isr := NewImageStreamReconciler(clnt, nil, nsn)
 
-		clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).Return(errors.New("some error"))
+		clnt.EXPECT().Get(ctx, nsn, gomock.Any()).Return(errors.New("some error"))
 
 		_, err := isr.Reconcile(ctx, runtimectrl.Request{})
 		Expect(err).To(HaveOccurred())
@@ -42,7 +44,7 @@ var _ = Describe("ImageStreamReconciler_Reconcile", func() {
 
 	It("should work as expected", func() {
 
-		isr := NewImageStreamReconciler(clnt, nil, mockSKODM)
+		isr := NewImageStreamReconciler(clnt, mockSKODM, nsn)
 
 		isSpec := imagev1.ImageStreamSpec{
 			Tags: []imagev1.TagReference{
@@ -56,7 +58,7 @@ var _ = Describe("ImageStreamReconciler_Reconcile", func() {
 		}
 
 		gomock.InOrder(
-			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
+			clnt.EXPECT().Get(ctx, nsn, gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, is *imagev1.ImageStream) error {
 					is.Spec = isSpec
 					return nil
