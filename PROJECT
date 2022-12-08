@@ -23,6 +23,24 @@ resources:
   domain: sigs.k8s.io
   group: kmm
   kind: ManagedClusterModule
-  path: github.com/kubernetes-sigs/kernel-module-management/api/v1beta1
+  path: github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1
+  version: v1beta1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: sigs.k8s.io
+  group: kmm
+  kind: PreflightValidation
+  path: github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1
+  version: v1beta1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: sigs.k8s.io
+  group: kmm
+  kind: PreflightValidationOCP
+  path: github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1
   version: v1beta1
 version: "3"

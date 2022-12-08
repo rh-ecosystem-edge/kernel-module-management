@@ -116,3 +116,40 @@ func (mr *MockPreflightStatusUpdaterMockRecorder) PreflightSetVerificationStatus
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PreflightSetVerificationStatus", reflect.TypeOf((*MockPreflightStatusUpdater)(nil).PreflightSetVerificationStatus), ctx, preflight, moduleName, verificationStatus, message)
 }
+
+// MockPreflightOCPStatusUpdater is a mock of PreflightOCPStatusUpdater interface.
+type MockPreflightOCPStatusUpdater struct {
+	ctrl     *gomock.Controller
+	recorder *MockPreflightOCPStatusUpdaterMockRecorder
+}
+
+// MockPreflightOCPStatusUpdaterMockRecorder is the mock recorder for MockPreflightOCPStatusUpdater.
+type MockPreflightOCPStatusUpdaterMockRecorder struct {
+	mock *MockPreflightOCPStatusUpdater
+}
+
+// NewMockPreflightOCPStatusUpdater creates a new mock instance.
+func NewMockPreflightOCPStatusUpdater(ctrl *gomock.Controller) *MockPreflightOCPStatusUpdater {
+	mock := &MockPreflightOCPStatusUpdater{ctrl: ctrl}
+	mock.recorder = &MockPreflightOCPStatusUpdaterMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockPreflightOCPStatusUpdater) EXPECT() *MockPreflightOCPStatusUpdaterMockRecorder {
+	return m.recorder
+}
+
+// PreflightOCPUpdateStatus mocks base method.
+func (m *MockPreflightOCPStatusUpdater) PreflightOCPUpdateStatus(ctx context.Context, pvo *v1beta1.PreflightValidationOCP, pv *v1beta1.PreflightValidation) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PreflightOCPUpdateStatus", ctx, pvo, pv)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PreflightOCPUpdateStatus indicates an expected call of PreflightOCPUpdateStatus.
+func (mr *MockPreflightOCPStatusUpdaterMockRecorder) PreflightOCPUpdateStatus(ctx, pvo, pv interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PreflightOCPUpdateStatus", reflect.TypeOf((*MockPreflightOCPStatusUpdater)(nil).PreflightOCPUpdateStatus), ctx, pvo, pv)
+}

@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	buildv1 "github.com/openshift/api/build/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/preflight"
@@ -64,6 +65,7 @@ func (r *PreflightValidationReconciler) SetupWithManager(mgr ctrl.Manager) error
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("preflightvalidation").
 		For(&kmmv1beta1.PreflightValidation{}, builder.WithPredicates(filter.PreflightReconcilerUpdatePredicate())).
+		Owns(&buildv1.Build{}).
 		Watches(
 			&source.Kind{Type: &kmmv1beta1.Module{}},
 			handler.EnqueueRequestsFromMapFunc(r.filter.EnqueueAllPreflightValidations),
