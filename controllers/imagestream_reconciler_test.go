@@ -13,6 +13,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	runtimectrl "sigs.k8s.io/controller-runtime"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ = Describe("ImageStreamReconciler_Reconcile", func() {
@@ -59,7 +60,7 @@ var _ = Describe("ImageStreamReconciler_Reconcile", func() {
 
 		gomock.InOrder(
 			clnt.EXPECT().Get(ctx, nsn, gomock.Any()).DoAndReturn(
-				func(_ interface{}, _ interface{}, is *imagev1.ImageStream) error {
+				func(_ interface{}, _ interface{}, is *imagev1.ImageStream, _ ...ctrlclient.GetOption) error {
 					is.Spec = isSpec
 					return nil
 				},

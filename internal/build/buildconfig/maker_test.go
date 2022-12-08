@@ -20,6 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ = Describe("Maker_MakeBuildTemplate", func() {
@@ -165,7 +166,7 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 		gomock.InOrder(
 			mockBuildHelper.EXPECT().GetRelevantBuild(mod, mapping).Return(mapping.Build),
 			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: dockerfileConfigMap.Name, Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
-				func(_ interface{}, _ interface{}, cm *v1.ConfigMap) error {
+				func(_ interface{}, _ interface{}, cm *v1.ConfigMap, _ ...ctrlclient.GetOption) error {
 					cm.Data = dockerfileCMData
 					return nil
 				},
@@ -193,7 +194,7 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 			gomock.InOrder(
 				mockBuildHelper.EXPECT().GetRelevantBuild(gomock.Any(), gomock.Any()).Return(build),
 				clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-					func(_ interface{}, _ interface{}, cm *v1.ConfigMap) error {
+					func(_ interface{}, _ interface{}, cm *v1.ConfigMap, _ ...ctrlclient.GetOption) error {
 						dockerfileData := fmt.Sprintf("FROM %s", dtkBuildArg)
 						cm.Data = map[string]string{constants.DockerfileCMKey: dockerfileData}
 						return nil
@@ -224,7 +225,7 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 			gomock.InOrder(
 				mockBuildHelper.EXPECT().GetRelevantBuild(gomock.Any(), gomock.Any()).Return(build),
 				clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-					func(_ interface{}, _ interface{}, cm *v1.ConfigMap) error {
+					func(_ interface{}, _ interface{}, cm *v1.ConfigMap, _ ...ctrlclient.GetOption) error {
 						dockerfileData := fmt.Sprintf("FROM %s", dtkBuildArg)
 						cm.Data = map[string]string{constants.DockerfileCMKey: dockerfileData}
 						return nil

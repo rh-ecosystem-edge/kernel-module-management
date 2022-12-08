@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ = Describe("registrySecretAuthGetter_GetKeyChain", func() {
@@ -58,7 +59,7 @@ var _ = Describe("registrySecretAuthGetter_GetKeyChain", func() {
 	It("should fail if the secret doesn't contains auth data", func() {
 
 		mockClient.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ interface{}, _ interface{}, s *v1.Secret) error {
+			func(_ interface{}, _ interface{}, s *v1.Secret, _ ...ctrlclient.GetOption) error {
 				s.Type = v1.SecretTypeDockerConfigJson
 				s.Data = map[string][]byte{
 					v1.DockerConfigJsonKey: []byte("some data"),
