@@ -93,7 +93,7 @@ func NewModuleReconciler(
 	}
 }
 
-//+kubebuilder:rbac:groups=kmm.sigs.k8s.io,resources=modules,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=kmm.sigs.k8s.io,resources=modules,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=kmm.sigs.k8s.io,resources=modules/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=kmm.sigs.k8s.io,resources=modules/finalizers,verbs=update
 //+kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=create;delete;get;list;patch;watch
