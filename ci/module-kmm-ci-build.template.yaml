@@ -1,0 +1,31 @@
+---
+apiVersion: kmm.sigs.k8s.io/v1beta1
+kind: Module
+metadata:
+  name: kmm-ci-build
+spec:
+  moduleLoader:
+    container:
+      modprobe:
+        moduleName: kmm_ci_a
+      kernelMappings:
+        - literal: KVER_CHANGEME
+          containerImage: registry.minikube/kmm-kmod:local
+          registryTLS:
+            insecure: true
+          build:
+            buildArgs:
+              - name: CI_BUILD_ARG
+                value: some-build-arg
+            baseImageRegistryTLS:
+              insecure: true
+            secrets:
+              - name: build-secret
+            dockerfileConfigMap:
+              name: kmm-kmod-dockerfile
+            
+            # Optional. If kanikoParams.tag is empty, the default value will be: 'latest'
+            kanikoParams:
+              tag: "debug"
+  selector:
+    kubernetes.io/hostname: minikube
