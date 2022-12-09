@@ -1,6 +1,8 @@
 package signjob
 
 import (
+	"strings"
+
 	"github.com/golang/mock/gomock"
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
@@ -11,7 +13,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
-	"strings"
 )
 
 var _ = Describe("MakeJobTemplate", func() {
@@ -28,11 +29,18 @@ var _ = Describe("MakeJobTemplate", func() {
 	var (
 		ctrl *gomock.Controller
 		m    Signer
+		mod  kmmv1beta1.Module
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		m = NewSigner(scheme)
+		mod = kmmv1beta1.Module{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      moduleName,
+				Namespace: namespace,
+			},
+		}
 	})
 
 	AfterEach(func() {
@@ -44,12 +52,6 @@ var _ = Describe("MakeJobTemplate", func() {
 		"kmm.node.kubernetes.io/target-kernel": kernelVersion,
 	}
 
-	mod := kmmv1beta1.Module{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      moduleName,
-			Namespace: namespace,
-		},
-	}
 	DescribeTable("should set fields correctly", func(imagePullSecret *v1.LocalObjectReference) {
 		nodeSelector := map[string]string{"arch": "x64"}
 
@@ -214,7 +216,6 @@ var _ = Describe("MakeJobTemplate", func() {
 		actual, err := m.MakeJobTemplate(mod, signConfig, kernelVersion, "", signedImage, labels, pushFlag)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(actual.Spec.Template.Spec.Containers[0].Args).To(ContainElement("-unsignedimage"))
-		Expect(actual.Spec.Template.Spec.Containers[0].Args).To(ContainElement("-pullsecret"))
 		Expect(actual.Spec.Template.Spec.Containers[0].Args).To(ContainElement("-key"))
 		Expect(actual.Spec.Template.Spec.Containers[0].Args).To(ContainElement("-cert"))
 		if pushFlag {
