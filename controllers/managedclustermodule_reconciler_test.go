@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	workv1 "open-cluster-management.io/api/work/v1"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
@@ -94,7 +95,7 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 
 		gomock.InOrder(
 			clnt.EXPECT().Get(ctx, req.NamespacedName, gomock.Any()).DoAndReturn(
-				func(_ interface{}, _ interface{}, m *kmmv1beta1.ManagedClusterModule) error {
+				func(_ interface{}, _ interface{}, m *kmmv1beta1.ManagedClusterModule, _ ...ctrlclient.GetOption) error {
 					m.ObjectMeta = mcm.ObjectMeta
 					m.Spec = mcm.Spec
 					return nil
@@ -126,7 +127,7 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 
 		gomock.InOrder(
 			clnt.EXPECT().Get(ctx, req.NamespacedName, gomock.Any()).DoAndReturn(
-				func(_ interface{}, _ interface{}, m *kmmv1beta1.ManagedClusterModule) error {
+				func(_ interface{}, _ interface{}, m *kmmv1beta1.ManagedClusterModule, _ ...ctrlclient.GetOption) error {
 					m.ObjectMeta = mcm.ObjectMeta
 					m.Spec = mcm.Spec
 					return nil
@@ -162,7 +163,7 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 
 		gomock.InOrder(
 			clnt.EXPECT().Get(ctx, req.NamespacedName, gomock.Any()).DoAndReturn(
-				func(_ interface{}, _ interface{}, m *kmmv1beta1.ManagedClusterModule) error {
+				func(_ interface{}, _ interface{}, m *kmmv1beta1.ManagedClusterModule, _ ...ctrlclient.GetOption) error {
 					m.ObjectMeta = mcm.ObjectMeta
 					m.Spec = mcm.Spec
 					return nil
@@ -216,7 +217,7 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 
 		gomock.InOrder(
 			clnt.EXPECT().Get(ctx, req.NamespacedName, gomock.Any()).DoAndReturn(
-				func(_ interface{}, _ interface{}, m *kmmv1beta1.ManagedClusterModule) error {
+				func(_ interface{}, _ interface{}, m *kmmv1beta1.ManagedClusterModule, _ ...ctrlclient.GetOption) error {
 					m.ObjectMeta = mcm.ObjectMeta
 					m.Spec = mcm.Spec
 					return nil
@@ -273,7 +274,7 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 
 		gomock.InOrder(
 			clnt.EXPECT().Get(ctx, req.NamespacedName, gomock.Any()).DoAndReturn(
-				func(_ interface{}, _ interface{}, m *kmmv1beta1.ManagedClusterModule) error {
+				func(_ interface{}, _ interface{}, m *kmmv1beta1.ManagedClusterModule, _ ...ctrlclient.GetOption) error {
 					m.ObjectMeta = mcm.ObjectMeta
 					m.Spec = mcm.Spec
 					return nil
