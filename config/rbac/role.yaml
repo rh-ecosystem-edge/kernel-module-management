@@ -37,6 +37,14 @@ rules:
   - patch
   - watch
 - apiGroups:
+  - cluster.open-cluster-management.io
+  resources:
+  - managedclusters
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - ""
   resources:
   - configmaps
@@ -89,6 +97,30 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - kmm.sigs.k8s.io
+  resources:
+  - managedclustermodules
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kmm.sigs.k8s.io
+  resources:
+  - managedclustermodules/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - kmm.sigs.k8s.io
+  resources:
+  - managedclustermodules/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - kmm.sigs.k8s.io
   resources:
@@ -161,3 +193,15 @@ rules:
   - securitycontextconstraints
   verbs:
   - use
+- apiGroups:
+  - work.open-cluster-management.io
+  resources:
+  - manifestworks
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
