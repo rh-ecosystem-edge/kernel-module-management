@@ -4,7 +4,7 @@ layout:
 plugins:
   manifests.sdk.operatorframework.io/v2: {}
   scorecard.sdk.operatorframework.io/v2: {}
-projectName: kmm-operator
+projectName: kernel-module-management
 repo: github.com/rh-ecosystem-edge/kernel-module-management
 resources:
 - api:
