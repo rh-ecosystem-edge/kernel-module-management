@@ -7,5 +7,5 @@ metrics:
 webhook:
   port: 9443
 leaderElection:
-  leaderElect: false
+  leaderElect: true
   resourceName: c5baf8af.sigs.k8s.io

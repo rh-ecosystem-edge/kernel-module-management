@@ -24,15 +24,21 @@ spec:
       labels:
         control-plane: controller-manager
     spec:
-      nodeSelector:
-        node-role.kubernetes.io/master: ''
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: Exists
+            - matchExpressions:
+              - key: node-role.kubernetes.io/master
+                operator: Exists
       securityContext:
         runAsNonRoot: true
-        seccompProfile:
-          type: RuntimeDefault
       containers:
       - command:
-        - /usr/local/bin/manager
+        - /manager
         args:
         - --leader-elect
         image: controller:latest
@@ -40,8 +46,6 @@ spec:
         imagePullPolicy: Always
         securityContext:
           allowPrivilegeEscalation: false
-          capabilities:
-            drop: [ALL]
         livenessProbe:
           httpGet:
             path: /healthz
@@ -63,20 +67,12 @@ spec:
           requests:
             cpu: 10m
             memory: 64Mi
-        volumeMounts:
-          - name: trusted-ca
-            mountPath: /etc/pki/ca-trust/extracted/pem
-            readOnly: true
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
       tolerations:
         - key: node-role.kubernetes.io/master
           operator: Equal
           effect: NoSchedule
-      volumes:
-        - name: trusted-ca
-          configMap:
-            name: trusted-ca
-            items:
-              - key: ca-bundle.crt
-                path: tls-ca-bundle.pem
+        - key: node-role.kubernetes.io/control-plane
+          operator: Equal
+          effect: NoSchedule

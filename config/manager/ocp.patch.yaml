@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: system
+spec:
+  template:
+    spec:
+      affinity:
+        $patch: delete
+      containers:
+        - name: manager
+          command: [/usr/local/bin/manager]
+          env:
+            - name: SSL_CERT_DIR
+              value: /etc/pki/ca-trust/extracted/pem
+          securityContext:
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: trusted-ca
+              mountPath: /etc/pki/ca-trust/extracted/pem
+              readOnly: true
+      nodeSelector:
+        node-role.kubernetes.io/master: ''
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: trusted-ca
+          projected:
+            sources:
+              - configMap:
+                  name: cluster-ca
+                  items:
+                    - key: ca-bundle.crt
+                      path: tls-ca-bundle.pem
+              - configMap:
+                  name: service-ca
+                  items:
+                    - key: service-ca.crt
+                      path: ocp-service-ca-bundle.pem
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          operator: Equal
+          effect: NoSchedule
