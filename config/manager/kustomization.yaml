@@ -1,5 +1,6 @@
 resources:
-- configmap-ca.yaml
+- configmap-cluster-ca.yaml
+- configmap-service-ca.yaml
 - manager.yaml
 
 generatorOptions:
@@ -15,3 +16,6 @@ images:
 - name: controller
   newName: quay.io/edge-infrastructure/kernel-module-management-operator
   newTag: latest
+
+patchesStrategicMerge:
+- ocp.patch.yaml

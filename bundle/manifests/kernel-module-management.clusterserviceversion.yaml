@@ -22,6 +22,9 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
+    - kind: ManagedClusterModule
+      name: managedclustermodules.kmm.sigs.k8s.io
+      version: v1beta1
     - kind: Module
       name: modules.kmm.sigs.k8s.io
       version: v1beta1
@@ -67,6 +70,33 @@ spec:
           - get
           - list
           - patch
+          - watch
+        - apiGroups:
+          - cluster.open-cluster-management.io
+          resources:
+          - clusterclaims
+          verbs:
+          - create
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - cluster.open-cluster-management.io
+          resourceNames:
+          - kernel-versions.kmm.node.kubernetes.io
+          resources:
+          - clusterclaims
+          verbs:
+          - delete
+          - patch
+          - update
+        - apiGroups:
+          - cluster.open-cluster-management.io
+          resources:
+          - managedclusters
+          verbs:
+          - get
+          - list
           - watch
         - apiGroups:
           - ""
@@ -124,10 +154,32 @@ spec:
         - apiGroups:
           - kmm.sigs.k8s.io
           resources:
+          - managedclustermodules
+          verbs:
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - kmm.sigs.k8s.io
+          resources:
+          - managedclustermodules/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - kmm.sigs.k8s.io
+          resources:
+          - managedclustermodules/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - kmm.sigs.k8s.io
+          resources:
           - modules
           verbs:
-          - create
-          - delete
           - get
           - list
           - patch
@@ -196,6 +248,18 @@ spec:
           verbs:
           - use
         - apiGroups:
+          - work.open-cluster-management.io
+          resources:
+          - manifestworks
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
           - authentication.k8s.io
           resources:
           - tokenreviews
@@ -227,34 +291,12 @@ spec:
             spec:
               containers:
               - args:
-                - --secure-listen-address=0.0.0.0:8443
-                - --upstream=http://127.0.0.1:8080/
-                - --logtostderr=true
-                - --v=0
-                image: gcr.io/kubebuilder/kube-rbac-proxy:v0.8.0
-                name: kube-rbac-proxy
-                ports:
-                - containerPort: 8443
-                  name: https
-                  protocol: TCP
-                resources:
-                  limits:
-                    cpu: 500m
-                    memory: 128Mi
-                  requests:
-                    cpu: 5m
-                    memory: 64Mi
-                securityContext:
-                  allowPrivilegeEscalation: false
-                  capabilities:
-                    drop:
-                    - ALL
-              - args:
-                - --health-probe-bind-address=:8081
-                - --metrics-bind-address=127.0.0.1:8080
-                - --leader-elect
+                - --config=controller_manager_config.yaml
                 command:
                 - /usr/local/bin/manager
+                env:
+                - name: SSL_CERT_DIR
+                  value: /etc/pki/ca-trust/extracted/pem
                 image: quay.io/edge-infrastructure/kernel-module-management-operator:latest
                 imagePullPolicy: Always
                 livenessProbe:
@@ -283,9 +325,35 @@ spec:
                     drop:
                     - ALL
                 volumeMounts:
+                - mountPath: /controller_manager_config.yaml
+                  name: manager-config
+                  subPath: controller_manager_config.yaml
                 - mountPath: /etc/pki/ca-trust/extracted/pem
                   name: trusted-ca
                   readOnly: true
+              - args:
+                - --secure-listen-address=0.0.0.0:8443
+                - --upstream=http://127.0.0.1:8080/
+                - --logtostderr=true
+                - --v=0
+                image: gcr.io/kubebuilder/kube-rbac-proxy:v0.8.0
+                name: kube-rbac-proxy
+                ports:
+                - containerPort: 8443
+                  name: https
+                  protocol: TCP
+                resources:
+                  limits:
+                    cpu: 500m
+                    memory: 128Mi
+                  requests:
+                    cpu: 5m
+                    memory: 64Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop:
+                    - ALL
               nodeSelector:
                 node-role.kubernetes.io/master: ""
               securityContext:
@@ -300,11 +368,21 @@ spec:
                 operator: Equal
               volumes:
               - configMap:
-                  items:
-                  - key: ca-bundle.crt
-                    path: tls-ca-bundle.pem
-                  name: kmm-operator-trusted-ca
-                name: trusted-ca
+                  name: kmm-operator-manager-config
+                name: manager-config
+              - name: trusted-ca
+                projected:
+                  sources:
+                  - configMap:
+                      items:
+                      - key: ca-bundle.crt
+                        path: tls-ca-bundle.pem
+                      name: kmm-operator-cluster-ca
+                  - configMap:
+                      items:
+                      - key: service-ca.crt
+                        path: ocp-service-ca-bundle.pem
+                      name: kmm-operator-service-ca
       permissions:
       - rules:
         - apiGroups:
