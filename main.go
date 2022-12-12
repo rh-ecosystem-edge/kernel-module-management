@@ -195,6 +195,7 @@ func main() {
 	kernelAPI := module.NewKernelMapper()
 	moduleStatusUpdaterAPI := statusupdater.NewModuleStatusUpdater(client, daemonAPI, metricsAPI)
 	preflightStatusUpdaterAPI := statusupdater.NewPreflightStatusUpdater(client)
+	preflightOCPStatusUpdaterAPI := statusupdater.NewPreflightOCPStatusUpdater(client)
 	registryAPI := registry.NewRegistry()
 	authFactory := auth.NewRegistryAuthGetterFactory(client, kubernetes.NewForConfigOrDie(restConfig))
 	preflightAPI := preflight.NewPreflightAPI(client, buildAPI, registryAPI, kernelAPI, preflightStatusUpdaterAPI, authFactory)
@@ -239,6 +240,17 @@ func main() {
 
 	if err = controllers.NewImageStreamReconciler(dtkClient, kernelOsDtkMapping, dtkNSN).SetupWithManager(mgr, filter); err != nil {
 		setupLogger.Error(err, "unable to create controller", "controller", "ImageStream")
+		os.Exit(1)
+	}
+
+	if err = controllers.NewPreflightValidationOCPReconciler(client,
+		filter,
+		registryAPI,
+		authFactory,
+		kernelOsDtkMapping,
+		preflightOCPStatusUpdaterAPI,
+		scheme).SetupWithManager(mgr); err != nil {
+		setupLogger.Error(err, "unable to create controller", "controller", "PreflightOCP")
 		os.Exit(1)
 	}
 

@@ -33,6 +33,10 @@ type PreflightStatusUpdater interface {
 		moduleName string, stage string) error
 }
 
+type PreflightOCPStatusUpdater interface {
+	PreflightOCPUpdateStatus(ctx context.Context, pvo *kmmv1beta1.PreflightValidationOCP, pv *kmmv1beta1.PreflightValidation) error
+}
+
 type moduleStatusUpdater struct {
 	client     client.Client
 	daemonAPI  daemonset.DaemonSetCreator
@@ -40,6 +44,10 @@ type moduleStatusUpdater struct {
 }
 
 type preflightStatusUpdater struct {
+	client client.Client
+}
+
+type preflightOCPStatusUpdater struct {
 	client client.Client
 }
 
@@ -53,6 +61,12 @@ func NewModuleStatusUpdater(client client.Client, daemonAPI daemonset.DaemonSetC
 
 func NewPreflightStatusUpdater(client client.Client) PreflightStatusUpdater {
 	return &preflightStatusUpdater{
+		client: client,
+	}
+}
+
+func NewPreflightOCPStatusUpdater(client client.Client) PreflightOCPStatusUpdater {
+	return &preflightOCPStatusUpdater{
 		client: client,
 	}
 }
@@ -138,4 +152,9 @@ func (m *moduleStatusUpdater) updateMetrics(ctx context.Context, mod *kmmv1beta1
 			stage,
 			ds.Status.DesiredNumberScheduled == ds.Status.NumberAvailable)
 	}
+}
+
+func (p *preflightOCPStatusUpdater) PreflightOCPUpdateStatus(ctx context.Context, pvo *kmmv1beta1.PreflightValidationOCP, pv *kmmv1beta1.PreflightValidation) error {
+	pv.Status.DeepCopyInto(&pvo.Status)
+	return p.client.Status().Update(ctx, pvo)
 }

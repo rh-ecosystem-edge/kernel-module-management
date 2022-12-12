@@ -275,3 +275,7 @@ func PodReadinessChangedPredicate(logger logr.Logger) predicate.Predicate {
 func PreflightReconcilerUpdatePredicate() predicate.Predicate {
 	return predicate.GenerationChangedPredicate{}
 }
+
+func PreflightOCPReconcilerUpdatePredicate() predicate.Predicate {
+	return predicate.GenerationChangedPredicate{}
+}

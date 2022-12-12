@@ -179,7 +179,39 @@ rules:
 - apiGroups:
   - kmm.sigs.k8s.io
   resources:
+  - preflightvalidations/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - kmm.sigs.k8s.io
+  resources:
   - preflightvalidations/status
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kmm.sigs.k8s.io
+  resources:
+  - preflightvalidationsocp
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kmm.sigs.k8s.io
+  resources:
+  - preflightvalidationsocp/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - kmm.sigs.k8s.io
+  resources:
+  - preflightvalidationsocp/status
   verbs:
   - get
   - patch
