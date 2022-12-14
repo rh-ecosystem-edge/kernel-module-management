@@ -7,9 +7,6 @@ check_kmm_mod () {
 oc debug node/$NODE -T -- chroot /host sh -c "lsmod | grep kmm"
 }
 
-echo "Make kubectl available..."
-ln -s /usr/local/bin/oc /usr/local/bin/kubectl
-
 echo "Get first node..."
 NODE=$(oc get nodes -o jsonpath='{.items..metadata.name}' | awk {'print $1'})
 
