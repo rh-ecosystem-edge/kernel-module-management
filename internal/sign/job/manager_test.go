@@ -4,24 +4,155 @@ import (
 	"context"
 	"errors"
 
-	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
+
+	"github.com/golang/mock/gomock"
 	batchv1 "k8s.io/api/batch/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 )
 
 var _ = Describe("JobManager", func() {
-	Describe("Sync", func() {
+	Describe("ShouldSync", func() {
+		var (
+			ctrl        *gomock.Controller
+			authFactory *auth.MockRegistryAuthGetterFactory
+			reg         *registry.MockRegistry
+		)
 
+		const (
+			moduleName    = "module-name"
+			imageName     = "image-name"
+			namespace     = "some-namespace"
+			kernelVersion = "1.2.3"
+		)
+
+		BeforeEach(func() {
+			ctrl = gomock.NewController(GinkgoT())
+			authFactory = auth.NewMockRegistryAuthGetterFactory(ctrl)
+			reg = registry.NewMockRegistry(ctrl)
+		})
+
+		It("should return false if there was not sign section", func() {
+			ctx := context.Background()
+
+			mod := kmmv1beta1.Module{}
+			km := kmmv1beta1.KernelMapping{}
+
+			mgr := NewSignJobManager(nil, nil, authFactory, reg)
+
+			shouldSync, err := mgr.ShouldSync(ctx, mod, km)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(shouldSync).To(BeFalse())
+		})
+
+		It("should return false if image already exists", func() {
+			ctx := context.Background()
+
+			km := kmmv1beta1.KernelMapping{
+				Sign:           &kmmv1beta1.Sign{},
+				ContainerImage: imageName,
+			}
+
+			mod := kmmv1beta1.Module{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      moduleName,
+					Namespace: namespace,
+				},
+				Spec: kmmv1beta1.ModuleSpec{
+					ImageRepoSecret: &v1.LocalObjectReference{Name: "pull-push-secret"},
+				},
+			}
+
+			gomock.InOrder(
+				authFactory.EXPECT().NewRegistryAuthGetterFrom(&mod),
+				reg.EXPECT().ImageExists(ctx, imageName, nil, gomock.Any()).Return(true, nil),
+			)
+
+			mgr := NewSignJobManager(nil, nil, authFactory, reg)
+
+			shouldSync, err := mgr.ShouldSync(ctx, mod, km)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(shouldSync).To(BeFalse())
+		})
+
+		It("should return false and an error if image check fails", func() {
+			ctx := context.Background()
+
+			km := kmmv1beta1.KernelMapping{
+				Sign:           &kmmv1beta1.Sign{},
+				ContainerImage: imageName,
+			}
+
+			mod := kmmv1beta1.Module{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      moduleName,
+					Namespace: namespace,
+				},
+				Spec: kmmv1beta1.ModuleSpec{
+					ImageRepoSecret: &v1.LocalObjectReference{Name: "pull-push-secret"},
+				},
+			}
+
+			gomock.InOrder(
+				authFactory.EXPECT().NewRegistryAuthGetterFrom(&mod),
+				reg.EXPECT().ImageExists(ctx, imageName, nil, gomock.Any()).Return(false, errors.New("generic-registry-error")),
+			)
+
+			mgr := NewSignJobManager(nil, nil, authFactory, reg)
+
+			shouldSync, err := mgr.ShouldSync(ctx, mod, km)
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("generic-registry-error"))
+			Expect(shouldSync).To(BeFalse())
+		})
+
+		It("should return true if image does not exist", func() {
+			ctx := context.Background()
+
+			km := kmmv1beta1.KernelMapping{
+				Sign:           &kmmv1beta1.Sign{},
+				ContainerImage: imageName,
+			}
+
+			mod := kmmv1beta1.Module{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      moduleName,
+					Namespace: namespace,
+				},
+				Spec: kmmv1beta1.ModuleSpec{
+					ImageRepoSecret: &v1.LocalObjectReference{Name: "pull-push-secret"},
+				},
+			}
+
+			gomock.InOrder(
+				authFactory.EXPECT().NewRegistryAuthGetterFrom(&mod),
+				reg.EXPECT().ImageExists(ctx, imageName, nil, gomock.Any()).Return(false, nil),
+			)
+
+			mgr := NewSignJobManager(nil, nil, authFactory, reg)
+
+			shouldSync, err := mgr.ShouldSync(ctx, mod, km)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(shouldSync).To(BeTrue())
+		})
+	})
+
+	Describe("Sync", func() {
 		var (
 			ctrl      *gomock.Controller
 			maker     *MockSigner
-			helper    *sign.MockHelper
 			jobhelper *utils.MockJobHelper
 		)
 
@@ -38,7 +169,6 @@ var _ = Describe("JobManager", func() {
 		BeforeEach(func() {
 			ctrl = gomock.NewController(GinkgoT())
 			maker = NewMockSigner(ctrl)
-			helper = sign.NewMockHelper(ctrl)
 			jobhelper = utils.NewMockJobHelper(ctrl)
 		})
 
@@ -87,18 +217,16 @@ var _ = Describe("JobManager", func() {
 				}
 
 				gomock.InOrder(
-					helper.EXPECT().GetRelevantSign(mod, km).Return(km.Sign),
-
-					jobhelper.EXPECT().JobLabels(mod, kernelVersion, "sign").Return(labels),
-					maker.EXPECT().MakeJobTemplate(mod, km.Sign, kernelVersion, previousImageName, km.ContainerImage, labels, true).Return(&j, nil),
-					jobhelper.EXPECT().GetModuleJobByKernel(ctx, mod, kernelVersion, utils.JobTypeSign).Return(&newJob, nil),
+					jobhelper.EXPECT().JobLabels(mod.Name, kernelVersion, "sign").Return(labels),
+					maker.EXPECT().MakeJobTemplate(mod, km, kernelVersion, labels, previousImageName, true, &mod).Return(&j, nil),
+					jobhelper.EXPECT().GetModuleJobByKernel(ctx, mod.Name, mod.Namespace, kernelVersion, utils.JobTypeSign).Return(&newJob, nil),
 					jobhelper.EXPECT().IsJobChanged(&j, &newJob).Return(false, nil),
 					jobhelper.EXPECT().GetJobStatus(&newJob).Return(r.Status, r.Requeue, joberr),
 				)
 
-				mgr := NewSignJobManager(maker, helper, jobhelper)
+				mgr := NewSignJobManager(maker, jobhelper, nil, nil)
 
-				res, err := mgr.Sync(ctx, mod, km, kernelVersion, previousImageName, imageName, true)
+				res, err := mgr.Sync(ctx, mod, km, kernelVersion, previousImageName, true, &mod)
 
 				if expectsErr {
 					Expect(err).To(HaveOccurred())
@@ -117,15 +245,15 @@ var _ = Describe("JobManager", func() {
 			ctx := context.Background()
 
 			gomock.InOrder(
-				helper.EXPECT().GetRelevantSign(mod, km).Return(km.Sign),
-				jobhelper.EXPECT().JobLabels(mod, kernelVersion, "sign").Return(labels),
-				maker.EXPECT().MakeJobTemplate(mod, km.Sign, kernelVersion, previousImageName, km.ContainerImage, labels, true).Return(nil, errors.New("random error")),
+				jobhelper.EXPECT().JobLabels(mod.Name, kernelVersion, "sign").Return(labels),
+				maker.EXPECT().MakeJobTemplate(mod, km, kernelVersion, labels, previousImageName, true, &mod).
+					Return(nil, errors.New("random error")),
 			)
 
-			mgr := NewSignJobManager(maker, helper, jobhelper)
+			mgr := NewSignJobManager(maker, jobhelper, nil, nil)
 
 			Expect(
-				mgr.Sync(ctx, mod, km, kernelVersion, previousImageName, imageName, true),
+				mgr.Sync(ctx, mod, km, kernelVersion, previousImageName, true, &mod),
 			).Error().To(
 				HaveOccurred(),
 			)
@@ -145,16 +273,15 @@ var _ = Describe("JobManager", func() {
 			}
 
 			gomock.InOrder(
-				helper.EXPECT().GetRelevantSign(mod, km).Return(km.Sign),
-				jobhelper.EXPECT().JobLabels(mod, kernelVersion, "sign").Return(labels),
-				maker.EXPECT().MakeJobTemplate(mod, km.Sign, kernelVersion, previousImageName, km.ContainerImage, labels, true).Return(&j, nil),
-				jobhelper.EXPECT().GetModuleJobByKernel(ctx, mod, kernelVersion, utils.JobTypeSign).Return(nil, errors.New("random error")),
+				jobhelper.EXPECT().JobLabels(mod.Name, kernelVersion, "sign").Return(labels),
+				maker.EXPECT().MakeJobTemplate(mod, km, kernelVersion, labels, previousImageName, true, &mod).Return(&j, nil),
+				jobhelper.EXPECT().GetModuleJobByKernel(ctx, mod.Name, mod.Namespace, kernelVersion, utils.JobTypeSign).Return(nil, errors.New("random error")),
 			)
 
-			mgr := NewSignJobManager(maker, helper, jobhelper)
+			mgr := NewSignJobManager(maker, jobhelper, nil, nil)
 
 			Expect(
-				mgr.Sync(ctx, mod, km, kernelVersion, previousImageName, imageName, true),
+				mgr.Sync(ctx, mod, km, kernelVersion, previousImageName, true, &mod),
 			).Error().To(
 				HaveOccurred(),
 			)
@@ -174,17 +301,16 @@ var _ = Describe("JobManager", func() {
 			}
 
 			gomock.InOrder(
-				helper.EXPECT().GetRelevantSign(mod, km).Return(km.Sign),
-				jobhelper.EXPECT().JobLabels(mod, kernelVersion, "sign").Return(labels),
-				maker.EXPECT().MakeJobTemplate(mod, km.Sign, kernelVersion, previousImageName, km.ContainerImage, labels, true).Return(&j, nil),
-				jobhelper.EXPECT().GetModuleJobByKernel(ctx, mod, kernelVersion, utils.JobTypeSign).Return(nil, utils.ErrNoMatchingJob),
+				jobhelper.EXPECT().JobLabels(mod.Name, kernelVersion, "sign").Return(labels),
+				maker.EXPECT().MakeJobTemplate(mod, km, kernelVersion, labels, previousImageName, true, &mod).Return(&j, nil),
+				jobhelper.EXPECT().GetModuleJobByKernel(ctx, mod.Name, mod.Namespace, kernelVersion, utils.JobTypeSign).Return(nil, utils.ErrNoMatchingJob),
 				jobhelper.EXPECT().CreateJob(ctx, &j).Return(errors.New("unable to create job")),
 			)
 
-			mgr := NewSignJobManager(maker, helper, jobhelper)
+			mgr := NewSignJobManager(maker, jobhelper, nil, nil)
 
 			Expect(
-				mgr.Sync(ctx, mod, km, kernelVersion, previousImageName, imageName, true),
+				mgr.Sync(ctx, mod, km, kernelVersion, previousImageName, true, &mod),
 			).Error().To(
 				HaveOccurred(),
 			)
@@ -205,17 +331,16 @@ var _ = Describe("JobManager", func() {
 			}
 
 			gomock.InOrder(
-				helper.EXPECT().GetRelevantSign(mod, km).Return(km.Sign),
-				jobhelper.EXPECT().JobLabels(mod, kernelVersion, "sign").Return(labels),
-				maker.EXPECT().MakeJobTemplate(mod, km.Sign, kernelVersion, previousImageName, km.ContainerImage, labels, true).Return(&j, nil),
-				jobhelper.EXPECT().GetModuleJobByKernel(ctx, mod, kernelVersion, utils.JobTypeSign).Return(nil, utils.ErrNoMatchingJob),
+				jobhelper.EXPECT().JobLabels(mod.Name, kernelVersion, "sign").Return(labels),
+				maker.EXPECT().MakeJobTemplate(mod, km, kernelVersion, labels, previousImageName, true, &mod).Return(&j, nil),
+				jobhelper.EXPECT().GetModuleJobByKernel(ctx, mod.Name, mod.Namespace, kernelVersion, utils.JobTypeSign).Return(nil, utils.ErrNoMatchingJob),
 				jobhelper.EXPECT().CreateJob(ctx, &j).Return(nil),
 			)
 
-			mgr := NewSignJobManager(maker, helper, jobhelper)
+			mgr := NewSignJobManager(maker, jobhelper, nil, nil)
 
 			Expect(
-				mgr.Sync(ctx, mod, km, kernelVersion, previousImageName, imageName, true),
+				mgr.Sync(ctx, mod, km, kernelVersion, previousImageName, true, &mod),
 			).To(
 				Equal(utils.Result{Requeue: true, Status: utils.StatusCreated}),
 			)
@@ -237,18 +362,17 @@ var _ = Describe("JobManager", func() {
 			}
 
 			gomock.InOrder(
-				helper.EXPECT().GetRelevantSign(mod, km).Return(km.Sign),
-				jobhelper.EXPECT().JobLabels(mod, kernelVersion, "sign").Return(labels),
-				maker.EXPECT().MakeJobTemplate(mod, km.Sign, kernelVersion, previousImageName, km.ContainerImage, labels, true).Return(&newJob, nil),
-				jobhelper.EXPECT().GetModuleJobByKernel(ctx, mod, kernelVersion, utils.JobTypeSign).Return(&newJob, nil),
+				jobhelper.EXPECT().JobLabels(mod.Name, kernelVersion, "sign").Return(labels),
+				maker.EXPECT().MakeJobTemplate(mod, km, kernelVersion, labels, previousImageName, true, &mod).Return(&newJob, nil),
+				jobhelper.EXPECT().GetModuleJobByKernel(ctx, mod.Name, mod.Namespace, kernelVersion, utils.JobTypeSign).Return(&newJob, nil),
 				jobhelper.EXPECT().IsJobChanged(&newJob, &newJob).Return(true, nil),
 				jobhelper.EXPECT().DeleteJob(ctx, &newJob).Return(nil),
 			)
 
-			mgr := NewSignJobManager(maker, helper, jobhelper)
+			mgr := NewSignJobManager(maker, jobhelper, nil, nil)
 
 			Expect(
-				mgr.Sync(ctx, mod, km, kernelVersion, previousImageName, imageName, true),
+				mgr.Sync(ctx, mod, km, kernelVersion, previousImageName, true, &mod),
 			).To(
 				Equal(utils.Result{Requeue: true, Status: utils.StatusInProgress}),
 			)

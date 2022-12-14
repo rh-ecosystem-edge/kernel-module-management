@@ -5,22 +5,24 @@ import (
 	"errors"
 	"fmt"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
 	"github.com/golang/mock/gomock"
 	"github.com/google/go-cmp/cmp"
 	"github.com/mitchellh/hashstructure"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 	buildv1 "github.com/openshift/api/build/v1"
-	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 )
 
 var _ = Describe("Maker_MakeBuildTemplate", func() {
@@ -164,7 +166,7 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 		expected.SetAnnotations(annotations)
 
 		gomock.InOrder(
-			mockBuildHelper.EXPECT().GetRelevantBuild(mod, mapping).Return(mapping.Build),
+			mockBuildHelper.EXPECT().GetRelevantBuild(mod.Spec, mapping).Return(mapping.Build),
 			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: dockerfileConfigMap.Name, Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, cm *v1.ConfigMap, _ ...ctrlclient.GetOption) error {
 					cm.Data = dockerfileCMData
@@ -174,7 +176,7 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 			mockBuildHelper.EXPECT().ApplyBuildArgOverrides(buildArgs, overrides).Return(append(buildArgs, kmmv1beta1.BuildArg{Name: "KERNEL_VERSION", Value: targetKernel})),
 		)
 
-		bc, err := maker.MakeBuildTemplate(ctx, mod, mapping, targetKernel, containerImage, true)
+		bc, err := maker.MakeBuildTemplate(ctx, mod, mapping, targetKernel, true, &mod)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(
@@ -203,7 +205,8 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 				mockKernelOSDTKMapping.EXPECT().GetImage(gomock.Any()).Return("", errors.New("random error")),
 			)
 
-			_, err := maker.MakeBuildTemplate(ctx, kmmv1beta1.Module{}, kmmv1beta1.KernelMapping{}, "", "", false)
+			mod := kmmv1beta1.Module{}
+			_, err := maker.MakeBuildTemplate(ctx, mod, kmmv1beta1.KernelMapping{}, "", false, &mod)
 			Expect(err).To(HaveOccurred())
 		})
 
@@ -235,7 +238,8 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 				mockBuildHelper.EXPECT().ApplyBuildArgOverrides(gomock.Any(), gomock.Any()).Return(buildArgs),
 			)
 
-			bct, err := maker.MakeBuildTemplate(ctx, kmmv1beta1.Module{}, kmmv1beta1.KernelMapping{}, "", "", false)
+			mod := kmmv1beta1.Module{}
+			bct, err := maker.MakeBuildTemplate(ctx, mod, kmmv1beta1.KernelMapping{}, "", false, &mod)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(bct.Spec.CommonSpec.Strategy.DockerStrategy.BuildArgs)).To(Equal(1))
 			Expect(bct.Spec.CommonSpec.Strategy.DockerStrategy.BuildArgs[0].Name).To(Equal(buildArgs[0].Name))

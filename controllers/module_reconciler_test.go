@@ -7,14 +7,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/daemonset"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/rbac"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
@@ -35,16 +33,15 @@ const (
 
 var _ = Describe("ModuleReconciler_Reconcile", func() {
 	var (
-		ctrl         *gomock.Controller
-		clnt         *client.MockClient
-		mockBM       *build.MockManager
-		mockSM       *sign.MockSignManager
-		mockRC       *rbac.MockRBACCreator
-		mockDC       *daemonset.MockDaemonSetCreator
-		mockKM       *module.MockKernelMapper
-		mockMetrics  *metrics.MockMetrics
-		mockSU       *statusupdater.MockModuleStatusUpdater
-		mockRegistry *registry.MockRegistry
+		ctrl        *gomock.Controller
+		clnt        *client.MockClient
+		mockBM      *build.MockManager
+		mockSM      *sign.MockSignManager
+		mockRC      *rbac.MockRBACCreator
+		mockDC      *daemonset.MockDaemonSetCreator
+		mockKM      *module.MockKernelMapper
+		mockMetrics *metrics.MockMetrics
+		mockSU      *statusupdater.MockModuleStatusUpdater
 	)
 
 	BeforeEach(func() {
@@ -57,7 +54,6 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 		mockKM = module.NewMockKernelMapper(ctrl)
 		mockMetrics = metrics.NewMockMetrics(ctrl)
 		mockSU = statusupdater.NewMockModuleStatusUpdater(ctrl)
-		mockRegistry = registry.NewMockRegistry(ctrl)
 	})
 
 	const moduleName = "test-module"
@@ -87,8 +83,6 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockDC,
 			mockKM,
 			mockMetrics,
-			nil,
-			mockRegistry,
 			nil,
 			mockSU,
 		)
@@ -162,8 +156,6 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockKM,
 			mockMetrics,
 			nil,
-			mockRegistry,
-			nil,
 			mockSU,
 		)
 
@@ -172,7 +164,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 		gomock.InOrder(
 			mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, moduleName, namespace).Return(dsByKernelVersion, nil),
 			mockDC.EXPECT().GarbageCollect(ctx, dsByKernelVersion, sets.NewString()),
-			mockBM.EXPECT().GarbageCollect(ctx, mod),
+			mockBM.EXPECT().GarbageCollect(ctx, mod.Name, mod.Namespace),
 			mockSU.EXPECT().ModuleUpdateStatus(ctx, &mod, []v1.Node{}, []v1.Node{}, dsByKernelVersion).Return(nil),
 		)
 
@@ -229,8 +221,6 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockKM,
 			mockMetrics,
 			nil,
-			mockRegistry,
-			nil,
 			mockSU,
 		)
 
@@ -239,74 +229,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 		gomock.InOrder(
 			mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, moduleName, namespace).Return(dsByKernelVersion, nil),
 			mockDC.EXPECT().GarbageCollect(ctx, dsByKernelVersion, sets.NewString()),
-			mockBM.EXPECT().GarbageCollect(ctx, mod),
-			mockSU.EXPECT().ModuleUpdateStatus(ctx, &mod, []v1.Node{}, []v1.Node{}, dsByKernelVersion).Return(nil),
-		)
-
-		res, err := mr.Reconcile(context.Background(), req)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(reconcile.Result{}))
-	})
-
-	It("should do nothing when no nodes match the selector", func() {
-		const serviceAccountName = "module-loader-service-account"
-
-		mod := kmmv1beta1.Module{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      moduleName,
-				Namespace: namespace,
-			},
-			Spec: kmmv1beta1.ModuleSpec{
-				Selector: map[string]string{"key": "value"},
-				ModuleLoader: kmmv1beta1.ModuleLoaderSpec{
-					ServiceAccountName: serviceAccountName,
-				},
-			},
-		}
-
-		gomock.InOrder(
-			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ interface{}, _ interface{}, m *kmmv1beta1.Module, _ ...ctrlclient.GetOption) error {
-					m.ObjectMeta = mod.ObjectMeta
-					m.Spec = mod.Spec
-					return nil
-				},
-			),
-			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ interface{}, list *kmmv1beta1.ModuleList, _ ...interface{}) error {
-					list.Items = []kmmv1beta1.Module{mod}
-					return nil
-				},
-			),
-			mockMetrics.EXPECT().SetExistingKMMOModules(1),
-			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ interface{}, list *v1.NodeList, _ ...interface{}) error {
-					list.Items = []v1.Node{}
-					return nil
-				},
-			),
-		)
-
-		mr := NewModuleReconciler(
-			clnt,
-			mockBM,
-			mockSM,
-			mockRC,
-			mockDC,
-			mockKM,
-			mockMetrics,
-			nil,
-			mockRegistry,
-			nil,
-			mockSU,
-		)
-
-		dsByKernelVersion := make(map[string]*appsv1.DaemonSet)
-
-		gomock.InOrder(
-			mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, moduleName, namespace).Return(dsByKernelVersion, nil),
-			mockDC.EXPECT().GarbageCollect(ctx, dsByKernelVersion, sets.NewString()),
-			mockBM.EXPECT().GarbageCollect(ctx, mod),
+			mockBM.EXPECT().GarbageCollect(ctx, mod.Name, mod.Namespace),
 			mockSU.EXPECT().ModuleUpdateStatus(ctx, &mod, []v1.Node{}, []v1.Node{}, dsByKernelVersion).Return(nil),
 		)
 
@@ -373,8 +296,6 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockKM,
 			mockMetrics,
 			nil,
-			mockRegistry,
-			nil,
 			mockSU,
 		)
 
@@ -383,7 +304,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 		gomock.InOrder(
 			mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, moduleName, namespace).Return(dsByKernelVersion, nil),
 			mockDC.EXPECT().GarbageCollect(ctx, dsByKernelVersion, sets.NewString()),
-			mockBM.EXPECT().GarbageCollect(ctx, mod),
+			mockBM.EXPECT().GarbageCollect(ctx, mod.Name, mod.Namespace),
 			mockSU.EXPECT().ModuleUpdateStatus(ctx, &mod, []v1.Node{}, []v1.Node{}, dsByKernelVersion).Return(nil),
 		)
 
@@ -449,8 +370,6 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockKM,
 			mockMetrics,
 			nil,
-			mockRegistry,
-			nil,
 			mockSU,
 		)
 
@@ -485,12 +404,16 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockKM.EXPECT().FindMappingForKernel(mappings, kernelVersion).Return(&mappings[0], nil),
 			mockKM.EXPECT().PrepareKernelMapping(&mappings[0], &osConfig).Return(&mappings[0], nil),
 			mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, moduleName, namespace).Return(dsByKernelVersion, nil),
+			mockBM.EXPECT().ShouldSync(gomock.Any(), mod, mappings[0]).Return(true, nil),
+			mockBM.EXPECT().Sync(gomock.Any(), mod, mappings[0], kernelVersion, true, &mod),
+			mockSM.EXPECT().ShouldSync(gomock.Any(), mod, mappings[0]).Return(true, nil),
+			mockSM.EXPECT().Sync(gomock.Any(), mod, mappings[0], kernelVersion, "", true, &mod),
 			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).Return(apierrors.NewNotFound(schema.GroupResource{}, "whatever")),
 			mockDC.EXPECT().SetDriverContainerAsDesired(context.Background(), &ds, imageName, gomock.AssignableToTypeOf(mod), kernelVersion),
 			clnt.EXPECT().Create(ctx, gomock.Any()).Return(nil),
 			mockMetrics.EXPECT().SetCompletedStage(moduleName, namespace, kernelVersion, metrics.ModuleLoaderStage, false),
 			mockDC.EXPECT().GarbageCollect(ctx, dsByKernelVersion, sets.NewString(kernelVersion)),
-			mockBM.EXPECT().GarbageCollect(ctx, mod),
+			mockBM.EXPECT().GarbageCollect(ctx, mod.Name, mod.Namespace),
 			mockSU.EXPECT().ModuleUpdateStatus(ctx, &mod, nodeList.Items, nodeList.Items, dsByKernelVersion).Return(nil),
 		)
 
@@ -593,8 +516,6 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockKM,
 			mockMetrics,
 			nil,
-			mockRegistry,
-			nil,
 			mockSU,
 		)
 
@@ -605,12 +526,16 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockKM.EXPECT().FindMappingForKernel(mappings, kernelVersion).Return(&mappings[0], nil),
 			mockKM.EXPECT().PrepareKernelMapping(&mappings[0], &osConfig).Return(&mappings[0], nil),
 			mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, moduleName, namespace).Return(dsByKernelVersion, nil),
+			mockBM.EXPECT().ShouldSync(gomock.Any(), mod, mappings[0]).Return(true, nil),
+			mockBM.EXPECT().Sync(gomock.Any(), mod, mappings[0], kernelVersion, true, &mod),
+			mockSM.EXPECT().ShouldSync(gomock.Any(), mod, mappings[0]).Return(true, nil),
+			mockSM.EXPECT().Sync(gomock.Any(), mod, mappings[0], kernelVersion, "", true, &mod),
 			mockDC.EXPECT().SetDriverContainerAsDesired(context.Background(), &ds, imageName, gomock.AssignableToTypeOf(mod), kernelVersion).Do(
 				func(ctx context.Context, d *appsv1.DaemonSet, _ string, _ kmmv1beta1.Module, _ string) {
 					d.SetLabels(map[string]string{"test": "test"})
 				}),
 			mockDC.EXPECT().GarbageCollect(ctx, dsByKernelVersion, sets.NewString(kernelVersion)),
-			mockBM.EXPECT().GarbageCollect(ctx, mod),
+			mockBM.EXPECT().GarbageCollect(ctx, mod.Name, mod.Namespace),
 			mockSU.EXPECT().ModuleUpdateStatus(ctx, &mod, nodeList.Items, nodeList.Items, dsByKernelVersion).Return(nil),
 		)
 
@@ -663,8 +588,6 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockKM,
 			mockMetrics,
 			nil,
-			mockRegistry,
-			nil,
 			mockSU,
 		)
 
@@ -702,7 +625,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			clnt.EXPECT().Create(ctx, gomock.Any()).Return(nil),
 			mockMetrics.EXPECT().SetCompletedStage(moduleName, namespace, "", metrics.DevicePluginStage, false),
 			mockDC.EXPECT().GarbageCollect(ctx, nil, sets.NewString()),
-			mockBM.EXPECT().GarbageCollect(ctx, mod),
+			mockBM.EXPECT().GarbageCollect(ctx, mod.Name, mod.Namespace),
 			mockSU.EXPECT().ModuleUpdateStatus(ctx, &mod, []v1.Node{}, []v1.Node{}, nil).Return(nil),
 		)
 
@@ -714,24 +637,20 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 
 var _ = Describe("ModuleReconciler_handleBuild", func() {
 	var (
-		authGetter      = &auth.MockRegistryAuthGetter{}
-		ctrl            *gomock.Controller
-		clnt            *client.MockClient
-		mockAuthFactory *auth.MockRegistryAuthGetterFactory
-		mockBM          *build.MockManager
-		mockSM          *sign.MockSignManager
-		mockRC          *rbac.MockRBACCreator
-		mockDC          *daemonset.MockDaemonSetCreator
-		mockKM          *module.MockKernelMapper
-		mockMetrics     *metrics.MockMetrics
-		mockSU          *statusupdater.MockModuleStatusUpdater
-		mockRegistry    *registry.MockRegistry
+		ctrl        *gomock.Controller
+		clnt        *client.MockClient
+		mockBM      *build.MockManager
+		mockSM      *sign.MockSignManager
+		mockRC      *rbac.MockRBACCreator
+		mockDC      *daemonset.MockDaemonSetCreator
+		mockKM      *module.MockKernelMapper
+		mockMetrics *metrics.MockMetrics
+		mockSU      *statusupdater.MockModuleStatusUpdater
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mockAuthFactory = auth.NewMockRegistryAuthGetterFactory(ctrl)
 		mockBM = build.NewMockManager(ctrl)
 		mockSM = sign.NewMockSignManager(ctrl)
 		mockRC = rbac.NewMockRBACCreator(ctrl)
@@ -739,7 +658,6 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 		mockKM = module.NewMockKernelMapper(ctrl)
 		mockMetrics = metrics.NewMockMetrics(ctrl)
 		mockSU = statusupdater.NewMockModuleStatusUpdater(ctrl)
-		mockRegistry = registry.NewMockRegistry(ctrl)
 	})
 
 	const (
@@ -748,7 +666,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 		imageName     = "test-image"
 	)
 
-	It("Build missing in module and in kernel mapping", func() {
+	It("should do nothing when build is skipped", func() {
 		km := &kmmv1beta1.KernelMapping{
 			ContainerImage: imageName,
 			Literal:        kernelVersion,
@@ -756,56 +674,8 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 
 		mod := &kmmv1beta1.Module{}
 
-		mr := NewModuleReconciler(
-			clnt,
-			mockBM,
-			mockSM,
-			mockRC,
-			mockDC,
-			mockKM,
-			mockMetrics,
-			nil,
-			mockRegistry,
-			nil,
-			mockSU,
-		)
-
-		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion, km.ContainerImage)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(BeFalse())
-	})
-
-	It("Build present, image exists, push secret specified", func() {
-		const secretName = "pull-push-secret"
-
-		km := &kmmv1beta1.KernelMapping{
-			ContainerImage: imageName,
-			Literal:        kernelVersion,
-			Build:          &kmmv1beta1.Build{},
-		}
-		mod := &kmmv1beta1.Module{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      moduleName,
-				Namespace: namespace,
-			},
-			Spec: kmmv1beta1.ModuleSpec{
-				ImageRepoSecret: &v1.LocalObjectReference{Name: secretName},
-			},
-		}
-
-		authGetter := &auth.MockRegistryAuthGetter{}
-
 		gomock.InOrder(
-			mockAuthFactory.
-				EXPECT().
-				NewRegistryAuthGetterFrom(mod).
-				Return(authGetter),
-			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, authGetter).DoAndReturn(
-				func(_ interface{}, _ interface{}, _ interface{}, registryAuthGetter auth.RegistryAuthGetter) (bool, error) {
-					Expect(registryAuthGetter).ToNot(BeNil())
-					return true, nil
-				},
-			),
+			mockBM.EXPECT().ShouldSync(gomock.Any(), *mod, *km).Return(false, nil),
 		)
 
 		mr := NewModuleReconciler(
@@ -817,62 +687,15 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 			mockKM,
 			mockMetrics,
 			nil,
-			mockRegistry,
-			mockAuthFactory,
 			mockSU,
 		)
 
-		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion, km.ContainerImage)
+		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(BeFalse())
 	})
 
-	It("Build present, image exists, no push secret", func() {
-		km := &kmmv1beta1.KernelMapping{
-			ContainerImage: imageName,
-			Literal:        kernelVersion,
-			Build:          &kmmv1beta1.Build{},
-		}
-		mod := &kmmv1beta1.Module{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      moduleName,
-				Namespace: namespace,
-			},
-		}
-
-		gomock.InOrder(
-			mockAuthFactory.
-				EXPECT().
-				NewRegistryAuthGetterFrom(mod).
-				Return(authGetter),
-			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, authGetter).DoAndReturn(
-				func(_ interface{}, _ interface{}, _ interface{}, registryAuthGetter auth.RegistryAuthGetter) (bool, error) {
-					Expect(registryAuthGetter).ToNot(BeNil())
-					return true, nil
-				},
-			),
-		)
-
-		mr := NewModuleReconciler(
-			clnt,
-			mockBM,
-			mockSM,
-			mockRC,
-			mockDC,
-			mockKM,
-			mockMetrics,
-			nil,
-			mockRegistry,
-			mockAuthFactory,
-			mockSU,
-		)
-
-		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion, km.ContainerImage)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(BeFalse())
-	})
-
-	It("Build present, image does not exist, job created", func() {
+	It("should record that a job was created when the build sync returns StatusCreated", func() {
 		km := &kmmv1beta1.KernelMapping{
 			ContainerImage: imageName,
 			Literal:        kernelVersion,
@@ -887,12 +710,8 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 		}
 		buildRes := build.Result{Requeue: true, Status: build.StatusCreated}
 		gomock.InOrder(
-			mockAuthFactory.
-				EXPECT().
-				NewRegistryAuthGetterFrom(mod).
-				Return(authGetter),
-			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, authGetter).Return(false, nil),
-			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), km.ContainerImage, true).Return(buildRes, nil),
+			mockBM.EXPECT().ShouldSync(gomock.Any(), *mod, *km).Return(true, nil),
+			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), true, mod).Return(buildRes, nil),
 			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, kernelVersion, metrics.BuildStage, false),
 		)
 
@@ -905,60 +724,15 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 			mockKM,
 			mockMetrics,
 			nil,
-			mockRegistry,
-			mockAuthFactory,
 			mockSU,
 		)
 
-		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion, km.ContainerImage)
+		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(BeTrue())
 	})
 
-	It("Build present, image does not exist, job created", func() {
-		km := &kmmv1beta1.KernelMapping{
-			ContainerImage: imageName,
-			Literal:        kernelVersion,
-			Build:          &kmmv1beta1.Build{},
-		}
-		mod := &kmmv1beta1.Module{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      moduleName,
-				Namespace: namespace,
-			},
-			Spec: kmmv1beta1.ModuleSpec{},
-		}
-		buildRes := build.Result{Requeue: true, Status: build.StatusCreated}
-		gomock.InOrder(
-			mockAuthFactory.
-				EXPECT().
-				NewRegistryAuthGetterFrom(mod).
-				Return(authGetter),
-			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, authGetter).Return(false, nil),
-			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), km.ContainerImage, true).Return(buildRes, nil),
-			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, kernelVersion, metrics.BuildStage, false),
-		)
-
-		mr := NewModuleReconciler(
-			clnt,
-			mockBM,
-			mockSM,
-			mockRC,
-			mockDC,
-			mockKM,
-			mockMetrics,
-			nil,
-			mockRegistry,
-			mockAuthFactory,
-			mockSU,
-		)
-
-		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion, km.ContainerImage)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(BeTrue())
-	})
-
-	It("Build present, image does not exist, job completed", func() {
+	It("should record that a job was completed, when the build sync returns StatusCompleted", func() {
 		km := &kmmv1beta1.KernelMapping{
 			ContainerImage: imageName,
 			Literal:        kernelVersion,
@@ -973,12 +747,8 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 		}
 		buildRes := build.Result{Requeue: false, Status: build.StatusCompleted}
 		gomock.InOrder(
-			mockAuthFactory.
-				EXPECT().
-				NewRegistryAuthGetterFrom(mod).
-				Return(authGetter),
-			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, authGetter).Return(false, nil),
-			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), km.ContainerImage, true).Return(buildRes, nil),
+			mockBM.EXPECT().ShouldSync(gomock.Any(), *mod, *km).Return(true, nil),
+			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), true, mod).Return(buildRes, nil),
 			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, kernelVersion, metrics.BuildStage, true),
 		)
 
@@ -991,12 +761,10 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 			mockKM,
 			mockMetrics,
 			nil,
-			mockRegistry,
-			mockAuthFactory,
 			mockSU,
 		)
 
-		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion, km.ContainerImage)
+		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(BeFalse())
 	})
@@ -1006,23 +774,20 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 /***************** signing ***********************/
 var _ = Describe("ModuleReconciler_handleSigning", func() {
 	var (
-		ctrl            *gomock.Controller
-		clnt            *client.MockClient
-		mockBM          *build.MockManager
-		mockSM          *sign.MockSignManager
-		mockRC          *rbac.MockRBACCreator
-		mockDC          *daemonset.MockDaemonSetCreator
-		mockKM          *module.MockKernelMapper
-		mockMetrics     *metrics.MockMetrics
-		mockSU          *statusupdater.MockModuleStatusUpdater
-		mockRegistry    *registry.MockRegistry
-		mockAuthFactory *auth.MockRegistryAuthGetterFactory
+		ctrl        *gomock.Controller
+		clnt        *client.MockClient
+		mockBM      *build.MockManager
+		mockSM      *sign.MockSignManager
+		mockRC      *rbac.MockRBACCreator
+		mockDC      *daemonset.MockDaemonSetCreator
+		mockKM      *module.MockKernelMapper
+		mockMetrics *metrics.MockMetrics
+		mockSU      *statusupdater.MockModuleStatusUpdater
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mockAuthFactory = auth.NewMockRegistryAuthGetterFactory(ctrl)
 		mockBM = build.NewMockManager(ctrl)
 		mockSM = sign.NewMockSignManager(ctrl)
 		mockRC = rbac.NewMockRBACCreator(ctrl)
@@ -1030,7 +795,6 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 		mockKM = module.NewMockKernelMapper(ctrl)
 		mockMetrics = metrics.NewMockMetrics(ctrl)
 		mockSU = statusupdater.NewMockModuleStatusUpdater(ctrl)
-		mockRegistry = registry.NewMockRegistry(ctrl)
 	})
 
 	const (
@@ -1039,55 +803,16 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 		imageName     = "test-image"
 	)
 
-	It("Sign missing in module and in kernel mapping", func() {
+	It("should do nothing when build is skipped", func() {
 		km := &kmmv1beta1.KernelMapping{
 			ContainerImage: imageName,
 			Literal:        kernelVersion,
 		}
 
 		mod := &kmmv1beta1.Module{}
-		mr := NewModuleReconciler(
-			clnt,
-			mockBM,
-			mockSM,
-			mockRC,
-			mockDC,
-			mockKM,
-			mockMetrics,
-			nil,
-			mockRegistry,
-			mockAuthFactory,
-			mockSU,
-		)
 
-		res, err := mr.handleSigning(context.Background(), mod, km, kernelVersion, km.ContainerImage)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(BeFalse())
-	})
-
-	It("Sign present, image exists", func() {
-		km := &kmmv1beta1.KernelMapping{
-			ContainerImage: imageName,
-			Literal:        kernelVersion,
-			Sign:           &kmmv1beta1.Sign{},
-		}
-		mod := &kmmv1beta1.Module{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      moduleName,
-				Namespace: namespace,
-			},
-			Spec: kmmv1beta1.ModuleSpec{
-				ImageRepoSecret: &v1.LocalObjectReference{Name: "pull-push-secret"},
-			},
-		}
-
-		authGetter := &auth.MockRegistryAuthGetter{}
-		mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(mod).Return(authGetter)
-		mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, gomock.Any()).DoAndReturn(
-			func(_ interface{}, _ interface{}, _ interface{}, registryAuthGetter auth.RegistryAuthGetter) (bool, error) {
-				Expect(registryAuthGetter).ToNot(BeNil())
-				return true, nil
-			},
+		gomock.InOrder(
+			mockSM.EXPECT().ShouldSync(gomock.Any(), *mod, *km).Return(false, nil),
 		)
 
 		mr := NewModuleReconciler(
@@ -1099,17 +824,15 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 			mockKM,
 			mockMetrics,
 			nil,
-			mockRegistry,
-			mockAuthFactory,
 			mockSU,
 		)
 
-		res, err := mr.handleSigning(context.Background(), mod, km, kernelVersion, km.ContainerImage)
+		res, err := mr.handleSigning(context.Background(), mod, km, kernelVersion)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(BeFalse())
 	})
 
-	It("Sign present, image does not exist, job created", func() {
+	It("should record that a job was created when the sign sync returns StatusCreated", func() {
 		km := &kmmv1beta1.KernelMapping{
 			ContainerImage: imageName,
 			Literal:        kernelVersion,
@@ -1122,12 +845,11 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 			},
 			Spec: kmmv1beta1.ModuleSpec{},
 		}
+
 		signRes := utils.Result{Requeue: true, Status: utils.StatusCreated}
-		authGetter := &auth.MockRegistryAuthGetter{}
 		gomock.InOrder(
-			mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(mod).Return(authGetter),
-			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, gomock.Any()).Return(false, nil),
-			mockSM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), "", km.ContainerImage, true).Return(signRes, nil),
+			mockSM.EXPECT().ShouldSync(gomock.Any(), *mod, *km).Return(true, nil),
+			mockSM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), "", true, mod).Return(signRes, nil),
 			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, kernelVersion, metrics.SignStage, false),
 		)
 		mr := NewModuleReconciler(
@@ -1139,17 +861,16 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 			mockKM,
 			mockMetrics,
 			nil,
-			mockRegistry,
-			mockAuthFactory,
 			mockSU,
 		)
 
-		res, err := mr.handleSigning(context.Background(), mod, km, kernelVersion, km.ContainerImage)
+		res, err := mr.handleSigning(context.Background(), mod, km, kernelVersion)
+
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(BeTrue())
 	})
 
-	It("Sign present, image does not exist, job created", func() {
+	It("should record that a job was completed when the sign sync returns StatusCompleted", func() {
 		km := &kmmv1beta1.KernelMapping{
 			ContainerImage: imageName,
 			Literal:        kernelVersion,
@@ -1162,52 +883,11 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 			},
 			Spec: kmmv1beta1.ModuleSpec{},
 		}
-		buildRes := utils.Result{Requeue: true, Status: utils.StatusCreated}
-		authGetter := &auth.MockRegistryAuthGetter{}
-		gomock.InOrder(
-			mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(mod).Return(authGetter),
-			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, gomock.Any()).Return(false, nil),
-			mockSM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), "", km.ContainerImage, true).Return(buildRes, nil),
-			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, kernelVersion, metrics.SignStage, false),
-		)
 
-		mr := NewModuleReconciler(
-			clnt,
-			mockBM,
-			mockSM,
-			mockRC,
-			mockDC,
-			mockKM,
-			mockMetrics,
-			nil,
-			mockRegistry,
-			mockAuthFactory,
-			mockSU,
-		)
-		res, err := mr.handleSigning(context.Background(), mod, km, kernelVersion, km.ContainerImage)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(BeTrue())
-	})
-
-	It("Sign present, image does not exist, job completed", func() {
-		km := &kmmv1beta1.KernelMapping{
-			ContainerImage: imageName,
-			Literal:        kernelVersion,
-			Sign:           &kmmv1beta1.Sign{},
-		}
-		mod := &kmmv1beta1.Module{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      moduleName,
-				Namespace: namespace,
-			},
-			Spec: kmmv1beta1.ModuleSpec{},
-		}
 		signRes := utils.Result{Requeue: false, Status: build.StatusCompleted}
-		authGetter := &auth.MockRegistryAuthGetter{}
 		gomock.InOrder(
-			mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(mod).Return(authGetter),
-			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, gomock.Any()).Return(false, nil),
-			mockSM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), "", km.ContainerImage, true).Return(signRes, nil),
+			mockSM.EXPECT().ShouldSync(gomock.Any(), *mod, *km).Return(true, nil),
+			mockSM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), "", true, mod).Return(signRes, nil),
 			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, kernelVersion, metrics.SignStage, true),
 		)
 
@@ -1220,15 +900,16 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 			mockKM,
 			mockMetrics,
 			nil,
-			mockRegistry,
-			mockAuthFactory,
 			mockSU,
 		)
-		res, err := mr.handleSigning(context.Background(), mod, km, kernelVersion, km.ContainerImage)
+
+		res, err := mr.handleSigning(context.Background(), mod, km, kernelVersion)
+
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(BeFalse())
 	})
-	It("Sign present, Build present, image does not exist, job completed", func() {
+
+	It("should run sign sync with the previous image as well when module build and sign are specified", func() {
 		km := &kmmv1beta1.KernelMapping{
 			ContainerImage: imageName,
 			Literal:        kernelVersion,
@@ -1242,12 +923,11 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 			},
 			Spec: kmmv1beta1.ModuleSpec{},
 		}
+
 		signRes := utils.Result{Requeue: false, Status: build.StatusCompleted}
-		authGetter := &auth.MockRegistryAuthGetter{}
 		gomock.InOrder(
-			mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(mod).Return(authGetter),
-			mockRegistry.EXPECT().ImageExists(context.Background(), imageName, nil, gomock.Any()).Return(false, nil),
-			mockSM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), imageName+":"+namespace+"_"+moduleName+"_kmm_unsigned", km.ContainerImage, true).Return(signRes, nil),
+			mockSM.EXPECT().ShouldSync(gomock.Any(), *mod, *km).Return(true, nil),
+			mockSM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), imageName+":"+namespace+"_"+moduleName+"_kmm_unsigned", true, mod).Return(signRes, nil),
 			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, kernelVersion, metrics.SignStage, true),
 		)
 
@@ -1260,51 +940,11 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 			mockKM,
 			mockMetrics,
 			nil,
-			mockRegistry,
-			mockAuthFactory,
 			mockSU,
-		)
-		res, err := mr.handleSigning(context.Background(), mod, km, kernelVersion, km.ContainerImage)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(BeFalse())
-	})
-	It("Sign present, Build present, image does not exist, job completed", func() {
-		km := &kmmv1beta1.KernelMapping{
-			ContainerImage: imageName + ":test",
-			Literal:        kernelVersion,
-			Sign:           &kmmv1beta1.Sign{},
-			Build:          &kmmv1beta1.Build{},
-		}
-		mod := &kmmv1beta1.Module{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      moduleName,
-				Namespace: namespace,
-			},
-			Spec: kmmv1beta1.ModuleSpec{},
-		}
-		signRes := utils.Result{Requeue: false, Status: build.StatusCompleted}
-		authGetter := &auth.MockRegistryAuthGetter{}
-		gomock.InOrder(
-			mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(mod).Return(authGetter),
-			mockRegistry.EXPECT().ImageExists(context.Background(), imageName+":test", nil, gomock.Any()).Return(false, nil),
-			mockSM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), imageName+":test_"+namespace+"_"+moduleName+"_kmm_unsigned", km.ContainerImage, true).Return(signRes, nil),
-			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, kernelVersion, metrics.SignStage, true),
 		)
 
-		mr := NewModuleReconciler(
-			clnt,
-			mockBM,
-			mockSM,
-			mockRC,
-			mockDC,
-			mockKM,
-			mockMetrics,
-			nil,
-			mockRegistry,
-			mockAuthFactory,
-			mockSU,
-		)
-		res, err := mr.handleSigning(context.Background(), mod, km, kernelVersion, km.ContainerImage)
+		res, err := mr.handleSigning(context.Background(), mod, km, kernelVersion)
+
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(BeFalse())
 	})
@@ -1322,7 +962,7 @@ var _ = Describe("ModuleReconciler_getNodesListBySelector", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mr = NewModuleReconciler(clnt, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+		mr = NewModuleReconciler(clnt, nil, nil, nil, nil, nil, nil, nil, nil)
 	})
 
 	ctx := context.Background()
@@ -1339,7 +979,6 @@ var _ = Describe("ModuleReconciler_getNodesListBySelector", func() {
 				return nil
 			},
 		)
-		//mr := NewModuleReconciler(clnt, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 		nodeList, err := mr.getNodesListBySelector(context.Background(), &mod)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(nodeList)).To(Equal(0))
@@ -1352,7 +991,6 @@ var _ = Describe("ModuleReconciler_getNodesListBySelector", func() {
 				return nil
 			},
 		)
-		//mr := NewModuleReconciler(clnt, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 		nodeList, err := mr.getNodesListBySelector(context.Background(), &mod)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(nodeList)).To(Equal(2))
@@ -1374,7 +1012,6 @@ var _ = Describe("ModuleReconciler_getNodesListBySelector", func() {
 				return nil
 			},
 		)
-		//mr := NewModuleReconciler(clnt, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 		nodeList, err := mr.getNodesListBySelector(context.Background(), &mod)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(nodeList)).To(Equal(1))

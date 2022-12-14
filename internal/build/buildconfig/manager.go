@@ -6,12 +6,16 @@ import (
 	"fmt"
 
 	buildv1 "github.com/openshift/api/build/v1"
-	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
-	kmmbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
+	kmmbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 )
 
 const buildHashAnnotation = "kmm.node.kubernetes.io/last-hash"
@@ -24,34 +28,68 @@ type buildManager struct {
 	client          client.Client
 	maker           Maker
 	ocpBuildsHelper OpenShiftBuildsHelper
+	authFactory     auth.RegistryAuthGetterFactory
+	registry        registry.Registry
 }
 
-func NewManager(client client.Client, maker Maker, ocpBuildsHelper OpenShiftBuildsHelper) *buildManager {
+func NewManager(
+	client client.Client,
+	maker Maker,
+	ocpBuildsHelper OpenShiftBuildsHelper,
+	authFactory auth.RegistryAuthGetterFactory,
+	registry registry.Registry) *buildManager {
 	return &buildManager{
 		client:          client,
 		maker:           maker,
 		ocpBuildsHelper: ocpBuildsHelper,
+		authFactory:     authFactory,
+		registry:        registry,
 	}
 }
 
-func (bcm *buildManager) GarbageCollect(ctx context.Context, mod kmmv1beta1.Module) ([]string, error) {
+func (bcm *buildManager) GarbageCollect(ctx context.Context, modName, namespace string) ([]string, error) {
 
 	//Garbage Collection noti (yet) implemented for Build
 	return nil, nil
+}
+
+func (bcm *buildManager) ShouldSync(ctx context.Context, mod kmmv1beta1.Module, m kmmv1beta1.KernelMapping) (bool, error) {
+	// if there is no build specified skip
+	if !module.ShouldBeBuilt(mod.Spec, m) {
+		return false, nil
+	}
+
+	targetImage := m.ContainerImage
+
+	// if build AND sign are specified, then we will build an intermediate image
+	// and let sign produce the one specified in targetImage
+	if module.ShouldBeSigned(mod.Spec, m) {
+		targetImage = module.IntermediateImageName(mod.Name, mod.Namespace, targetImage)
+	}
+
+	// build is specified and targetImage is either the final image or the intermediate image
+	// tag, depending on whether sign is specified or not. Either way, if targetImage exists
+	// we can skip building it
+	exists, err := module.ImageExists(ctx, bcm.authFactory, bcm.registry, mod, m, targetImage)
+	if err != nil {
+		return false, fmt.Errorf("failed to check existence of image %s: %w", targetImage, err)
+	}
+
+	return !exists, nil
 }
 
 func (bcm *buildManager) Sync(
 	ctx context.Context,
 	mod kmmv1beta1.Module,
 	m kmmv1beta1.KernelMapping,
-	targetKernel,
-	targetImage string,
+	targetKernel string,
 	pushImage bool,
+	owner metav1.Object,
 ) (kmmbuild.Result, error) {
 
 	logger := log.FromContext(ctx)
 
-	buildTemplate, err := bcm.maker.MakeBuildTemplate(ctx, mod, m, targetKernel, targetImage, pushImage)
+	buildTemplate, err := bcm.maker.MakeBuildTemplate(ctx, mod, m, targetKernel, pushImage, owner)
 	if err != nil {
 		return kmmbuild.Result{}, fmt.Errorf("could not make Build template: %v", err)
 	}

@@ -54,7 +54,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/rbac"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign/job"
+	signjob "github.com/rh-ecosystem-edge/kernel-module-management/internal/sign/job"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
@@ -178,16 +178,24 @@ func main() {
 	metricsAPI := metrics.New()
 	metricsAPI.Register()
 	helperAPI := build.NewHelper()
+	registryAPI := registry.NewRegistry()
+	authFactory := auth.NewRegistryAuthGetterFactory(client, kubernetes.NewForConfigOrDie(restConfig))
+
 	buildAPI := buildconfig.NewManager(
 		client,
 		buildconfig.NewMaker(client, helperAPI, scheme, kernelOsDtkMapping),
 		buildconfig.NewOpenShiftBuildsHelper(client),
+		authFactory,
+		registryAPI,
 	)
 
+	signHelperAPI := sign.NewSignerHelper()
+	jobHelperAPI := utils.NewJobHelper(client)
 	signAPI := signjob.NewSignJobManager(
-		signjob.NewSigner(scheme),
-		sign.NewSignerHelper(),
-		utils.NewJobHelper(client),
+		signjob.NewSigner(scheme, signHelperAPI, jobHelperAPI),
+		jobHelperAPI,
+		authFactory,
+		registryAPI,
 	)
 
 	rbacAPI := rbac.NewCreator(client, scheme)
@@ -196,8 +204,6 @@ func main() {
 	moduleStatusUpdaterAPI := statusupdater.NewModuleStatusUpdater(client, daemonAPI, metricsAPI)
 	preflightStatusUpdaterAPI := statusupdater.NewPreflightStatusUpdater(client)
 	preflightOCPStatusUpdaterAPI := statusupdater.NewPreflightOCPStatusUpdater(client)
-	registryAPI := registry.NewRegistry()
-	authFactory := auth.NewRegistryAuthGetterFactory(client, kubernetes.NewForConfigOrDie(restConfig))
 	preflightAPI := preflight.NewPreflightAPI(client, buildAPI, registryAPI, kernelAPI, preflightStatusUpdaterAPI, authFactory)
 
 	mc := controllers.NewModuleReconciler(
@@ -209,8 +215,6 @@ func main() {
 		kernelAPI,
 		metricsAPI,
 		filter,
-		registryAPI,
-		authFactory,
 		moduleStatusUpdaterAPI,
 	)
 

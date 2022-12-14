@@ -26,7 +26,14 @@ const dtkBuildArg = "DTK_AUTO"
 //go:generate mockgen -source=maker.go -package=buildconfig -destination=mock_maker.go
 
 type Maker interface {
-	MakeBuildTemplate(ctx context.Context, mod kmmv1beta1.Module, mapping kmmv1beta1.KernelMapping, targetKernel, containerImage string, pushImage bool) (*buildv1.Build, error)
+	MakeBuildTemplate(
+		ctx context.Context,
+		mod kmmv1beta1.Module,
+		mapping kmmv1beta1.KernelMapping,
+		targetKernel string,
+		pushImage bool,
+		owner metav1.Object,
+	) (*buildv1.Build, error)
 }
 
 type maker struct {
@@ -49,12 +56,12 @@ func (m *maker) MakeBuildTemplate(
 	ctx context.Context,
 	mod kmmv1beta1.Module,
 	mapping kmmv1beta1.KernelMapping,
-	targetKernel,
-	containerImage string,
+	targetKernel string,
 	pushImage bool,
+	owner metav1.Object,
 ) (*buildv1.Build, error) {
 
-	kmmBuild := m.helper.GetRelevantBuild(mod, mapping)
+	kmmBuild := m.helper.GetRelevantBuild(mod.Spec, mapping)
 
 	overrides := []kmmv1beta1.BuildArg{
 		{
@@ -85,7 +92,7 @@ func (m *maker) MakeBuildTemplate(
 	buildTarget := buildv1.BuildOutput{
 		To: &v1.ObjectReference{
 			Kind: "DockerImage",
-			Name: containerImage,
+			Name: mapping.ContainerImage,
 		},
 		PushSecret: mod.Spec.ImageRepoSecret,
 	}
@@ -128,7 +135,7 @@ func (m *maker) MakeBuildTemplate(
 		},
 	}
 
-	if err := controllerutil.SetControllerReference(&mod, &bc, m.scheme); err != nil {
+	if err := controllerutil.SetControllerReference(owner, &bc, m.scheme); err != nil {
 		return nil, fmt.Errorf("could not set the owner reference: %v", err)
 	}
 
