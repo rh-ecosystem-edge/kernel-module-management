@@ -222,7 +222,7 @@ var _ = Describe("preflightHelper_verifyImage", func() {
 		digestLayer := v1stream.Layer{}
 		gomock.InOrder(
 			mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(mod).Return(authGetter),
-			mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, nil, authGetter).Return(digests, repoConfig, nil),
+			mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, gomock.Any(), gomock.Any()).Return(digests, repoConfig, nil),
 			mockRegistryAPI.EXPECT().GetLayerByDigest(digests[1], repoConfig).Return(&digestLayer, nil),
 			mockRegistryAPI.EXPECT().VerifyModuleExists(&digestLayer, "/opt", kernelVersion, "simple-kmod.ko").Return(true),
 		)
@@ -235,9 +235,10 @@ var _ = Describe("preflightHelper_verifyImage", func() {
 
 	It("get layers digest failed", func() {
 		mapping := kmmv1beta1.KernelMapping{ContainerImage: containerImage}
+
 		gomock.InOrder(
 			mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(mod).Return(authGetter),
-			mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, nil, authGetter).Return(nil, nil, fmt.Errorf("some error")),
+			mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, gomock.Any(), gomock.Any()).Return(nil, nil, fmt.Errorf("some error")),
 		)
 
 		res, message := ph.verifyImage(context.Background(), &mapping, mod, kernelVersion)
@@ -252,7 +253,7 @@ var _ = Describe("preflightHelper_verifyImage", func() {
 		repoConfig := &registry.RepoPullConfig{}
 		gomock.InOrder(
 			mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(mod).Return(authGetter),
-			mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, nil, authGetter).Return(digests, repoConfig, nil),
+			mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, gomock.Any(), gomock.Any()).Return(digests, repoConfig, nil),
 			mockRegistryAPI.EXPECT().GetLayerByDigest(digests[1], repoConfig).Return(nil, fmt.Errorf("some error")),
 		)
 
@@ -269,7 +270,7 @@ var _ = Describe("preflightHelper_verifyImage", func() {
 		digestLayer := v1stream.Layer{}
 		gomock.InOrder(
 			mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(mod).Return(authGetter),
-			mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, nil, gomock.Any()).Return(digests, repoConfig, nil),
+			mockRegistryAPI.EXPECT().GetLayersDigests(context.Background(), containerImage, gomock.Any(), gomock.Any()).Return(digests, repoConfig, nil),
 			mockRegistryAPI.EXPECT().GetLayerByDigest(digests[0], repoConfig).Return(&digestLayer, nil),
 			mockRegistryAPI.EXPECT().VerifyModuleExists(&digestLayer, "/opt", kernelVersion, "simple-kmod.ko").Return(false),
 		)
