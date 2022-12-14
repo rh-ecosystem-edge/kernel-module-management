@@ -99,7 +99,7 @@ help: ## Display this help.
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	@for f in config/crd/bases/*.yaml; do \
-		kubectl annotate --overwrite -f $$f --local=true -o yaml api-approved.kubernetes.io="unapproved, testing-only" > $$f.bk; \
+		oc annotate --overwrite -f $$f --local=true -o yaml api-approved.kubernetes.io="unapproved, testing-only" > $$f.bk; \
 		mv $$f.bk $$f; \
 	done
 
@@ -168,22 +168,22 @@ KUSTOMIZE_CONFIG_CRD ?= config/crd
 
 .PHONY: install
 install: manifests ## Install CRDs into the K8s cluster specified in ~/.kube/config.
-	kubectl apply -k $(KUSTOMIZE_CONFIG_CRD)
+	oc apply -k $(KUSTOMIZE_CONFIG_CRD)
 
 .PHONY: uninstall
 uninstall: manifests ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	kubectl delete -k $(KUSTOMIZE_CONFIG_CRD) --ignore-not-found=$(ignore-not-found)
+	oc delete -k $(KUSTOMIZE_CONFIG_CRD) --ignore-not-found=$(ignore-not-found)
 
 KUSTOMIZE_CONFIG_DEFAULT ?= config/default
 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	kubectl apply -k $(KUSTOMIZE_CONFIG_DEFAULT)
+	oc apply -k $(KUSTOMIZE_CONFIG_DEFAULT)
 
 .PHONY: undeploy
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	kubectl delete -k $(KUSTOMIZE_CONFIG_DEFAULT) --ignore-not-found=$(ignore-not-found)
+	oc delete -k $(KUSTOMIZE_CONFIG_DEFAULT) --ignore-not-found=$(ignore-not-found)
 
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 .PHONY: controller-gen
@@ -218,7 +218,7 @@ endef
 bundle: manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
 	operator-sdk generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	kubectl kustomize config/manifests | operator-sdk generate bundle $(BUNDLE_GEN_FLAGS)
+	oc kustomize config/manifests | operator-sdk generate bundle $(BUNDLE_GEN_FLAGS)
 	operator-sdk bundle validate ./bundle
 
 .PHONY: bundle-build
