@@ -192,7 +192,7 @@ func main() {
 	signHelperAPI := sign.NewSignerHelper()
 	jobHelperAPI := utils.NewJobHelper(client)
 	signAPI := signjob.NewSignJobManager(
-		signjob.NewSigner(scheme, signHelperAPI, jobHelperAPI),
+		signjob.NewSigner(client, scheme, signHelperAPI, jobHelperAPI),
 		jobHelperAPI,
 		authFactory,
 		registryAPI,
