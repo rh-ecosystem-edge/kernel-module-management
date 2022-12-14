@@ -12,9 +12,6 @@ NODE=$(oc get nodes -o jsonpath='{.items..metadata.name}' | awk {'print $1'})
 echo "Label a node to match selector in Module afterwards..."
 oc label $NODE task=kmm-ci
 
-echo "Make kubectl available..."
-ln -s /usr/local/bin/oc /usr/local/bin/kubectl
-
 echo "Deploy KMMO..."
 make deploy
 
