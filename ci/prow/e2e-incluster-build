@@ -2,6 +2,10 @@
 
 set -euxo pipefail
 
+check_kmm_mod () {
+oc debug node/$NODE -T -- chroot /host sh -c "lsmod | grep kmm"
+}
+
 echo "Deploy KMMO..."
 make deploy
 
@@ -9,10 +13,10 @@ echo "Get first node..."
 NODE=$(oc get nodes -o jsonpath='{.items..metadata.name}' | awk {'print $1'})
 
 echo "Label a node to match selector in Module afterwards..."
-oc label $NODE task=kmm-ci
+oc label node $NODE task=kmm-ci
 
 echo "Wait until the KMMO Deployment is Available"
-timeout 1m oc wait --for condition=Available deployments.apps -n kmm-operator-system kmm-operator-controller-manager
+oc wait --for condition=Available --timeout 1m deployments.apps -n kmm-operator-system kmm-operator-controller-manager
 
 echo "Create a build secret..."
 oc create secret generic build-secret --from-literal=ci-build-secret=super-secret-value
@@ -27,7 +31,7 @@ echo "Wait for the job to be created..."
 timeout 1m bash -c 'until oc get job -l kmm.node.kubernetes.io/module.name | grep kmm; do sleep 1; done'
 
 echo "Check that the module gets loaded on the node..."
-#timeout 1m bash -c 'until minikube ssh -- lsmod | grep kmm_ci_a; do sleep 3; done'
+timeout 1m bash -c 'until check_kmm_kmod; do sleep 3; done'
 
 echo "Check that the DriverContainer prints the secret's value to the standard output..."
 POD_NAME=$(oc get pod -l kmm.node.kubernetes.io/module.name --template='{{ (index .items 0).metadata.name }}')
@@ -48,4 +52,4 @@ echo "Remove the Module..."
 oc delete -f module-kmm-ci.yaml
 
 echo "Check that the module gets unloaded from the node..."
-#timeout 1m bash -c 'until ! minikube ssh -- lsmod | grep kmm_ci_a; do sleep 3; done'
+timeout 1m bash -c 'until ! check_kmm_kmod; do sleep 3; done'

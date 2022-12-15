@@ -10,7 +10,7 @@ echo "Get first node..."
 NODE=$(oc get nodes -o jsonpath='{.items..metadata.name}' | awk {'print $1'})
 
 echo "Label a node to match selector in Module afterwards..."
-oc label $NODE task=kmm-ci
+oc label node $NODE task=kmm-ci
 
 echo "Deploy KMMO..."
 make deploy
