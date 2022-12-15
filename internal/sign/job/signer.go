@@ -126,11 +126,24 @@ func (s *signer) MakeJobTemplate(
 		utils.MakeSecretVolumeMount(signConfig.KeySecret, "/signingkey"),
 	}
 
-	args = append(args, "-secretdir", "/docker_config/")
 	imageSecret := mod.Spec.ImageRepoSecret
+	buildImageSecret, err := s.getSAImageRepoSecret(ctx, &mod, constants.OCPBuilderServiceAccountName)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get secrets for service account %s: %v", constants.OCPBuilderServiceAccountName, err)
+	}
+
+	args = append(args, "-secretdir", "/docker_config/")
 	if imageSecret != nil {
 		volumes = append(volumes, utils.MakeSecretVolume(imageSecret, "", ""))
 		volumeMounts = append(volumeMounts, utils.MakeSecretVolumeMount(imageSecret, "/docker_config/"+imageSecret.Name))
+	}
+
+	if len(buildImageSecret) > 0 {
+		for _, secret := range buildImageSecret {
+			buildSecret := &v1.LocalObjectReference{Name: secret.Name}
+			volumes = append(volumes, utils.MakeSecretVolume(buildSecret, "", ""))
+			volumeMounts = append(volumeMounts, utils.MakeSecretVolumeMount(buildSecret, "/docker_config/"+constants.OCPBuilderServiceAccountName+"/"+secret.Name))
+		}
 	}
 
 	specTemplate := v1.PodTemplateSpec{
@@ -185,6 +198,19 @@ func (s *signer) getHashAnnotationValue(ctx context.Context, privateSecret, publ
 	}
 
 	return getHashValue(podTemplate, publicKeyData, privateKeyData)
+}
+
+func (s *signer) getSAImageRepoSecret(ctx context.Context, mod *kmmv1beta1.Module, accountName string) ([]v1.ObjectReference, error) {
+	serviceaccount := v1.ServiceAccount{}
+
+	namespacedName := types.NamespacedName{Name: accountName, Namespace: mod.Namespace}
+
+	err := s.client.Get(ctx, namespacedName, &serviceaccount)
+	if err != nil {
+		return nil, err
+	}
+
+	return serviceaccount.Secrets, nil
 }
 
 func (s *signer) getSecretData(ctx context.Context, secretName, secretDataKey, namespace string) ([]byte, error) {
