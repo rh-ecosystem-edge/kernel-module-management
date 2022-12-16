@@ -4,7 +4,7 @@ set -euxo pipefail
 
 echo "Get first node..."
 NODE=$(oc get nodes -o jsonpath='{.items..metadata.name}' | awk {'print $1'})
-
+echo "PATH:" $(pwd)
 source check-kmm-kmod
 
 echo "Label a node to match selector in Module afterwards..."
