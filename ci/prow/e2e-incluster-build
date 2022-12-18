@@ -2,16 +2,17 @@
 
 set -euxo pipefail
 
-echo "Deploy KMMO..."
-make deploy
+source ci/prow/check-kmm-kmod
+export -f check_kmm_kmod
 
 echo "Get first node..."
-NODE=$(oc get nodes -o jsonpath='{.items..metadata.name}' | awk {'print $1'})
-
-source ci/prow/check-kmm-kmod
+export NODE=$(oc get nodes -o jsonpath='{.items..metadata.name}' | awk {'print $1'})
 
 echo "Label a node to match selector in Module afterwards..."
 oc label node $NODE task=kmm-ci
+
+echo "Deploy KMMO..."
+make deploy
 
 echo "Wait until the KMMO Deployment is Available"
 oc wait --for condition=Available --timeout 1m deployments.apps -n kmm-operator-system kmm-operator-controller-manager
