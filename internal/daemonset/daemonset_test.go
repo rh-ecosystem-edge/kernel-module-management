@@ -922,7 +922,7 @@ var _ = Describe("MakeLoadCommand", func() {
 			Equal([]string{
 				"/bin/sh",
 				"-c",
-				fmt.Sprintf("cp -r /kmm/firmware/mymodule /var/lib/firmware && modprobe -v %s", kernelModuleName),
+				fmt.Sprintf("cp -r /kmm/firmware/mymodule/* /var/lib/firmware && modprobe -v %s", kernelModuleName),
 			}),
 		)
 	})
@@ -1003,7 +1003,7 @@ var _ = Describe("MakeUnloadCommand", func() {
 			Equal([]string{
 				"/bin/sh",
 				"-c",
-				fmt.Sprintf("modprobe -rv %s && cd /kmm/firmware/mymodule && find |sort -r |xargs -I{} rm -d /var/lib/firmware/$(basename /kmm/firmware/mymodule)/{}", kernelModuleName),
+				fmt.Sprintf("modprobe -rv %s && cd /kmm/firmware/mymodule && find |sort -r |xargs -I{} rm -d /var/lib/firmware/{}", kernelModuleName),
 			}),
 		)
 	})
