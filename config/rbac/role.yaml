@@ -117,7 +117,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - kmm.sigs.k8s.io
+  - kmm.sigs.x-k8s.io
   resources:
   - managedclustermodules
   verbs:
@@ -127,13 +127,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - kmm.sigs.k8s.io
+  - kmm.sigs.x-k8s.io
   resources:
   - managedclustermodules/finalizers
   verbs:
   - update
 - apiGroups:
-  - kmm.sigs.k8s.io
+  - kmm.sigs.x-k8s.io
   resources:
   - managedclustermodules/status
   verbs:
@@ -141,7 +141,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - kmm.sigs.k8s.io
+  - kmm.sigs.x-k8s.io
   resources:
   - modules
   verbs:
@@ -151,13 +151,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - kmm.sigs.k8s.io
+  - kmm.sigs.x-k8s.io
   resources:
   - modules/finalizers
   verbs:
   - update
 - apiGroups:
-  - kmm.sigs.k8s.io
+  - kmm.sigs.x-k8s.io
   resources:
   - modules/status
   verbs:
@@ -165,7 +165,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - kmm.sigs.k8s.io
+  - kmm.sigs.x-k8s.io
   resources:
   - preflightvalidations
   verbs:
@@ -177,13 +177,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - kmm.sigs.k8s.io
+  - kmm.sigs.x-k8s.io
   resources:
   - preflightvalidations/finalizers
   verbs:
   - update
 - apiGroups:
-  - kmm.sigs.k8s.io
+  - kmm.sigs.x-k8s.io
   resources:
   - preflightvalidations/status
   verbs:
@@ -193,7 +193,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - kmm.sigs.k8s.io
+  - kmm.sigs.x-k8s.io
   resources:
   - preflightvalidationsocp
   verbs:
@@ -203,13 +203,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - kmm.sigs.k8s.io
+  - kmm.sigs.x-k8s.io
   resources:
   - preflightvalidationsocp/finalizers
   verbs:
   - update
 - apiGroups:
-  - kmm.sigs.k8s.io
+  - kmm.sigs.x-k8s.io
   resources:
   - preflightvalidationsocp/status
   verbs:

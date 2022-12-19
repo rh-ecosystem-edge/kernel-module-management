@@ -1,7 +1,0 @@
-apiVersion: v1
-data: {}
-kind: ConfigMap
-metadata:
-  labels:
-    config.openshift.io/inject-trusted-cabundle: "true"
-  name: kmm-operator-trusted-ca

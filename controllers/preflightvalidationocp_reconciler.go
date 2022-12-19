@@ -94,12 +94,12 @@ func (r *PreflightValidationOCPReconciler) SetupWithManager(mgr ctrl.Manager) er
 		Complete(r)
 }
 
-//+kubebuilder:rbac:groups=kmm.sigs.k8s.io,resources=preflightvalidations,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=kmm.sigs.k8s.io,resources=preflightvalidations/status,verbs=get;list;watch
-//+kubebuilder:rbac:groups=kmm.sigs.k8s.io,resources=preflightvalidations/finalizers,verbs=update
-//+kubebuilder:rbac:groups=kmm.sigs.k8s.io,resources=preflightvalidationsocp,verbs=get;list;watch;update;patch
-//+kubebuilder:rbac:groups=kmm.sigs.k8s.io,resources=preflightvalidationsocp/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=kmm.sigs.k8s.io,resources=preflightvalidationsocp/finalizers,verbs=update
+//+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=preflightvalidations,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=preflightvalidations/status,verbs=get;list;watch
+//+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=preflightvalidations/finalizers,verbs=update
+//+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=preflightvalidationsocp,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=preflightvalidationsocp/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=preflightvalidationsocp/finalizers,verbs=update
 
 // Reconcile Reconiliation entry point
 func (r *PreflightValidationOCPReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
