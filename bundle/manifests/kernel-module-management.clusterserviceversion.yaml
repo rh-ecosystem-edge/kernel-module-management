@@ -5,7 +5,7 @@ metadata:
     alm-examples: |-
       [
         {
-          "apiVersion": "kmm.sigs.k8s.io/v1beta1",
+          "apiVersion": "kmm.sigs.x-k8s.io/v1beta1",
           "kind": "Module",
           "metadata": {
             "name": "module-sample"
@@ -14,7 +14,8 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    operators.operatorframework.io/builder: operator-sdk-v1.25.2
+    createdAt: "2022-12-19T10:49:04Z"
+    operators.operatorframework.io/builder: operator-sdk-v1.26.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
   name: kernel-module-management.v0.0.1
   namespace: placeholder
@@ -23,13 +24,16 @@ spec:
   customresourcedefinitions:
     owned:
     - kind: ManagedClusterModule
-      name: managedclustermodules.kmm.sigs.k8s.io
+      name: managedclustermodules.kmm.sigs.x-k8s.io
       version: v1beta1
     - kind: Module
-      name: modules.kmm.sigs.k8s.io
+      name: modules.kmm.sigs.x-k8s.io
       version: v1beta1
     - kind: PreflightValidation
-      name: preflightvalidations.kmm.sigs.k8s.io
+      name: preflightvalidations.kmm.sigs.x-k8s.io
+      version: v1beta1
+    - kind: PreflightValidationOCP
+      name: preflightvalidationsocp.kmm.sigs.x-k8s.io
       version: v1beta1
   description: Kernel Module Management description. TODO.
   displayName: Kernel Module Management
@@ -152,7 +156,7 @@ spec:
           - list
           - watch
         - apiGroups:
-          - kmm.sigs.k8s.io
+          - kmm.sigs.x-k8s.io
           resources:
           - managedclustermodules
           verbs:
@@ -162,13 +166,13 @@ spec:
           - update
           - watch
         - apiGroups:
-          - kmm.sigs.k8s.io
+          - kmm.sigs.x-k8s.io
           resources:
           - managedclustermodules/finalizers
           verbs:
           - update
         - apiGroups:
-          - kmm.sigs.k8s.io
+          - kmm.sigs.x-k8s.io
           resources:
           - managedclustermodules/status
           verbs:
@@ -176,7 +180,7 @@ spec:
           - patch
           - update
         - apiGroups:
-          - kmm.sigs.k8s.io
+          - kmm.sigs.x-k8s.io
           resources:
           - modules
           verbs:
@@ -186,13 +190,13 @@ spec:
           - update
           - watch
         - apiGroups:
-          - kmm.sigs.k8s.io
+          - kmm.sigs.x-k8s.io
           resources:
           - modules/finalizers
           verbs:
           - update
         - apiGroups:
-          - kmm.sigs.k8s.io
+          - kmm.sigs.x-k8s.io
           resources:
           - modules/status
           verbs:
@@ -200,7 +204,7 @@ spec:
           - patch
           - update
         - apiGroups:
-          - kmm.sigs.k8s.io
+          - kmm.sigs.x-k8s.io
           resources:
           - preflightvalidations
           verbs:
@@ -212,9 +216,41 @@ spec:
           - update
           - watch
         - apiGroups:
-          - kmm.sigs.k8s.io
+          - kmm.sigs.x-k8s.io
+          resources:
+          - preflightvalidations/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - kmm.sigs.x-k8s.io
           resources:
           - preflightvalidations/status
+          verbs:
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - kmm.sigs.x-k8s.io
+          resources:
+          - preflightvalidationsocp
+          verbs:
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - kmm.sigs.x-k8s.io
+          resources:
+          - preflightvalidationsocp/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - kmm.sigs.x-k8s.io
+          resources:
+          - preflightvalidationsocp/status
           verbs:
           - get
           - patch

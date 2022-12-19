@@ -22,11 +22,11 @@ done
 echo "Collecting logs from 'deployment/kmm-operator-controller-manager'"
 oc -n "$NS" logs "deployment/kmm-operator-controller-manager" > "${OUTPUT_DIR}/kmm-operator-controller-manager.log"
 
-echo "Inspecting modules.kmm.sigs.k8s.io in all the namespaces"
-oc adm inspect -A crd/modules.kmm.sigs.k8s.io  --dest-dir="$OUTPUT_DIR/inspect"
+echo "Inspecting modules.kmm.sigs.x-k8s.io in all the namespaces"
+oc adm inspect -A crd/modules.kmm.sigs.x-k8s.io  --dest-dir="$OUTPUT_DIR/inspect"
 
 echo "Inspecting all Modules in all namespaces"
-oc adm inspect -A modules.kmm.sigs.k8s.io --dest-dir="$OUTPUT_DIR/inspect"
+oc adm inspect -A modules.kmm.sigs.x-k8s.io --dest-dir="$OUTPUT_DIR/inspect"
 
 namespaces=$(oc get daemonset -A -l kmm.node.kubernetes.io/module.name --no-headers -o custom-columns="NS:.metadata.namespace")
 IFS=" " read -r -a namespaces <<< "$(echo "${namespaces[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' ')"

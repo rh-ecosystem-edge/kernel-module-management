@@ -1,27 +1,27 @@
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    api-approved.kubernetes.io: unapproved, testing-only
-    controller-gen.kubebuilder.io/version: v0.9.2
+    controller-gen.kubebuilder.io/version: v0.10.0
   creationTimestamp: null
-  name: preflightvalidations.kmm.sigs.k8s.io
+  name: preflightvalidationsocp.kmm.sigs.x-k8s.io
 spec:
-  group: kmm.sigs.k8s.io
+  group: kmm.sigs.x-k8s.io
   names:
-    kind: PreflightValidation
-    listKind: PreflightValidationList
-    plural: preflightvalidations
+    kind: PreflightValidationOCP
+    listKind: PreflightValidationOCPList
+    plural: preflightvalidationsocp
     shortNames:
-    - pv
-    singular: preflightvalidation
+    - pvo
+    singular: preflightvalidationocp
   scope: Cluster
   versions:
   - name: v1beta1
     schema:
       openAPIV3Schema:
-        description: PreflightValidation initiates a preflight validations for all
-          Modules on the current Kubernetes cluster.
+        description: PreflightValidationOCP initiates a preflight validations for
+          all Modules on the current OCP cluster.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -36,20 +36,20 @@ spec:
           metadata:
             type: object
           spec:
-            description: 'PreflightValidationSpec describes the desired state of the
-              resource, such as the kernel version that Module CRs need to be verified
-              against as well as the debug configuration of the logs More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status'
+            description: 'PreflightValidationOCPSpec describes the desired state of
+              the resource, such as the OCP release image that Module CRs need to
+              be verified against as well as the push image flag More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status'
             properties:
-              kernelVersion:
-                description: KernelImage describes the kernel image that all Modules
-                  need to be checked against.
-                type: string
               pushBuiltImage:
                 description: Boolean flag that determines whether images build during
                   preflight must also be pushed to a defined repository
                 type: boolean
+              releaseImage:
+                description: releaseImage describes the OCP release image that all
+                  Modules need to be checked against.
+                type: string
             required:
-            - kernelVersion
+            - releaseImage
             type: object
           status:
             description: 'PreflightValidationStatus is the most recently observed
@@ -76,6 +76,7 @@ spec:
                       enum:
                       - Image
                       - Build
+                      - Sign
                       - Requeued
                       - Done
                       type: string
@@ -101,9 +102,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null

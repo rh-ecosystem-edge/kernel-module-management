@@ -1,13 +1,13 @@
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    api-approved.kubernetes.io: unapproved, testing-only
-    controller-gen.kubebuilder.io/version: v0.9.2
+    controller-gen.kubebuilder.io/version: v0.10.0
   creationTimestamp: null
-  name: managedclustermodules.kmm.sigs.k8s.io
+  name: managedclustermodules.kmm.sigs.x-k8s.io
 spec:
-  group: kmm.sigs.k8s.io
+  group: kmm.sigs.x-k8s.io
   names:
     kind: ManagedClusterModule
     listKind: ManagedClusterModuleList
@@ -36,6 +36,10 @@ spec:
           spec:
             description: ManagedClusterModuleSpec defines the desired state of ManagedClusterModule
             properties:
+              jobNamespace:
+                description: JobNamespace describes the Hub namespace, to which Build
+                  and Sign Jobs should be deployed.
+                type: string
               moduleSpec:
                 description: ModuleSpec describes how the KMM operator should deploy
                   a Module on those nodes that need it.
@@ -2203,6 +2207,22 @@ spec:
                                       description: Image to sign, ignored if a Build
                                         is present, required otherwise
                                       type: string
+                                    unsignedImageRegistryTLS:
+                                      description: UnsignedImageRegistryTLS contains
+                                        settings determining how to access registries
+                                        of the unsigned image.
+                                      properties:
+                                        insecure:
+                                          description: If Insecure is true, the operator
+                                            will be able to access a registry in an
+                                            insecure (plain HTTP) protocol.
+                                          type: boolean
+                                        insecureSkipTLSVerify:
+                                          description: If InsecureSkipTLSVerify, the
+                                            operator will accept any certificate provided
+                                            by the registry.
+                                          type: boolean
+                                      type: object
                                   required:
                                   - certSecret
                                   - keySecret
@@ -2335,6 +2355,22 @@ spec:
                                 description: Image to sign, ignored if a Build is
                                   present, required otherwise
                                 type: string
+                              unsignedImageRegistryTLS:
+                                description: UnsignedImageRegistryTLS contains settings
+                                  determining how to access registries of the unsigned
+                                  image.
+                                properties:
+                                  insecure:
+                                    description: If Insecure is true, the operator
+                                      will be able to access a registry in an insecure
+                                      (plain HTTP) protocol.
+                                    type: boolean
+                                  insecureSkipTLSVerify:
+                                    description: If InsecureSkipTLSVerify, the operator
+                                      will accept any certificate provided by the
+                                      registry.
+                                    type: boolean
+                                type: object
                             required:
                             - certSecret
                             - keySecret
@@ -2360,16 +2396,16 @@ spec:
                 - moduleLoader
                 - selector
                 type: object
-              namespace:
-                description: Namespace describes the Spoke namespace, in which the
-                  ModuleSpec should be applied.
-                type: string
               selector:
                 additionalProperties:
                   type: string
                 description: Selector describes on which managed clusters the ModuleSpec
                   should be applied.
                 type: object
+              spokeNamespace:
+                description: SpokeNamespace describes the Spoke namespace, in which
+                  the ModuleSpec should be applied.
+                type: string
             required:
             - selector
             type: object
@@ -2382,9 +2418,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
