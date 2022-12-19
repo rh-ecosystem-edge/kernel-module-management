@@ -39,7 +39,6 @@ type PreflightOCPStatusUpdater interface {
 
 type moduleStatusUpdater struct {
 	client     client.Client
-	daemonAPI  daemonset.DaemonSetCreator
 	metricsAPI metrics.Metrics
 }
 
@@ -51,10 +50,9 @@ type preflightOCPStatusUpdater struct {
 	client client.Client
 }
 
-func NewModuleStatusUpdater(client client.Client, daemonAPI daemonset.DaemonSetCreator, metricsAPI metrics.Metrics) ModuleStatusUpdater {
+func NewModuleStatusUpdater(client client.Client, metricsAPI metrics.Metrics) ModuleStatusUpdater {
 	return &moduleStatusUpdater{
 		client:     client,
-		daemonAPI:  daemonAPI,
 		metricsAPI: metricsAPI,
 	}
 }
