@@ -133,7 +133,7 @@ func (m *signer) MakeJobTemplate(
 			Containers: []v1.Container{
 				{
 					Name:         "signimage",
-					Image:        "quay.io/chrisp262/kmod-signer:latest",
+					Image:        "quay.io/edge-infrastructure/kernel-module-management-signimage:latest",
 					Args:         args,
 					VolumeMounts: volumeMounts,
 				},

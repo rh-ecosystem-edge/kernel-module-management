@@ -151,7 +151,7 @@ var _ = Describe("MakeJobTemplate", func() {
 						Containers: []v1.Container{
 							{
 								Name:  "signimage",
-								Image: "quay.io/chrisp262/kmod-signer:latest",
+								Image: "quay.io/edge-infrastructure/kernel-module-management-signimage:latest",
 								Args: []string{
 									"-signedimage", signedImage,
 									"-unsignedimage", unsignedImage,
