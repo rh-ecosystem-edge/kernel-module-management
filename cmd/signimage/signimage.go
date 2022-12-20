@@ -5,17 +5,19 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"github.com/docker/cli/cli/config"
-	dockertypes "github.com/docker/cli/cli/config/types"
-	"github.com/go-logr/logr"
-	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"io"
-	"k8s.io/klog/v2/klogr"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/docker/cli/cli/config"
+	dockertypes "github.com/docker/cli/cli/config/types"
+	"github.com/go-logr/logr"
+	"github.com/google/go-containerregistry/pkg/authn"
+	"k8s.io/klog/v2/klogr"
+
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 )
 
 func checkArg(arg *string, varname string, fallback string) {
@@ -43,8 +45,10 @@ func canonicalisePath(path string) string {
 }
 
 func signFile(filename string, publickey string, privatekey string) error {
-	logger.Info("running /sign-file", "algo", "sha256", "privatekey", privatekey, "publickey", publickey, "filename", filepath.Base(filename))
-	out, err := exec.Command("/sign-file", "sha256", privatekey, publickey, filename).Output()
+	cmd := exec.Command("/usr/local/bin/sign-file", "sha256", privatekey, publickey, filename)
+
+	logger.Info("running sign-file", "cmd", cmd.String())
+	out, err := cmd.Output()
 	if err != nil {
 		return fmt.Errorf("signing %s returned: %s\n error: %v\n", filename, out, err)
 	}
