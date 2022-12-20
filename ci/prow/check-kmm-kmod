@@ -3,5 +3,7 @@
 set -euxo pipefail
 
 check_kmm_kmod () {
-  oc debug node/$NODE -T -- chroot /host sh -c "lsmod | grep kmm"
+  # `|| true` is required in order to prevent `grep` from returning an error
+  # code in case `kmm` wasn't found. Check `git blame` for additional info.
+  oc debug node/$NODE -T -- chroot /host sh -c "lsmod | { grep kmm || true; }"
 }
