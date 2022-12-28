@@ -17,6 +17,10 @@ import (
 
 //+kubebuilder:rbac:groups="core",resources=nodes,verbs=get;patch;list;watch
 
+const (
+	NodeKernelReconcilerName = "NodeKernel"
+)
+
 // We expect an osImageVersion of the form 411.86.202210072320-0 for example
 var osVersionRegexp = regexp.MustCompile(`\d+\.\d+\.\d+\-\d`)
 
@@ -78,7 +82,7 @@ func (r *NodeKernelReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 func (r *NodeKernelReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.
 		NewControllerManagedBy(mgr).
-		Named("node-kernel").
+		Named(NodeKernelReconcilerName).
 		For(&v1.Node{}).
 		WithEventFilter(
 			r.filter.NodeKernelReconcilerPredicate(r.labelName),

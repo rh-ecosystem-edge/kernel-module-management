@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-logr/logr"
 	imagev1 "github.com/openshift/api/image/v1"
+	hubv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api-hub/v1beta1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -160,7 +161,7 @@ func (f *Filter) FindManagedClusterModulesForCluster(cluster client.Object) []re
 
 	logger.Info("Listing all ManagedClusterModules")
 
-	mods := kmmv1beta1.ManagedClusterModuleList{}
+	mods := hubv1beta1.ManagedClusterModuleList{}
 
 	if err := f.client.List(context.Background(), &mods); err != nil {
 		logger.Error(err, "could not list ManagedClusterModules")

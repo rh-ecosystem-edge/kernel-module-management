@@ -11,8 +11,9 @@ COPY go.sum go.sum
 COPY vendor vendor
 
 # Copy the go source
-COPY main.go main.go
 COPY api api
+COPY api-hub api-hub
+COPY cmd cmd
 COPY controllers controllers
 COPY internal internal
 
@@ -22,12 +23,16 @@ COPY Makefile Makefile
 # Copy the .git directory which is needed to store the build info
 COPY .git .git
 
+ARG TARGET
+
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 make manager
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 make ${TARGET}
 
 FROM registry.redhat.io/ubi8/ubi-micro:8.7
 
-COPY --from=builder /workspace/manager /usr/local/bin
+ARG TARGET
+
+COPY --from=builder /workspace/${TARGET} /usr/local/bin/manager
 USER 65534:65534
 
 ENTRYPOINT ["/usr/local/bin/manager"]
