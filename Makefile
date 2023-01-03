@@ -34,7 +34,6 @@ IMAGE_TAG_BASE ?= quay.io/edge-infrastructure/kernel-module-management-operator
 # SIGNER_IMAGE_TAG_BASE and SIGNER_IMAGE_TAG together define SIGNER_IMG
 # SIGNER_IMG is the name given to the signer job image that is used to sign kernel modules
 # to implement the escureboot signing functionality
-PODMAN=podman
 SIGNER_IMAGE_TAG_BASE ?= quay.io/chrisp262/kmod-signer
 SIGNER_IMAGE_TAG ?= $(shell  git log --format="%H" -n 1)
 SIGNER_IMG ?= $(SIGNER_IMAGE_TAG_BASE):$(SIGNER_IMAGE_TAG)
@@ -281,4 +280,4 @@ signimage: ## Build signer binary.
 
 .PHONY: signimage-build
 signimage-build: ## Build docker image with the signer.
-	$(PODMAN) build -f Dockerfile.signimage -t $(SIGNER_IMG)
+	docker build -f Dockerfile.signimage -t $(SIGNER_IMG) .
