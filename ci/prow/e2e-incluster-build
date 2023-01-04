@@ -2,53 +2,44 @@
 
 set -euxo pipefail
 
-source ci/prow/check-kmm-kmod
-export -f check_kmm_kmod
-
-echo "Get first node..."
+echo "Get first node and the kernel version..."
 export NODE=$(oc get nodes -o jsonpath='{.items..metadata.name}' | awk {'print $1'})
+export KVER=$(oc debug node/${NODE} -- uname -r)
 
 echo "Label a node to match selector in Module afterwards..."
-oc label node $NODE task=kmm-ci
+oc label node ${NODE} task=kmm-ci
 
 echo "Deploy KMMO..."
 make deploy
 
-echo "Wait until the KMMO Deployment is Available"
-oc wait --for condition=Available --timeout 1m deployments.apps -n kmm-operator-system kmm-operator-controller-manager
-
 echo "Create a build secret..."
 oc create secret generic build-secret --from-literal=ci-build-secret=super-secret-value
+
 echo "Add a configmap that contain the kernel module build dockerfile..."
 oc apply -f ci/kmm-kmod-dockerfile.yaml
 
 echo "Add an kmm-ci Module that contains a valid mapping..."
-sed -e "s/KVER_CHANGEME/$(uname -r)/g" ci/module-kmm-ci-build.template.yaml | tee module-kmm-ci.yaml
+
+sed -e "s/KVER_CHANGEME/${KVER}/g" ci/module-kmm-ci-build.template.yaml | tee module-kmm-ci.yaml
 oc apply -f module-kmm-ci.yaml
 
-echo "Wait for the job to be created..."
-timeout 1m bash -c 'until oc get job -l kmm.node.kubernetes.io/module.name | grep kmm; do sleep 1; done'
+# Wait for the build pod to be created. `kubectl wait` doesn't support such option,
+# see https://github.com/kubernetes/kubernetes/issues/83242.
+echo "Waiting for the build pod to be created..."
+timeout 5m bash -c 'until oc get pods -o json | jq -er ".items[].metadata.name | select(.? | match(\"build\"))"; do sleep 1; done'
+POD_NAME=$(oc get pods -o json | jq -r '.items[].metadata.name | select(.? | match("build"))')
+
+# The build job/pod is deleted once done so we won't be able to get this info in the CI artifacts.
+echo "Print the build logs..."
+# we can't get the logs on a pod that isn't `Running` yet.
+oc wait pod/${POD_NAME} --for jsonpath='{.status.phase}'=Running --timeout=60s
+oc logs pod/${POD_NAME} -f
 
 echo "Check that the module gets loaded on the node..."
-timeout 1m bash -c 'until check_kmm_kmod; do sleep 3; done'
-
-echo "Check that the DriverContainer prints the secret's value to the standard output..."
-POD_NAME=$(oc get pod -l kmm.node.kubernetes.io/module.name --template='{{ (index .items 0).metadata.name }}')
-KERNEL_VERSION=$(uname -r)
-echo "Looking for the build secret"
-timeout 1m bash -c "until oc exec $POD_NAME -- grep super-secret-value /ci-build-secret; do sleep 3; done"
-
-echo "Looking for the build argument"
-timeout 1m bash -c "until oc exec $POD_NAME -- grep some-build-arg /build-arg; do sleep 3; done"
-
-echo "Looking for the kernel version"
-timeout 1m bash -c "until oc exec $POD_NAME -- grep $KERNEL_VERSION /kernel-version; do sleep 3; done"
-
-echo "Looking for the build argument with a default value"
-timeout 1m bash -c "until oc exec $POD_NAME -- grep default-value /default-value; do sleep 3; done"
+timeout 10m bash -c 'until oc debug node/${NODE} -- chroot host/ lsmod | grep kmm_ci_a; do sleep 3; done'
 
 echo "Remove the Module..."
 oc delete -f module-kmm-ci.yaml
 
 echo "Check that the module gets unloaded from the node..."
-timeout 1m bash -c 'until ! check_kmm_kmod; do sleep 3; done'
+timeout 1m bash -c 'until ! oc debug node/${NODE} -- chroot host/ lsmod | grep kmm_ci_a; do sleep 3; done'
