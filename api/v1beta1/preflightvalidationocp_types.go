@@ -40,7 +40,7 @@ type PreflightValidationOCPSpec struct {
 
 // PreflightValidationOCP initiates a preflight validations for all Modules on the current OCP cluster.
 // +kubebuilder:resource:path=preflightvalidationsocp,scope=Cluster
-// +kubebuilder:resource:path=preflightvalidationsocp,scope=Cluster,shortName=pvo
+// +kubebuilder:resource:path=preflightvalidationsocp,scope=Cluster,shortName=pfvo
 type PreflightValidationOCP struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
