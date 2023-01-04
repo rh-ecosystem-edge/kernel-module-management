@@ -12,7 +12,7 @@ spec:
     listKind: PreflightValidationOCPList
     plural: preflightvalidationsocp
     shortNames:
-    - pvo
+    - pfvo
     singular: preflightvalidationocp
   scope: Cluster
   versions:
