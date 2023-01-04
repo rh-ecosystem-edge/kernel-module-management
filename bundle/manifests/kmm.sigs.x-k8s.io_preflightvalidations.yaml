@@ -12,7 +12,7 @@ spec:
     listKind: PreflightValidationList
     plural: preflightvalidations
     shortNames:
-    - pv
+    - pfv
     singular: preflightvalidation
   scope: Cluster
   versions:
