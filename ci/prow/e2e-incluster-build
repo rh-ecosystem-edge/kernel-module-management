@@ -3,7 +3,7 @@
 set -euxo pipefail
 
 echo "Get first node and the kernel version..."
-export NODE=$(oc get nodes -o jsonpath='{.items..metadata.name}' | awk {'print $1'})
+export NODE=$(oc get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[0].metadata.name}')
 export KVER=$(oc debug node/${NODE} -- uname -r)
 
 echo "Label a node to match selector in Module afterwards..."
@@ -12,21 +12,22 @@ oc label node ${NODE} task=kmm-ci
 echo "Deploy KMMO..."
 make deploy
 
-echo "Create a build secret..."
-oc create secret generic build-secret --from-literal=ci-build-secret=super-secret-value
+echo "Check that the kmm_ci_a module is not loaded on the node..."
+if oc debug node/${NODE} -- chroot host/ lsmod | grep kmm_ci_a; then
+ echo "Unexpected lsmod output - the module is present on the node before the module was applied to the cluster"
+ exit 1
+fi
 
 echo "Add a configmap that contain the kernel module build dockerfile..."
 oc apply -f ci/kmm-kmod-dockerfile.yaml
 
 echo "Add an kmm-ci Module that contains a valid mapping..."
-
-sed -e "s/KVER_CHANGEME/${KVER}/g" ci/module-kmm-ci-build.template.yaml | tee module-kmm-ci.yaml
-oc apply -f module-kmm-ci.yaml
+oc apply -f ci/module-kmm-ci-build.yaml
 
 # Wait for the build pod to be created. `kubectl wait` doesn't support such option,
 # see https://github.com/kubernetes/kubernetes/issues/83242.
 echo "Waiting for the build pod to be created..."
-timeout 5m bash -c 'until oc get pods -o json | jq -er ".items[].metadata.name | select(.? | match(\"build\"))"; do sleep 1; done'
+timeout 1m bash -c 'until oc get pods -o json | jq -er ".items[].metadata.name | select(.? | match(\"build\"))"; do sleep 1; done'
 POD_NAME=$(oc get pods -o json | jq -r '.items[].metadata.name | select(.? | match("build"))')
 
 # The build job/pod is deleted once done so we won't be able to get this info in the CI artifacts.
@@ -39,7 +40,7 @@ echo "Check that the module gets loaded on the node..."
 timeout 10m bash -c 'until oc debug node/${NODE} -- chroot host/ lsmod | grep kmm_ci_a; do sleep 3; done'
 
 echo "Remove the Module..."
-oc delete -f module-kmm-ci.yaml
+oc delete -f ci/module-kmm-ci-build.yaml
 
 echo "Check that the module gets unloaded from the node..."
 timeout 1m bash -c 'until ! oc debug node/${NODE} -- chroot host/ lsmod | grep kmm_ci_a; do sleep 3; done'
