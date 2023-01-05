@@ -28,6 +28,7 @@ var _ = Describe("MakeJobTemplate", func() {
 	const (
 		unsignedImage = "my.registry/my/image"
 		signedImage   = "my.registry/my/image-signed"
+		signerImage   = "some-signer-image:some-tag"
 		filesToSign   = "/modules/simple-kmod.ko:/modules/simple-procfs-kmod.ko"
 		kernelVersion = "1.2.3"
 		moduleName    = "module-name"
@@ -72,6 +73,8 @@ var _ = Describe("MakeJobTemplate", func() {
 	privateSignData := map[string][]byte{constants.PrivateSignDataKey: []byte(privateKey)}
 
 	DescribeTable("should set fields correctly", func(imagePullSecret *v1.LocalObjectReference) {
+		GinkgoT().Setenv("RELATED_IMAGES_SIGN", signerImage)
+
 		ctx := context.Background()
 		nodeSelector := map[string]string{"arch": "x64"}
 
@@ -151,7 +154,7 @@ var _ = Describe("MakeJobTemplate", func() {
 						Containers: []v1.Container{
 							{
 								Name:  "signimage",
-								Image: "quay.io/edge-infrastructure/kernel-module-management-signimage:latest",
+								Image: signerImage,
 								Args: []string{
 									"-signedimage", signedImage,
 									"-unsignedimage", unsignedImage,

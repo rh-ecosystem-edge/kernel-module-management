@@ -41,6 +41,9 @@ spec:
         - /usr/local/bin/manager
         image: controller:latest
         name: manager
+        env:
+          - name: RELATED_IMAGES_SIGN
+            value: quay.io/edge-infrastructure/kernel-module-management-signimage:latest
         imagePullPolicy: Always
         securityContext:
           allowPrivilegeEscalation: false

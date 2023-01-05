@@ -3,6 +3,7 @@ package signjob
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/mitchellh/hashstructure"
@@ -133,7 +134,7 @@ func (m *signer) MakeJobTemplate(
 			Containers: []v1.Container{
 				{
 					Name:         "signimage",
-					Image:        "quay.io/edge-infrastructure/kernel-module-management-signimage:latest",
+					Image:        os.Getenv("RELATED_IMAGES_SIGN"),
 					Args:         args,
 					VolumeMounts: volumeMounts,
 				},
