@@ -38,9 +38,7 @@ spec:
         runAsNonRoot: true
       containers:
       - command:
-        - /manager
-        args:
-        - --leader-elect
+        - /usr/local/bin/manager
         image: controller:latest
         name: manager
         imagePullPolicy: Always

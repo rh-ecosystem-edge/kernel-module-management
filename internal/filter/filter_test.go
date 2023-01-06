@@ -8,18 +8,19 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	imagev1 "github.com/openshift/api/image/v1"
-	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
-	mockClient "github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
-
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	hubv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api-hub/v1beta1"
+	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	mockClient "github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 )
 
 var (
@@ -400,15 +401,15 @@ var _ = Describe("FindManagedClusterModulesForCluster", func() {
 	})
 
 	It("should return nothing if the cluster labels match no ManagedClusterModule", func() {
-		mod := kmmv1beta1.ManagedClusterModule{
-			Spec: kmmv1beta1.ManagedClusterModuleSpec{
+		mod := hubv1beta1.ManagedClusterModule{
+			Spec: hubv1beta1.ManagedClusterModuleSpec{
 				Selector: map[string]string{"key": "value"},
 			},
 		}
 
 		clnt.EXPECT().List(context.Background(), gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ interface{}, list *kmmv1beta1.ManagedClusterModuleList, _ ...interface{}) error {
-				list.Items = []kmmv1beta1.ManagedClusterModule{mod}
+			func(_ interface{}, list *hubv1beta1.ManagedClusterModuleList, _ ...interface{}) error {
+				list.Items = []hubv1beta1.ManagedClusterModule{mod}
 				return nil
 			},
 		)
@@ -431,23 +432,23 @@ var _ = Describe("FindManagedClusterModulesForCluster", func() {
 			},
 		}
 
-		matchingMod := kmmv1beta1.ManagedClusterModule{
+		matchingMod := hubv1beta1.ManagedClusterModule{
 			ObjectMeta: metav1.ObjectMeta{Name: "matching-mod"},
-			Spec: kmmv1beta1.ManagedClusterModuleSpec{
+			Spec: hubv1beta1.ManagedClusterModuleSpec{
 				Selector: clusterLabels,
 			},
 		}
 
-		mod := kmmv1beta1.ManagedClusterModule{
+		mod := hubv1beta1.ManagedClusterModule{
 			ObjectMeta: metav1.ObjectMeta{Name: "mod"},
-			Spec: kmmv1beta1.ManagedClusterModuleSpec{
+			Spec: hubv1beta1.ManagedClusterModuleSpec{
 				Selector: map[string]string{"other-key": "other-value"},
 			},
 		}
 
 		clnt.EXPECT().List(context.Background(), gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ interface{}, list *kmmv1beta1.ManagedClusterModuleList, _ ...interface{}) error {
-				list.Items = []kmmv1beta1.ManagedClusterModule{matchingMod, mod}
+			func(_ interface{}, list *hubv1beta1.ManagedClusterModuleList, _ ...interface{}) error {
+				list.Items = []hubv1beta1.ManagedClusterModule{matchingMod, mod}
 				return nil
 			},
 		)
