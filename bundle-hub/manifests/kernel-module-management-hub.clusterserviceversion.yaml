@@ -6,31 +6,20 @@ metadata:
     capabilities: Basic Install
     operators.operatorframework.io/builder: operator-sdk-v1.25.2
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
-  name: kernel-module-management.v0.0.1
+  name: kernel-module-management-hub.v0.0.1
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-    - description: Module is the Schema for the modules API
-      displayName: Module
-      kind: Module
-      name: modules.kmm.sigs.x-k8s.io
+    - description: ManagedClusterModule is the Schema for the managedclustermodules
+        API
+      displayName: Managed Cluster Module
+      kind: ManagedClusterModule
+      name: managedclustermodules.hub.kmm.sigs.x-k8s.io
       version: v1beta1
-    - description: PreflightValidation initiates a preflight validations for all Modules
-        on the current Kubernetes cluster.
-      displayName: Preflight Validation
-      kind: PreflightValidation
-      name: preflightvalidations.kmm.sigs.x-k8s.io
-      version: v1beta1
-    - description: PreflightValidationOCP initiates a preflight validations for all
-        Modules on the current OCP cluster.
-      displayName: Preflight Validation OCP
-      kind: PreflightValidationOCP
-      name: preflightvalidationsocp.kmm.sigs.x-k8s.io
-      version: v1beta1
-  description: Kubernetes operator managing out of tree kernel modules
-  displayName: Kernel Module Management
+  description: Hub component for Kernel Module Management
+  displayName: Kernel Module Management (Hub)
   icon:
   - base64data: PHN2ZyBpZD0iTGF5ZXJfMSIgZGF0YS1uYW1lPSJMYXllciAxIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOTIgMTQ1Ij48ZGVmcz48c3R5bGU+LmNscy0xe2ZpbGw6I2UwMDt9PC9zdHlsZT48L2RlZnM+PHRpdGxlPlJlZEhhdC1Mb2dvLUhhdC1Db2xvcjwvdGl0bGU+PHBhdGggZD0iTTE1Ny43Nyw2Mi42MWExNCwxNCwwLDAsMSwuMzEsMy40MmMwLDE0Ljg4LTE4LjEsMTcuNDYtMzAuNjEsMTcuNDZDNzguODMsODMuNDksNDIuNTMsNTMuMjYsNDIuNTMsNDRhNi40Myw2LjQzLDAsMCwxLC4yMi0xLjk0bC0zLjY2LDkuMDZhMTguNDUsMTguNDUsMCwwLDAtMS41MSw3LjMzYzAsMTguMTEsNDEsNDUuNDgsODcuNzQsNDUuNDgsMjAuNjksMCwzNi40My03Ljc2LDM2LjQzLTIxLjc3LDAtMS4wOCwwLTEuOTQtMS43My0xMC4xM1oiLz48cGF0aCBjbGFzcz0iY2xzLTEiIGQ9Ik0xMjcuNDcsODMuNDljMTIuNTEsMCwzMC42MS0yLjU4LDMwLjYxLTE3LjQ2YTE0LDE0LDAsMCwwLS4zMS0zLjQybC03LjQ1LTMyLjM2Yy0xLjcyLTcuMTItMy4yMy0xMC4zNS0xNS43My0xNi42QzEyNC44OSw4LjY5LDEwMy43Ni41LDk3LjUxLjUsOTEuNjkuNSw5MCw4LDgzLjA2LDhjLTYuNjgsMC0xMS42NC01LjYtMTcuODktNS42LTYsMC05LjkxLDQuMDktMTIuOTMsMTIuNSwwLDAtOC40MSwyMy43Mi05LjQ5LDI3LjE2QTYuNDMsNi40MywwLDAsMCw0Mi41Myw0NGMwLDkuMjIsMzYuMywzOS40NSw4NC45NCwzOS40NU0xNjAsNzIuMDdjMS43Myw4LjE5LDEuNzMsOS4wNSwxLjczLDEwLjEzLDAsMTQtMTUuNzQsMjEuNzctMzYuNDMsMjEuNzdDNzguNTQsMTA0LDM3LjU4LDc2LjYsMzcuNTgsNTguNDlhMTguNDUsMTguNDUsMCwwLDEsMS41MS03LjMzQzIyLjI3LDUyLC41LDU1LC41LDc0LjIyYzAsMzEuNDgsNzQuNTksNzAuMjgsMTMzLjY1LDcwLjI4LDQ1LjI4LDAsNTYuNy0yMC40OCw1Ni43LTM2LjY1LDAtMTIuNzItMTEtMjcuMTYtMzAuODMtMzUuNzgiLz48L3N2Zz4=
     mediatype: image/svg+xml
@@ -38,17 +27,6 @@ spec:
     spec:
       clusterPermissions:
       - rules:
-        - apiGroups:
-          - apps
-          resources:
-          - daemonsets
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - watch
         - apiGroups:
           - batch
           resources:
@@ -72,22 +50,11 @@ spec:
         - apiGroups:
           - cluster.open-cluster-management.io
           resources:
-          - clusterclaims
+          - managedclusters
           verbs:
-          - create
           - get
           - list
           - watch
-        - apiGroups:
-          - cluster.open-cluster-management.io
-          resourceNames:
-          - kernel-versions.kmm.node.kubernetes.io
-          resources:
-          - clusterclaims
-          verbs:
-          - delete
-          - patch
-          - update
         - apiGroups:
           - ""
           resources:
@@ -99,40 +66,35 @@ spec:
         - apiGroups:
           - ""
           resources:
-          - nodes
-          verbs:
-          - get
-          - list
-          - patch
-          - watch
-        - apiGroups:
-          - ""
-          resources:
-          - pods
-          verbs:
-          - get
-          - list
-          - patch
-          - watch
-        - apiGroups:
-          - ""
-          resources:
           - secrets
           verbs:
           - get
           - list
           - watch
         - apiGroups:
-          - ""
+          - hub.kmm.sigs.x-k8s.io
           resources:
-          - serviceaccounts
+          - managedclustermodules
           verbs:
-          - create
-          - delete
           - get
           - list
           - patch
+          - update
           - watch
+        - apiGroups:
+          - hub.kmm.sigs.x-k8s.io
+          resources:
+          - managedclustermodules/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - hub.kmm.sigs.x-k8s.io
+          resources:
+          - managedclustermodules/status
+          verbs:
+          - get
+          - patch
+          - update
         - apiGroups:
           - image.openshift.io
           resources:
@@ -142,33 +104,9 @@ spec:
           - list
           - watch
         - apiGroups:
-          - kmm.sigs.x-k8s.io
+          - work.open-cluster-management.io
           resources:
-          - modules
-          verbs:
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - kmm.sigs.x-k8s.io
-          resources:
-          - modules/finalizers
-          verbs:
-          - update
-        - apiGroups:
-          - kmm.sigs.x-k8s.io
-          resources:
-          - modules/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - kmm.sigs.x-k8s.io
-          resources:
-          - preflightvalidations
+          - manifestworks
           verbs:
           - create
           - delete
@@ -177,74 +115,6 @@ spec:
           - patch
           - update
           - watch
-        - apiGroups:
-          - kmm.sigs.x-k8s.io
-          resources:
-          - preflightvalidations/finalizers
-          verbs:
-          - update
-        - apiGroups:
-          - kmm.sigs.x-k8s.io
-          resources:
-          - preflightvalidations/status
-          verbs:
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - kmm.sigs.x-k8s.io
-          resources:
-          - preflightvalidationsocp
-          verbs:
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - kmm.sigs.x-k8s.io
-          resources:
-          - preflightvalidationsocp/finalizers
-          verbs:
-          - update
-        - apiGroups:
-          - kmm.sigs.x-k8s.io
-          resources:
-          - preflightvalidationsocp/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - rbac.authorization.k8s.io
-          resourceNames:
-          - device-plugin
-          - module-loader
-          resources:
-          - clusterroles
-          verbs:
-          - bind
-        - apiGroups:
-          - rbac.authorization.k8s.io
-          resources:
-          - rolebindings
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - watch
-        - apiGroups:
-          - security.openshift.io
-          resourceNames:
-          - privileged
-          resources:
-          - securitycontextconstraints
-          verbs:
-          - use
         - apiGroups:
           - authentication.k8s.io
           resources:
@@ -257,11 +127,11 @@ spec:
           - subjectaccessreviews
           verbs:
           - create
-        serviceAccountName: kmm-operator-controller-manager
+        serviceAccountName: kmm-operator-hub-controller-manager
       deployments:
       - label:
           control-plane: controller-manager
-        name: kmm-operator-controller-manager
+        name: kmm-operator-hub-controller-manager
         spec:
           replicas: 1
           selector:
@@ -281,9 +151,13 @@ spec:
                 command:
                 - /usr/local/bin/manager
                 env:
+                - name: OPERATOR_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
                 - name: SSL_CERT_DIR
                   value: /etc/pki/ca-trust/extracted/pem
-                image: quay.io/edge-infrastructure/kernel-module-management-operator:latest
+                image: quay.io/edge-infrastructure/kernel-module-management-operator-hub:latest
                 imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
@@ -346,7 +220,7 @@ spec:
                 runAsNonRoot: true
                 seccompProfile:
                   type: RuntimeDefault
-              serviceAccountName: kmm-operator-controller-manager
+              serviceAccountName: kmm-operator-hub-controller-manager
               terminationGracePeriodSeconds: 10
               tolerations:
               - effect: NoSchedule
@@ -360,14 +234,14 @@ spec:
                       items:
                       - key: ca-bundle.crt
                         path: tls-ca-bundle.pem
-                      name: kmm-operator-cluster-ca
+                      name: kmm-operator-hub-cluster-ca
                   - configMap:
                       items:
                       - key: service-ca.crt
                         path: ocp-service-ca-bundle.pem
-                      name: kmm-operator-service-ca
+                      name: kmm-operator-hub-service-ca
               - configMap:
-                  name: kmm-operator-manager-config
+                  name: kmm-operator-hub-manager-config
                 name: manager-config
       permissions:
       - rules:
@@ -402,7 +276,7 @@ spec:
           verbs:
           - create
           - patch
-        serviceAccountName: kmm-operator-controller-manager
+        serviceAccountName: kmm-operator-hub-controller-manager
     strategy: deployment
   installModes:
   - supported: false
@@ -420,13 +294,13 @@ spec:
   - module
   - modules
   links:
-  - name: KMM Operator
-    url: https://github.com/rh-ecosystem-edge/kernel-module-management
+  - name: Kernel Module Management Hub
+    url: https://github.com/kubernetes-sigs/kernel-module-management
   maintainers:
   - email: quba@redhat.com
     name: Quentin Barrand
   maturity: alpha
   provider:
-    name: Red Hat
-    url: https://www.redhat.com
+    name: Community
+    url: https://github.com/kubernetes-sigs/kernel-module-management
   version: 0.0.1

@@ -248,19 +248,34 @@ bundle: operator-sdk manifests kustomize ## Generate bundle manifests and metada
 	rm -fr ./bundle
 	${OPERATOR_SDK} generate kustomize manifests --apis-dir api
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	oc kustomize config/manifests | ${OPERATOR_SDK} generate bundle $(BUNDLE_GEN_FLAGS)
+
+	OPERATOR_SDK="${OPERATOR_SDK}" \
+	BUNDLE_GEN_FLAGS="${BUNDLE_GEN_FLAGS}" \
+	PKG=kernel-module-management \
+	SOURCE_DIR=$(dir $(realpath $(lastword $(MAKEFILE_LIST)))) \
+	./hack/generate-bundle
+
 	${OPERATOR_SDK} bundle validate ./bundle
 
 .PHONY: bundle-hub
 bundle-hub: operator-sdk manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
-	rm -fr ./bundle
+	rm -fr bundle-hub
+
 	${OPERATOR_SDK} generate kustomize manifests \
 		--apis-dir api-hub \
 		--output-dir config/manifests-hub \
 		--package kernel-module-management-hub \
 		--input-dir config/manifests-hub
 	cd config/manager-hub && $(KUSTOMIZE) edit set image controller=$(HUB_IMG)
-	oc kustomize config/manifests-hub | ${OPERATOR_SDK} generate bundle --package kernel-module-management-hub $(BUNDLE_GEN_FLAGS)
+
+	OPERATOR_SDK="${OPERATOR_SDK}" \
+	BUNDLE_GEN_FLAGS="${BUNDLE_GEN_FLAGS}" \
+	MANIFESTS_DIR=config/manifests-hub \
+	PKG=kernel-module-management-hub \
+	SOURCE_DIR=$(dir $(realpath $(lastword $(MAKEFILE_LIST)))) \
+	SUFFIX="-hub" \
+	./hack/generate-bundle
+
 	${OPERATOR_SDK} bundle validate ./bundle
 
 .PHONY: bundle-build
