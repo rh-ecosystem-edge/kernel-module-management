@@ -260,7 +260,7 @@ bundle-hub: operator-sdk manifests kustomize ## Generate bundle manifests and me
 		--package kernel-module-management-hub \
 		--input-dir config/manifests-hub
 	cd config/manager-hub && $(KUSTOMIZE) edit set image controller=$(HUB_IMG)
-	kubectl kustomize config/manifests-hub | ${OPERATOR_SDK} generate bundle --package kernel-module-management-hub $(BUNDLE_GEN_FLAGS)
+	oc kustomize config/manifests-hub | ${OPERATOR_SDK} generate bundle --package kernel-module-management-hub $(BUNDLE_GEN_FLAGS)
 	${OPERATOR_SDK} bundle validate ./bundle
 
 .PHONY: bundle-build
