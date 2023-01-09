@@ -9,12 +9,8 @@ spec:
       modprobe:
         moduleName: kmm-ci-a
       kernelMappings:
-        - literal: 4.18.0-372.19.1.el8_6.x86_64 
+        - literal: 4.18.0-372.19.1.el8_6.x86_64
           containerImage: image-registry.openshift-image-registry.svc:5000/default/kmm-kmod:4.18.1single
-          pull:
-            insecureSkipTLSVerify: true
-            insecure: true
-      
   selector:
     feature.kmm.lab: 'true'
 
