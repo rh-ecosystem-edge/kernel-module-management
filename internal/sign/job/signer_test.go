@@ -211,7 +211,7 @@ var _ = Describe("MakeJobTemplate", func() {
 		mod.Spec.Selector = nodeSelector
 
 		gomock.InOrder(
-			helper.EXPECT().GetRelevantSign(mod.Spec, km).Return(km.Sign),
+			helper.EXPECT().GetRelevantSign(mod.Spec, km, kernelVersion).Return(km.Sign, nil),
 			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: km.Sign.KeySecret.Name, Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
 					secret.Data = privateSignData
@@ -258,7 +258,7 @@ var _ = Describe("MakeJobTemplate", func() {
 		}
 
 		gomock.InOrder(
-			helper.EXPECT().GetRelevantSign(mod.Spec, km).Return(km.Sign),
+			helper.EXPECT().GetRelevantSign(mod.Spec, km, kernelVersion).Return(km.Sign, nil),
 			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: km.Sign.KeySecret.Name, Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
 					secret.Data = privateSignData
@@ -323,7 +323,7 @@ var _ = Describe("MakeJobTemplate", func() {
 		}
 
 		gomock.InOrder(
-			helper.EXPECT().GetRelevantSign(mod.Spec, km).Return(km.Sign),
+			helper.EXPECT().GetRelevantSign(mod.Spec, km, kernelVersion).Return(km.Sign, nil),
 			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: km.Sign.KeySecret.Name, Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
 					secret.Data = privateSignData
