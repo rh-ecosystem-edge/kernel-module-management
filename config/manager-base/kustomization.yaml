@@ -18,3 +18,8 @@ patchesStrategicMerge:
   - manager_config_patch.yaml
 
   - ocp.patch.yaml
+
+images:
+  - name: gcr.io/kubebuilder/kube-rbac-proxy
+    newName: registry.redhat.io/openshift4/ose-kube-rbac-proxy
+    newTag: v4.11.0
