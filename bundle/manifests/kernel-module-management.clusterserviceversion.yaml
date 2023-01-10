@@ -2,7 +2,51 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
   annotations:
-    alm-examples: '[]'
+    alm-examples: |-
+      [
+        {
+          "apiVersion": "kmm.sigs.x-k8s.io/v1beta1",
+          "kind": "Module",
+          "metadata": {
+            "name": "module-sample"
+          },
+          "spec": {
+            "moduleLoader": {
+              "container": {
+                "kernelMappings": [],
+                "modprobe": {
+                  "moduleName": "sample"
+                }
+              }
+            },
+            "selector": {
+              "node-role.kubernetes.io/worker": ""
+            }
+          }
+        },
+        {
+          "apiVersion": "kmm.sigs.x-k8s.io/v1beta1",
+          "kind": "PreflightValidation",
+          "metadata": {
+            "name": "preflightvalidation-sample"
+          },
+          "spec": {
+            "kernelVersion": "4.18.0-372.32.1.el8_6.x86_64",
+            "pushBuiltImage": true
+          }
+        },
+        {
+          "apiVersion": "kmm.sigs.x-k8s.io/v1beta1",
+          "kind": "PreflightValidationOCP",
+          "metadata": {
+            "name": "preflightvalidationocp-sample"
+          },
+          "spec": {
+            "pushBuiltImage": true,
+            "releaseImage": "quay.io/openshift-release-dev/ocp-release@sha256:22e149142517dfccb47be828f012659b1ccf71d26620e6f62468c264a7ce7863"
+          }
+        }
+      ]
     capabilities: Basic Install
     operators.operatorframework.io/builder: operator-sdk-v1.25.2
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
