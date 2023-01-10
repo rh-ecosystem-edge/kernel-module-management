@@ -2,7 +2,7 @@
 apiVersion: kmm.sigs.x-k8s.io/v1beta1
 kind: Module
 metadata:
-  name: kmm-ci-build
+  name: kmm-ci
 spec:
   moduleLoader:
     container:
@@ -21,8 +21,5 @@ spec:
               - name: build-secret
             dockerfileConfigMap:
               name: kmm-kmod-dockerfile
-            # Optional. If kanikoParams.tag is empty, the default value will be: 'latest'
-            kanikoParams:
-              tag: "debug"
   selector:
     task: kmm-ci

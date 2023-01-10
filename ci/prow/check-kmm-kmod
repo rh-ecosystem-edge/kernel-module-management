@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-
-set -euxo pipefail
-
-check_kmm_kmod () {
-  oc debug node/$NODE -T -- chroot /host sh -c "lsmod | grep kmm"
-}
