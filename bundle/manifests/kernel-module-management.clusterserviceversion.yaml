@@ -327,6 +327,8 @@ spec:
                 env:
                 - name: SSL_CERT_DIR
                   value: /etc/pki/ca-trust/extracted/pem
+                - name: RELATED_IMAGES_SIGN
+                  value: quay.io/edge-infrastructure/kernel-module-management-signimage:latest
                 image: quay.io/edge-infrastructure/kernel-module-management-operator:latest
                 imagePullPolicy: Always
                 livenessProbe:
