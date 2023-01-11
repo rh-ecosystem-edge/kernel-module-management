@@ -10,6 +10,7 @@ import (
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	kmmbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
@@ -63,6 +64,14 @@ func (m *maker) MakeBuildTemplate(
 
 	kmmBuild := m.helper.GetRelevantBuild(mod.Spec, mapping)
 
+	containerImage := mapping.ContainerImage
+
+	// if build AND sign are specified, then we will build an intermediate image
+	// and let sign produce the final image specified in spec.moduleLoader.container.km.containerImage
+	if module.ShouldBeSigned(mod.Spec, mapping) {
+		containerImage = module.IntermediateImageName(mod.Name, mod.Namespace, containerImage)
+	}
+
 	overrides := []kmmv1beta1.BuildArg{
 		{
 			Name:  "KERNEL_VERSION",
@@ -92,7 +101,7 @@ func (m *maker) MakeBuildTemplate(
 	buildTarget := buildv1.BuildOutput{
 		To: &v1.ObjectReference{
 			Kind: "DockerImage",
-			Name: mapping.ContainerImage,
+			Name: containerImage,
 		},
 		PushSecret: mod.Spec.ImageRepoSecret,
 	}
