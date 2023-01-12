@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ca"
 	batchv1 "k8s.io/api/batch/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,7 +51,9 @@ type ManagedClusterModuleReconciler struct {
 	clusterAPI       cluster.ClusterAPI
 	statusupdaterAPI statusupdater.ManagedClusterModuleStatusUpdater
 
-	filter *filter.Filter
+	filter              *filter.Filter
+	caHelper            ca.Helper
+	defaultJobNamespace string
 }
 
 //+kubebuilder:rbac:groups=hub.kmm.sigs.x-k8s.io,resources=managedclustermodules,verbs=get;list;watch;update;patch
@@ -59,8 +62,9 @@ type ManagedClusterModuleReconciler struct {
 //+kubebuilder:rbac:groups=work.open-cluster-management.io,resources=manifestworks,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=managedclusters,verbs=get;list;watch
 //+kubebuilder:rbac:groups=batch,resources=jobs,verbs=create;list;watch;delete
-//+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch
+//+kubebuilder:rbac:groups=core,resources=configmaps,verbs=create;delete;get;list;patch;watch
 //+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch
+//+kubebuilder:rbac:groups="core",resources=serviceaccounts,verbs=get;list;watch
 //+kubebuilder:rbac:groups=build.openshift.io,resources=builds,verbs=get;list;create;delete;watch;patch
 
 func NewManagedClusterModuleReconciler(
@@ -68,13 +72,18 @@ func NewManagedClusterModuleReconciler(
 	manifestAPI manifestwork.ManifestWorkCreator,
 	clusterAPI cluster.ClusterAPI,
 	statusupdaterAPI statusupdater.ManagedClusterModuleStatusUpdater,
-	filter *filter.Filter) *ManagedClusterModuleReconciler {
+	filter *filter.Filter,
+	caHelper ca.Helper,
+	defaultJobNamespace string,
+) *ManagedClusterModuleReconciler {
 	return &ManagedClusterModuleReconciler{
-		client:           client,
-		manifestAPI:      manifestAPI,
-		clusterAPI:       clusterAPI,
-		statusupdaterAPI: statusupdaterAPI,
-		filter:           filter,
+		client:              client,
+		manifestAPI:         manifestAPI,
+		clusterAPI:          clusterAPI,
+		statusupdaterAPI:    statusupdaterAPI,
+		filter:              filter,
+		caHelper:            caHelper,
+		defaultJobNamespace: defaultJobNamespace,
 	}
 }
 
@@ -91,6 +100,16 @@ func (r *ManagedClusterModuleReconciler) Reconcile(ctx context.Context, req ctrl
 		}
 
 		return res, fmt.Errorf("failed to get the requested CR: %v", err)
+	}
+
+	namespace := mcm.Spec.JobNamespace
+
+	if namespace == "" {
+		namespace = r.defaultJobNamespace
+	}
+
+	if err = r.caHelper.Sync(ctx, namespace, mcm); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to synchronize CA ConfigMaps: %v", err)
 	}
 
 	logger.Info("Requested KMMO ManagedClusterModule")
