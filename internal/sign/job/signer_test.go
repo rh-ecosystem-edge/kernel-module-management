@@ -208,6 +208,12 @@ var _ = Describe("MakeJobTemplate", func() {
 
 		gomock.InOrder(
 			helper.EXPECT().GetRelevantSign(mod.Spec, km, kernelVersion).Return(km.Sign, nil),
+			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: "builder", Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
+				func(_ interface{}, _ interface{}, svcaccnt *v1.ServiceAccount, _ ...ctrlclient.GetOption) error {
+					svcaccnt.Secrets = []v1.ObjectReference{}
+					return nil
+				},
+			),
 			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: km.Sign.KeySecret.Name, Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
 					secret.Data = privateSignData
@@ -255,6 +261,12 @@ var _ = Describe("MakeJobTemplate", func() {
 
 		gomock.InOrder(
 			helper.EXPECT().GetRelevantSign(mod.Spec, km, kernelVersion).Return(km.Sign, nil),
+			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: "builder", Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
+				func(_ interface{}, _ interface{}, svcaccnt *v1.ServiceAccount, _ ...ctrlclient.GetOption) error {
+					svcaccnt.Secrets = []v1.ObjectReference{}
+					return nil
+				},
+			),
 			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: km.Sign.KeySecret.Name, Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
 					secret.Data = privateSignData
@@ -317,15 +329,21 @@ var _ = Describe("MakeJobTemplate", func() {
 				CertSecret:               &v1.LocalObjectReference{Name: "securebootcert"},
 			},
 		}
-
 		gomock.InOrder(
 			helper.EXPECT().GetRelevantSign(mod.Spec, km, kernelVersion).Return(km.Sign, nil),
+			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: "builder", Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
+				func(_ interface{}, _ interface{}, svcaccnt *v1.ServiceAccount, _ ...ctrlclient.GetOption) error {
+					svcaccnt.Secrets = []v1.ObjectReference{}
+					return nil
+				},
+			),
 			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: km.Sign.KeySecret.Name, Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
 					secret.Data = privateSignData
 					return nil
 				},
 			),
+
 			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: km.Sign.CertSecret.Name, Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
 					secret.Data = publicSignData
