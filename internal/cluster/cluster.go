@@ -16,12 +16,9 @@ import (
 	hubv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api-hub/v1beta1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
-)
-
-const (
-	clusterClaimName = "kernel-versions.kmm.node.kubernetes.io"
 )
 
 //go:generate mockgen -source=cluster.go -package=cluster -destination=mock_cluster.go
@@ -188,7 +185,7 @@ func (c *clusterAPI) kernelMappingsByKernelVersion(
 
 func (c *clusterAPI) kernelVersions(cluster clusterv1.ManagedCluster) ([]string, error) {
 	for _, clusterClaim := range cluster.Status.ClusterClaims {
-		if clusterClaim.Name != clusterClaimName {
+		if clusterClaim.Name != constants.KernelVersionsClusterClaimName {
 			continue
 		}
 		return strings.Split(clusterClaim.Value, "\n"), nil

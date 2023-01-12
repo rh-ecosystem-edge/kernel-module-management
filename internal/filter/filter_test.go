@@ -3,10 +3,11 @@ package filter
 import (
 	"context"
 
-	"github.com/go-logr/logr"
-	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/go-logr/logr"
+	"github.com/golang/mock/gomock"
 	imagev1 "github.com/openshift/api/image/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -21,6 +22,7 @@ import (
 	hubv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api-hub/v1beta1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	mockClient "github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 )
 
 var (
@@ -65,6 +67,47 @@ var _ = Describe("skipDeletions", func() {
 			BeFalse(),
 		)
 	})
+})
+
+var _ = Describe("kmmClusterClaimChanged", func() {
+	updateFunc := kmmClusterClaimChanged.Update
+
+	managedCluster1 := clusterv1.ManagedCluster{
+		Status: clusterv1.ManagedClusterStatus{
+			ClusterClaims: []clusterv1.ManagedClusterClaim{
+				{
+					Name:  constants.KernelVersionsClusterClaimName,
+					Value: "a-kernel-version",
+				},
+			},
+		},
+	}
+	managedCluster2 := clusterv1.ManagedCluster{
+		Status: clusterv1.ManagedClusterStatus{
+			ClusterClaims: []clusterv1.ManagedClusterClaim{
+				{
+					Name:  constants.KernelVersionsClusterClaimName,
+					Value: "another-kernel-version",
+				},
+			},
+		},
+	}
+
+	DescribeTable(
+		"should work as expected",
+		func(updateEvent event.UpdateEvent, expectedResult bool) {
+			Expect(
+				updateFunc(updateEvent),
+			).To(
+				Equal(expectedResult),
+			)
+		},
+		Entry(nil, event.UpdateEvent{ObjectOld: &v1.Pod{}, ObjectNew: &clusterv1.ManagedCluster{}}, false),
+		Entry(nil, event.UpdateEvent{ObjectOld: &clusterv1.ManagedCluster{}, ObjectNew: &v1.Pod{}}, false),
+		Entry(nil, event.UpdateEvent{ObjectOld: &managedCluster1, ObjectNew: &clusterv1.ManagedCluster{}}, false),
+		Entry(nil, event.UpdateEvent{ObjectOld: &managedCluster1, ObjectNew: &managedCluster1}, false),
+		Entry(nil, event.UpdateEvent{ObjectOld: &managedCluster1, ObjectNew: &managedCluster2}, true),
+	)
 })
 
 var _ = Describe("ModuleReconcilerNodePredicate", func() {
@@ -461,6 +504,77 @@ var _ = Describe("FindManagedClusterModulesForCluster", func() {
 
 		reqs := p.FindManagedClusterModulesForCluster(&cluster)
 		Expect(reqs).To(Equal([]reconcile.Request{expectedReq}))
+	})
+})
+
+var _ = Describe("ManagedClusterModuleReconcilerManagedClusterPredicate", func() {
+	var p predicate.Predicate
+
+	BeforeEach(func() {
+		p = New(nil, logr.Discard()).ManagedClusterModuleReconcilerManagedClusterPredicate()
+	})
+
+	It("should return true for creations", func() {
+		ev := event.CreateEvent{
+			Object: &clusterv1.ManagedCluster{},
+		}
+
+		Expect(
+			p.Create(ev),
+		).To(
+			BeTrue(),
+		)
+	})
+
+	It("should return true for deletions", func() {
+		ev := event.DeleteEvent{
+			Object: &clusterv1.ManagedCluster{},
+		}
+
+		Expect(
+			p.Delete(ev),
+		).To(
+			BeTrue(),
+		)
+	})
+
+	It("should return true for label updates", func() {
+		ev := event.UpdateEvent{
+			ObjectOld: &clusterv1.ManagedCluster{},
+			ObjectNew: &clusterv1.ManagedCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"key": "value"},
+				},
+			},
+		}
+
+		Expect(
+			p.Update(ev),
+		).To(
+			BeTrue(),
+		)
+	})
+
+	It("should return true for KMM ClusterClaim updates", func() {
+		ev := event.UpdateEvent{
+			ObjectOld: &clusterv1.ManagedCluster{},
+			ObjectNew: &clusterv1.ManagedCluster{
+				Status: clusterv1.ManagedClusterStatus{
+					ClusterClaims: []clusterv1.ManagedClusterClaim{
+						{
+							Name:  constants.KernelVersionsClusterClaimName,
+							Value: "a-kernel-version",
+						},
+					},
+				},
+			},
+		}
+
+		Expect(
+			p.Update(ev),
+		).To(
+			BeTrue(),
+		)
 	})
 })
 
