@@ -12,6 +12,8 @@ spec:
         - regexp: '^.+$'
           containerImage: image-registry.openshift-image-registry.svc:5000/default/kmm-kmod:$KERNEL_FULL_VERSION
           build:
+            secrets:
+              - name: build-secret
             dockerfileConfigMap:
               name: kmm-kmod-dockerfile
   selector:
