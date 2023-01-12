@@ -3,22 +3,145 @@ package main
 import (
 	"archive/tar"
 	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
-	"github.com/docker/cli/cli/config"
-	dockertypes "github.com/docker/cli/cli/config/types"
 	"github.com/go-logr/logr"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"k8s.io/klog/v2/klogr"
 
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 )
+
+// configDir should contain all the secrets available as individual files named for their keys
+// so we need to search through for the secrets we need for our pull and push repos.
+// If we do not find any authn, default to anonymous.
+// we're (trying to be) tolerant in our inputs, precise in our outputs, and opaque in our comments. Its the UNIX way!
+type repoAuth struct {
+	pullRepo  string
+	pushRepo  string
+	PullAuth  authn.Authenticator
+	PushAuth  authn.Authenticator
+	configDir string
+}
+
+func NewRepoAuth(configDir string, pullRepo string, pushRepo string) *repoAuth {
+	if pushRepo == "" {
+		pushRepo = pullRepo
+	}
+	r := &repoAuth{
+		pullRepo:  pullRepo,
+		pushRepo:  pushRepo,
+		PullAuth:  nil,
+		PushAuth:  nil,
+		configDir: filepath.Clean(configDir),
+	}
+	r.PopulateAuthFromFileList()
+	// if we haven't found appropriate secrets try anonymous
+	// its not clear if this is what the user wants so we need to log it and let them decide
+	if r.PullAuth == nil {
+		r.PullAuth = authn.Anonymous
+		logger.Info("no secrets for pull found, default to Anonymous")
+	}
+	if r.PushAuth == nil {
+		r.PushAuth = authn.Anonymous
+		logger.Info("no secrets for push found, default to Anonymous")
+	}
+	return r
+}
+
+func (r *repoAuth) PopulateAuthFromFileList() {
+	// not giving any secrets should short cuircuit the whole process
+	if r.configDir == "" {
+		return
+	}
+	logger.Info("walking the tree looking for secrets", "dir", r.configDir)
+	// otherwise lets hunt for repo secrets!
+	err := filepath.WalkDir(r.configDir, r.authDirFileHandler)
+	if err != nil {
+		logger.Info("no secret found, default to Anonymous", "error", err)
+		// we could return the error and die, but we want to be tolerant of secrets in the wrong format etc
+		return
+	}
+}
+
+func (r *repoAuth) authDirFileHandler(path string, d fs.DirEntry, err error) error {
+	if err != nil {
+		//theres an error in WalkDir (either fs.Stat or Readdir)
+		//not much we can do except log it, and move on
+		logger.Info("error walking tree", "filename", path, "error", err)
+		return nil
+	}
+	if path == r.configDir {
+		return nil
+	}
+	if strings.Contains(path, "..") {
+		if d.IsDir() {
+			return filepath.SkipDir
+		}
+		return nil
+	}
+	if d.IsDir() {
+		return nil
+	}
+	logger.Info("checking auth file ", "filename", path)
+	err = r.getAuthFromSingleFile(path)
+	if err != nil {
+		logger.Info("unable to read auth file", "filename", path, "error=", err)
+	}
+
+	return nil
+}
+
+func (r *repoAuth) getAuthFromSingleFile(secretFile string) error {
+	jsonFile, err := os.Open(secretFile)
+	if err != nil {
+		return fmt.Errorf("unable to open secret file %s: %v", secretFile, err)
+	}
+	// defer the closing of our jsonFile so that we can parse it later o
+	defer jsonFile.Close()
+
+	byteValue, err := io.ReadAll(jsonFile)
+	if err != nil {
+		return fmt.Errorf("error reading secret file %s: %v", secretFile, err)
+	}
+
+	var result map[string]json.RawMessage
+	var allAuthConfigs map[string]authn.AuthConfig
+
+	err = json.Unmarshal(byteValue, &result)
+	if err != nil {
+		return fmt.Errorf("error unmarshalling %s: %v", secretFile, err)
+	}
+
+	// either our secret file is a map containing a map of repo secrets
+	// or its just a straight map of secrets, so we need some juggling to cope
+	if result["auths"] != nil {
+		err = json.Unmarshal(result["auths"], &allAuthConfigs)
+	} else {
+		err = json.Unmarshal(byteValue, &allAuthConfigs)
+	}
+	if err != nil {
+		return fmt.Errorf("error unmarshalling file to authconfig %s: %v", secretFile, err)
+	}
+
+	if _, ok := allAuthConfigs[r.pullRepo]; ok {
+		r.PullAuth = authn.FromConfig(allAuthConfigs[r.pullRepo])
+		logger.Info("Found secret", "pull registry", r.pullRepo)
+	}
+	if _, ok := allAuthConfigs[r.pushRepo]; ok {
+		r.PushAuth = authn.FromConfig(allAuthConfigs[r.pushRepo])
+		logger.Info("Found secret", "push registry", r.pushRepo)
+	}
+	return nil
+}
 
 func checkArg(arg *string, varname string, fallback string) {
 	if *arg == "" {
@@ -54,41 +177,6 @@ func signFile(filename string, publickey string, privatekey string) error {
 	}
 	return nil
 }
-
-func getAuthFromFile(configfile string, repo string) (authn.Authenticator, error) {
-
-	if configfile == "" || configfile == "anonymous" {
-		logger.Info("no secret given, default to Anonymous")
-		return authn.Anonymous, nil
-	}
-
-	f, err := os.Open(configfile)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	cf, err := config.LoadFromReader(f)
-	if err != nil {
-		return nil, err
-	}
-
-	var cfg dockertypes.AuthConfig
-
-	cfg, err = cf.GetAuthConfig(repo)
-	if err != nil {
-		return nil, err
-	}
-
-	return authn.FromConfig(authn.AuthConfig{
-		Username:      cfg.Username,
-		Password:      cfg.Password,
-		Auth:          cfg.Auth,
-		IdentityToken: cfg.IdentityToken,
-		RegistryToken: cfg.RegistryToken,
-	}), nil
-
-}
-
 func die(exitval int, message string, err error) {
 	fmt.Fprintf(os.Stderr, "\n%s\n", message)
 	logger.Info("ERROR "+message, "err", err)
@@ -126,7 +214,7 @@ func processFile(filename string, header *tar.Header, tarreader io.Reader, data 
 		//sign it
 		err = signFile(kmodsToSign[canonfilename], pubKeyFile, privKeyFile)
 		if err != nil {
-			return fmt.Errorf("error signing file %s", canonfilename)
+			return fmt.Errorf("error signing file %s: %w", canonfilename, err)
 		}
 		logger.Info("Signed successfully", "kmod", canonfilename)
 		return nil
@@ -175,8 +263,7 @@ func main() {
 	var err error
 	var unsignedImageName string
 	var signedImageName string
-	var pullSecret string
-	var pushSecret string
+	var secretDir string
 	var extractionDir string
 	var filesList string
 	var privKeyFile string
@@ -194,8 +281,7 @@ func main() {
 	flag.StringVar(&filesList, "filestosign", "", "colon seperated list of kmods to sign")
 	flag.StringVar(&privKeyFile, "key", "", "path to file containing private key for signing")
 	flag.StringVar(&pubKeyFile, "cert", "", "path to file containing public key for signing")
-	flag.StringVar(&pullSecret, "pullsecret", "", "path to file containing credentials for pulling images")
-	flag.StringVar(&pullSecret, "pushsecret", "", "path to file containing credentials for pushing images")
+	flag.StringVar(&secretDir, "secretdir", "", "path to directory containing credentials for pushing images")
 	flag.BoolVar(&nopush, "no-push", false, "do not push the resulting image")
 
 	flag.BoolVar(&insecurePull, "insecure-pull", false, "images can be pulled from an insecure (plain HTTP) registry")
@@ -210,8 +296,7 @@ func main() {
 	checkArg(&filesList, "filestosign", "")
 	checkArg(&privKeyFile, "key", "")
 	checkArg(&pubKeyFile, "cert", "")
-	checkArg(&pullSecret, "pullsecret", "anonymous")
-	checkArg(&pushSecret, "pushsecret", pullSecret)
+	checkArg(&secretDir, "pullsecret", "")
 	// if we've made it this far the arguments are sane
 
 	// get a temp dir to copy kmods into for signing
@@ -235,14 +320,11 @@ func main() {
 		kmodsToSign[x] = "not found"
 	}
 
-	a, err := getAuthFromFile(pullSecret, strings.Split(unsignedImageName, "/")[0])
-	if err != nil {
-		die(2, "failed to get auth", err)
-	}
+	a := NewRepoAuth(secretDir, strings.Split(unsignedImageName, "/")[0], strings.Split(signedImageName, "/")[0])
 
 	r := registry.NewRegistry()
 
-	img, err := r.GetImageByName(unsignedImageName, a, insecurePull, skipTlsVerifyPull)
+	img, err := r.GetImageByName(unsignedImageName, a.PullAuth, insecurePull, skipTlsVerifyPull)
 	if err != nil {
 		die(3, "could not Image()", err)
 	}
@@ -293,13 +375,8 @@ func main() {
 	logger.Info("Appended new layer to image", "image", signedImageName)
 
 	if !nopush {
-		a, err = getAuthFromFile(pushSecret, strings.Split(signedImageName, "/")[0])
-		if err != nil {
-			die(7, "failed to get push auth", err)
-		}
-
 		// write the image back to the name:tag set via the args
-		err := r.WriteImageByName(signedImageName, signedImage, a, insecurePush, skipTlsVerifyPush)
+		err := r.WriteImageByName(signedImageName, signedImage, a.PushAuth, insecurePush, skipTlsVerifyPush)
 		if err != nil {
 			die(8, "failed to write signed image", err)
 		}
