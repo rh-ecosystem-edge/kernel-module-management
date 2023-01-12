@@ -8,9 +8,11 @@ spec:
     container:
       modprobe:
         moduleName: kmm_ci_a
-      imagePullPolicy: Never
       kernelMappings:
         - regexp: '^.+$'
           containerImage: image-registry.openshift-image-registry.svc:5000/default/kmm-kmod:$KERNEL_FULL_VERSION
+          build:
+            dockerfileConfigMap:
+              name: kmm-kmod-dockerfile
   selector:
     task: kmm-ci
