@@ -46,6 +46,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build/buildconfig"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ca"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cluster"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cmd"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
@@ -135,8 +136,10 @@ func main() {
 		registryAPI,
 	)
 
+	caHelper := ca.NewHelper(client, scheme)
+
 	signAPI := signjob.NewSignJobManager(
-		signjob.NewSigner(client, scheme, sign.NewSignerHelper(), jobHelperAPI),
+		signjob.NewSigner(client, scheme, sign.NewSignerHelper(), jobHelperAPI, caHelper),
 		jobHelperAPI,
 		authFactory,
 		registryAPI,
@@ -158,6 +161,8 @@ func main() {
 		cluster.NewClusterAPI(client, module.NewKernelMapper(), buildAPI, signAPI, operatorNamespace),
 		statusupdater.NewManagedClusterModuleStatusUpdater(client),
 		filterAPI,
+		caHelper,
+		operatorNamespace,
 	)
 
 	if err = mcmr.SetupWithManager(mgr); err != nil {

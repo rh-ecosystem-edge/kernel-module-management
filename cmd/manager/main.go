@@ -24,6 +24,7 @@ import (
 
 	buildv1 "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ca"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -138,9 +139,10 @@ func main() {
 	)
 
 	jobHelperAPI := utils.NewJobHelper(client)
+	caHelper := ca.NewHelper(client, scheme)
 
 	signAPI := signjob.NewSignJobManager(
-		signjob.NewSigner(client, scheme, sign.NewSignerHelper(), jobHelperAPI),
+		signjob.NewSigner(client, scheme, sign.NewSignerHelper(), jobHelperAPI, caHelper),
 		jobHelperAPI,
 		authFactory,
 		registryAPI,
@@ -159,6 +161,7 @@ func main() {
 		metricsAPI,
 		filterAPI,
 		statusupdater.NewModuleStatusUpdater(client, metricsAPI),
+		caHelper,
 	)
 
 	if err = mc.SetupWithManager(mgr, constants.KernelLabel); err != nil {

@@ -2,12 +2,14 @@ package controllers
 
 import (
 	"context"
+	"errors"
 
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ca"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/daemonset"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
@@ -42,6 +44,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 		mockKM      *module.MockKernelMapper
 		mockMetrics *metrics.MockMetrics
 		mockSU      *statusupdater.MockModuleStatusUpdater
+		mockCAH     *ca.MockHelper
 	)
 
 	BeforeEach(func() {
@@ -54,6 +57,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 		mockKM = module.NewMockKernelMapper(ctrl)
 		mockMetrics = metrics.NewMockMetrics(ctrl)
 		mockSU = statusupdater.NewMockModuleStatusUpdater(ctrl)
+		mockCAH = ca.NewMockHelper(ctrl)
 	})
 
 	const moduleName = "test-module"
@@ -85,6 +89,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockMetrics,
 			nil,
 			mockSU,
+			mockCAH,
 		)
 
 		Expect(
@@ -92,6 +97,42 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 		).To(
 			Equal(reconcile.Result{}),
 		)
+	})
+
+	It("should return an error if the CAs cannot be synced", func() {
+		mod := kmmv1beta1.Module{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      moduleName,
+				Namespace: namespace,
+			},
+		}
+
+		gomock.InOrder(
+			clnt.EXPECT().Get(ctx, req.NamespacedName, gomock.Any()).DoAndReturn(
+				func(_ interface{}, _ interface{}, m *kmmv1beta1.Module, _ ...ctrlclient.GetOption) error {
+					m.ObjectMeta = mod.ObjectMeta
+					m.Spec = mod.Spec
+					return nil
+				},
+			),
+			mockCAH.EXPECT().Sync(ctx, namespace, &mod).Return(errors.New("random error")),
+		)
+
+		mr := NewModuleReconciler(
+			clnt,
+			mockBM,
+			mockSM,
+			mockRC,
+			mockDC,
+			mockKM,
+			mockMetrics,
+			nil,
+			mockSU,
+			mockCAH,
+		)
+
+		_, err := mr.Reconcile(ctx, req)
+		Expect(err).To(HaveOccurred())
 	})
 
 	It("should add the module loader and device plugin ServiceAccounts if they are not set", func() {
@@ -125,6 +166,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 					return nil
 				},
 			),
+			mockCAH.EXPECT().Sync(ctx, namespace, &mod),
 			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ interface{}, list *kmmv1beta1.ModuleList, _ ...interface{}) error {
 					list.Items = []kmmv1beta1.Module{mod}
@@ -157,6 +199,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockMetrics,
 			nil,
 			mockSU,
+			mockCAH,
 		)
 
 		dsByKernelVersion := make(map[string]*appsv1.DaemonSet)
@@ -197,6 +240,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 					return nil
 				},
 			),
+			mockCAH.EXPECT().Sync(ctx, namespace, &mod),
 			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ interface{}, list *kmmv1beta1.ModuleList, _ ...interface{}) error {
 					list.Items = []kmmv1beta1.Module{mod}
@@ -222,6 +266,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockMetrics,
 			nil,
 			mockSU,
+			mockCAH,
 		)
 
 		dsByKernelVersion := make(map[string]*appsv1.DaemonSet)
@@ -272,6 +317,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 					return nil
 				},
 			),
+			mockCAH.EXPECT().Sync(ctx, namespace, &mod),
 			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ interface{}, list *kmmv1beta1.ModuleList, _ ...interface{}) error {
 					list.Items = []kmmv1beta1.Module{mod}
@@ -297,6 +343,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockMetrics,
 			nil,
 			mockSU,
+			mockCAH,
 		)
 
 		dsByKernelVersion := map[string]*appsv1.DaemonSet{kernelVersion: &ds}
@@ -371,6 +418,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockMetrics,
 			nil,
 			mockSU,
+			mockCAH,
 		)
 
 		ds := appsv1.DaemonSet{
@@ -388,6 +436,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 					return nil
 				},
 			),
+			mockCAH.EXPECT().Sync(ctx, namespace, &mod),
 			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ interface{}, list *kmmv1beta1.ModuleList, _ ...interface{}) error {
 					return nil
@@ -490,6 +539,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 					return nil
 				},
 			),
+			mockCAH.EXPECT().Sync(ctx, namespace, &mod),
 			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ interface{}, list *kmmv1beta1.ModuleList, _ ...interface{}) error {
 					list.Items = []kmmv1beta1.Module{mod}
@@ -517,6 +567,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockMetrics,
 			nil,
 			mockSU,
+			mockCAH,
 		)
 
 		dsByKernelVersion := map[string]*appsv1.DaemonSet{kernelVersion: &ds}
@@ -589,6 +640,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockMetrics,
 			nil,
 			mockSU,
+			mockCAH,
 		)
 
 		ds := appsv1.DaemonSet{
@@ -606,6 +658,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 					return nil
 				},
 			),
+			mockCAH.EXPECT().Sync(ctx, namespace, &mod),
 			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ interface{}, list *kmmv1beta1.ModuleList, _ ...interface{}) error {
 					return nil
@@ -646,6 +699,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 		mockKM      *module.MockKernelMapper
 		mockMetrics *metrics.MockMetrics
 		mockSU      *statusupdater.MockModuleStatusUpdater
+		mockCAH     *ca.MockHelper
 	)
 
 	BeforeEach(func() {
@@ -658,6 +712,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 		mockKM = module.NewMockKernelMapper(ctrl)
 		mockMetrics = metrics.NewMockMetrics(ctrl)
 		mockSU = statusupdater.NewMockModuleStatusUpdater(ctrl)
+		mockCAH = ca.NewMockHelper(ctrl)
 	})
 
 	const (
@@ -688,6 +743,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 			mockMetrics,
 			nil,
 			mockSU,
+			mockCAH,
 		)
 
 		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion)
@@ -725,6 +781,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 			mockMetrics,
 			nil,
 			mockSU,
+			mockCAH,
 		)
 
 		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion)
@@ -762,6 +819,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 			mockMetrics,
 			nil,
 			mockSU,
+			mockCAH,
 		)
 
 		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion)
@@ -825,6 +883,7 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 			mockMetrics,
 			nil,
 			mockSU,
+			nil,
 		)
 
 		res, err := mr.handleSigning(context.Background(), mod, km, kernelVersion)
@@ -862,6 +921,7 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 			mockMetrics,
 			nil,
 			mockSU,
+			nil,
 		)
 
 		res, err := mr.handleSigning(context.Background(), mod, km, kernelVersion)
@@ -901,6 +961,7 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 			mockMetrics,
 			nil,
 			mockSU,
+			nil,
 		)
 
 		res, err := mr.handleSigning(context.Background(), mod, km, kernelVersion)
@@ -941,6 +1002,7 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 			mockMetrics,
 			nil,
 			mockSU,
+			nil,
 		)
 
 		res, err := mr.handleSigning(context.Background(), mod, km, kernelVersion)
@@ -962,7 +1024,18 @@ var _ = Describe("ModuleReconciler_getNodesListBySelector", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mr = NewModuleReconciler(clnt, nil, nil, nil, nil, nil, nil, nil, nil)
+		mr = NewModuleReconciler(
+			clnt,
+			nil,
+			nil,
+			nil,
+			nil,
+			nil,
+			nil,
+			nil,
+			nil,
+			nil,
+		)
 	})
 
 	ctx := context.Background()
