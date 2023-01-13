@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/mitchellh/hashstructure"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ca"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,18 +50,21 @@ type signer struct {
 	scheme    *runtime.Scheme
 	helper    sign.Helper
 	jobHelper utils.JobHelper
+	caHelper  ca.Helper
 }
 
 func NewSigner(
 	client client.Client,
 	scheme *runtime.Scheme,
 	helper sign.Helper,
-	jobHelper utils.JobHelper) Signer {
+	jobHelper utils.JobHelper,
+	caHelper ca.Helper) Signer {
 	return &signer{
 		client:    client,
 		scheme:    scheme,
 		helper:    helper,
 		jobHelper: jobHelper,
+		caHelper:  caHelper,
 	}
 }
 
@@ -117,13 +121,64 @@ func (s *signer) MakeJobTemplate(
 		args = append(args, "--skip-tls-verify-pull")
 	}
 
+	clusterCACM, err := s.caHelper.GetClusterCA(ctx, mod.Namespace)
+	if err != nil {
+		return nil, fmt.Errorf("could not get the cluster CA ConfigMap: %v", err)
+	}
+
+	servingCACM, err := s.caHelper.GetServiceCA(ctx, mod.Namespace)
+	if err != nil {
+		return nil, fmt.Errorf("could not get the serving CA ConfigMap: %v", err)
+	}
+
+	const (
+		trustedCAMountPath  = "/etc/pki/ca-trust/extracted/pem"
+		trustedCAVolumeName = "trusted-ca"
+	)
+
 	volumes := []v1.Volume{
 		utils.MakeSecretVolume(signConfig.KeySecret, "key", "key.priv"),
 		utils.MakeSecretVolume(signConfig.CertSecret, "cert", "public.der"),
+		{
+			Name: trustedCAVolumeName,
+			VolumeSource: v1.VolumeSource{
+				Projected: &v1.ProjectedVolumeSource{
+					Sources: []v1.VolumeProjection{
+						{
+							ConfigMap: &v1.ConfigMapProjection{
+								LocalObjectReference: v1.LocalObjectReference{Name: clusterCACM.Name},
+								Items: []v1.KeyToPath{
+									{
+										Key:  clusterCACM.KeyName,
+										Path: "tls-ca-bundle.pem",
+									},
+								},
+							},
+						},
+						{
+							ConfigMap: &v1.ConfigMapProjection{
+								LocalObjectReference: v1.LocalObjectReference{Name: servingCACM.Name},
+								Items: []v1.KeyToPath{
+									{
+										Key:  servingCACM.KeyName,
+										Path: "ocp-service-ca-bundle.pem",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 	volumeMounts := []v1.VolumeMount{
 		utils.MakeSecretVolumeMount(signConfig.CertSecret, "/signingcert"),
 		utils.MakeSecretVolumeMount(signConfig.KeySecret, "/signingkey"),
+		{
+			Name:      trustedCAVolumeName,
+			ReadOnly:  true,
+			MountPath: trustedCAMountPath,
+		},
 	}
 
 	imageSecret := mod.Spec.ImageRepoSecret
@@ -150,8 +205,14 @@ func (s *signer) MakeJobTemplate(
 		Spec: v1.PodSpec{
 			Containers: []v1.Container{
 				{
-					Name:         "signimage",
-					Image:        os.Getenv("RELATED_IMAGES_SIGN"),
+					Name:  "signimage",
+					Image: os.Getenv("RELATED_IMAGES_SIGN"),
+					Env: []v1.EnvVar{
+						{
+							Name:  "SSL_CERT_DIR",
+							Value: trustedCAMountPath,
+						},
+					},
 					Args:         args,
 					VolumeMounts: volumeMounts,
 				},
