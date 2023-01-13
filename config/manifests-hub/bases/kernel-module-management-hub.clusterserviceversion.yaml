@@ -42,12 +42,12 @@ spec:
   - modules
   links:
   - name: Kernel Module Management Hub
-    url: https://github.com/kubernetes-sigs/kernel-module-management
+    url: https://github.com/rh-ecosystem-edge/kernel-module-management
   maintainers:
-  - email: quba@redhat.com
-    name: Quentin Barrand
+  - email: edge-kmm@redhat.com
+    name: Red Hat Ecosystem - Partner Accelerators Team
   maturity: alpha
   provider:
-    name: Community
-    url: https://github.com/kubernetes-sigs/kernel-module-management
+    name: Red Hat
+    url: https://www.redhat.com
   version: 0.0.0
