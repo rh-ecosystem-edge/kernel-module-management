@@ -1,55 +1,76 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-OUTPUT_DIR="${OUTPUT_DIR:-must-gather/${TIMESTAMP}}"
+OUTPUT_DIR="${OUTPUT_DIR:-must-gather/$(date +%Y%m%d_%H%M%S)}"
+readonly OUTPUT_DIR
 
-NS="${NS:-kmm-operator-system}"
+HUB=false
+NS=openshift-operators
+
+readonly COMMON_KINDS='clusterrolebindings,configmaps,events,pods,secrets,roles,rolebindings,serviceaccounts'
+readonly BUILD_KINDS="${COMMON_KINDS},builds,jobs.batch"
+
+collect_common() {
+  echo "Collecting common objects"
+
+  oc adm inspect clusterversions.config.openshift.io/version --dest-dir="$OUTPUT_DIR/inspect"
+  oc adm inspect crd,images --dest-dir="$OUTPUT_DIR/inspect"
+
+  oc adm inspect \
+    -n "$NS" \
+    "${COMMON_KINDS},deployment.apps,services" \
+    --dest-dir="$OUTPUT_DIR/inspect"
+
+  oc adm inspect imagestreams -n openshift driver-toolkit --dest-dir="$OUTPUT_DIR/inspect"
+}
+
+collect() {
+  echo "Collecting KMM objects and logs"
+
+  oc adm inspect modules,preflightvalidations,preflightvalidationsocp -A --dest-dir="$OUTPUT_DIR/inspect"
+  oc adm inspect clusterclaims --dest-dir="$OUTPUT_DIR/inspect"
+
+  oc -n "$NS" logs "deployment/kmm-operator-controller-manager" > "${OUTPUT_DIR}/kmm-operator-controller-manager.log"
+
+  namespaces=$(oc get daemonset -A -l kmm.node.kubernetes.io/module.name --no-headers -o custom-columns="NS:.metadata.namespace")
+  IFS=" " read -r -a namespaces <<< "$(echo "${namespaces[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' ')"
+  for ns in "${namespaces[@]}"; do
+    echo "Collecting data in namespace ${ns}"
+
+    oc adm inspect -n "$ns" "daemonset.apps,${BUILD_KINDS}" --dest-dir="$OUTPUT_DIR/inspect"
+  done
+}
+
+collect_hub() {
+  echo "Collecting KMM-Hub objects and logs"
+
+  oc adm inspect managedclustermodules,managedclusters --dest-dir="$OUTPUT_DIR/inspect"
+  oc adm inspect manifestworks -A --dest-dir="$OUTPUT_DIR/inspect"
+  oc adm inspect "${BUILD_KINDS}" -A --dest-dir="$OUTPUT_DIR/inspect"
+
+  oc -n "$NS" logs "deployment.apps/kmm-operator-hub-controller-manager" > "${OUTPUT_DIR}/kmm-operator-hub-controller-manager.log"
+}
+
+while getopts "hn:u" arg; do
+  case $arg in
+    n)
+      NS="${OPTARG}"
+      ;;
+    u)
+      HUB=true
+      ;;
+    h | *) # Display help.
+      echo 'Usage: gather [ -n NAMESPACE ] [ -u ]'
+      exit 0
+      ;;
+  esac
+done
 
 mkdir -p "$OUTPUT_DIR"
 
-for resource in $(oc get all -n "$NS" --no-headers | awk '{print $1}'); do
-  type=$(echo "$resource" | cut -d'/' -f1 )
-  name=$(echo "$resource" | cut -d'/' -f2 )
+collect_common
 
-  echo "Inspecting ${resource}"
-  oc adm inspect -n "$NS" "$resource" --dest-dir="$OUTPUT_DIR/inspect"
-
-  echo "Collecting information for ${resource}"
-  describeFile="${OUTPUT_DIR}/${type}_${name}.yaml"
-  oc -n "$NS" describe "$resource" > "$describeFile"
-done
-
-echo "Collecting logs from 'deployment/kmm-operator-controller-manager'"
-oc -n "$NS" logs "deployment/kmm-operator-controller-manager" > "${OUTPUT_DIR}/kmm-operator-controller-manager.log"
-
-echo "Inspecting modules.kmm.sigs.x-k8s.io in all the namespaces"
-oc adm inspect -A crd/modules.kmm.sigs.x-k8s.io  --dest-dir="$OUTPUT_DIR/inspect"
-
-echo "Inspecting all Modules in all namespaces"
-oc adm inspect -A modules.kmm.sigs.x-k8s.io --dest-dir="$OUTPUT_DIR/inspect"
-
-namespaces=$(oc get daemonset -A -l kmm.node.kubernetes.io/module.name --no-headers -o custom-columns="NS:.metadata.namespace")
-IFS=" " read -r -a namespaces <<< "$(echo "${namespaces[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' ')"
-for ns in "${namespaces[@]}"; do
-  echo "Inspecting DaemonSet in '${ns}' namespace"
-  oc adm inspect -n "$ns" daemonset.apps --dest-dir="$OUTPUT_DIR/inspect"
-
-  echo "Inspecting RBAC for DaemonSets in '${ns}' namespace"
-  for sa in $(oc get daemonset -n "${ns}" -l kmm.node.kubernetes.io/module.name --no-headers -o custom-columns="SA:.spec.template.spec.serviceAccountName"); do
-    oc adm inspect -n "${ns}" serviceaccounts "${sa}" --dest-dir="${OUTPUT_DIR}/inspect"
-
-    rbac=$(oc get rolebinding,clusterrolebinding -n simple-kmod \
-      -o jsonpath="{range .items[?(@.subjects[0].name=='${sa}')]}{.kind}{' '}{.metadata.name}{'\n'}{.roleRef.kind}{' '}{.roleRef.name}{'\n'}{end}")
-
-    echo "${rbac}" | while read -r line; do
-      resourceType="$(echo "${line}" | cut -d' ' -f1)"
-      name="$(echo "${line}" | cut -d' ' -f2)"
-      oc adm inspect -n "${ns}" "${resourceType}" "${name}" --dest-dir="${OUTPUT_DIR}/inspect"
-    done
-  done
-done
-
-for ns in $(oc get job -A -l kmm.node.kubernetes.io/module.name --no-headers -o custom-columns="NS:.metadata.namespace"); do
-  echo "Inspecting job in '${ns}' namespace"
-  oc adm inspect -n "$ns" job.batch --dest-dir="$OUTPUT_DIR/inspect"
-done
+if [ $HUB == true ]; then
+  collect_hub
+else
+  collect
+fi
