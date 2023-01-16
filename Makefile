@@ -286,7 +286,11 @@ bundle-hub: operator-sdk manifests kustomize ## Generate bundle manifests and me
 	SUFFIX="-hub" \
 	./hack/generate-bundle
 
-	${OPERATOR_SDK} bundle validate ./bundle
+	${OPERATOR_SDK} bundle validate ./bundle-hub
+
+.PHONY: bundle-build-hub
+bundle-build-hub: ## Build the bundle-hub image.
+	docker build -f bundle-hub.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-build
 bundle-build: ## Build the bundle image.
