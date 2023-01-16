@@ -214,7 +214,7 @@ func processFile(filename string, header *tar.Header, tarreader io.Reader, data 
 		//sign it
 		err = signFile(kmodsToSign[canonfilename], pubKeyFile, privKeyFile)
 		if err != nil {
-			return fmt.Errorf("error signing file %s: %w", canonfilename, err)
+			return fmt.Errorf("error signing file %s: %v", canonfilename, err)
 		}
 		logger.Info("Signed successfully", "kmod", canonfilename)
 		return nil
