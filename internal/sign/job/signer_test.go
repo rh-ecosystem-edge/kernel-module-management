@@ -7,6 +7,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ca"
 
 	"github.com/golang/mock/gomock"
 	"github.com/google/go-cmp/cmp"
@@ -26,15 +27,20 @@ import (
 
 var _ = Describe("MakeJobTemplate", func() {
 	const (
-		unsignedImage = "my.registry/my/image"
-		signedImage   = "my.registry/my/image-signed"
-		signerImage   = "some-signer-image:some-tag"
-		filesToSign   = "/modules/simple-kmod.ko:/modules/simple-procfs-kmod.ko"
-		kernelVersion = "1.2.3"
-		moduleName    = "module-name"
-		namespace     = "some-namespace"
-		privateKey    = "some private key"
-		publicKey     = "some public key"
+		unsignedImage      = "my.registry/my/image"
+		signedImage        = "my.registry/my/image-signed"
+		signerImage        = "some-signer-image:some-tag"
+		filesToSign        = "/modules/simple-kmod.ko:/modules/simple-procfs-kmod.ko"
+		kernelVersion      = "1.2.3"
+		moduleName         = "module-name"
+		namespace          = "some-namespace"
+		privateKey         = "some private key"
+		publicKey          = "some public key"
+		clusterCACMName    = "cluster-ca"
+		clusterCACMKeyName = "cluster-ca-key"
+		serviceCACMName    = "service-ca"
+		serviceCACMKeyName = "service-ca-key"
+		caMountPath        = "/etc/pki/ca-trust/extracted/pem"
 	)
 
 	var (
@@ -44,6 +50,7 @@ var _ = Describe("MakeJobTemplate", func() {
 		mod       kmmv1beta1.Module
 		helper    *sign.MockHelper
 		jobhelper *utils.MockJobHelper
+		caHelper  *ca.MockHelper
 	)
 
 	BeforeEach(func() {
@@ -51,7 +58,8 @@ var _ = Describe("MakeJobTemplate", func() {
 		clnt = client.NewMockClient(ctrl)
 		helper = sign.NewMockHelper(ctrl)
 		jobhelper = utils.NewMockJobHelper(ctrl)
-		m = NewSigner(clnt, scheme, helper, jobhelper)
+		caHelper = ca.NewMockHelper(ctrl)
+		m = NewSigner(clnt, scheme, helper, jobhelper, caHelper)
 		mod = kmmv1beta1.Module{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      moduleName,
@@ -98,6 +106,11 @@ var _ = Describe("MakeJobTemplate", func() {
 			ReadOnly:  true,
 			MountPath: "/signingkey",
 		}
+		trustedCAMount := v1.VolumeMount{
+			Name:      "trusted-ca",
+			ReadOnly:  true,
+			MountPath: "/etc/pki/ca-trust/extracted/pem",
+		}
 		keysecret := v1.Volume{
 			Name: "secret-securebootkey",
 			VolumeSource: v1.VolumeSource{
@@ -121,6 +134,37 @@ var _ = Describe("MakeJobTemplate", func() {
 						{
 							Key:  "cert",
 							Path: "public.der",
+						},
+					},
+				},
+			},
+		}
+		trustedCA := v1.Volume{
+			Name: "trusted-ca",
+			VolumeSource: v1.VolumeSource{
+				Projected: &v1.ProjectedVolumeSource{
+					Sources: []v1.VolumeProjection{
+						{
+							ConfigMap: &v1.ConfigMapProjection{
+								LocalObjectReference: v1.LocalObjectReference{Name: clusterCACMName},
+								Items: []v1.KeyToPath{
+									{
+										Key:  clusterCACMKeyName,
+										Path: "tls-ca-bundle.pem",
+									},
+								},
+							},
+						},
+						{
+							ConfigMap: &v1.ConfigMapProjection{
+								LocalObjectReference: v1.LocalObjectReference{Name: serviceCACMName},
+								Items: []v1.KeyToPath{
+									{
+										Key:  serviceCACMKeyName,
+										Path: "ocp-service-ca-bundle.pem",
+									},
+								},
+							},
 						},
 					},
 				},
@@ -155,6 +199,12 @@ var _ = Describe("MakeJobTemplate", func() {
 							{
 								Name:  "signimage",
 								Image: signerImage,
+								Env: []v1.EnvVar{
+									{
+										Name:  "SSL_CERT_DIR",
+										Value: caMountPath,
+									},
+								},
 								Args: []string{
 									"-signedimage", signedImage,
 									"-unsignedimage", unsignedImage,
@@ -163,13 +213,13 @@ var _ = Describe("MakeJobTemplate", func() {
 									"-filestosign", filesToSign,
 									"-secretdir", "/docker_config/",
 								},
-								VolumeMounts: []v1.VolumeMount{secretMount, certMount},
+								VolumeMounts: []v1.VolumeMount{secretMount, certMount, trustedCAMount},
 							},
 						},
 						NodeSelector:  nodeSelector,
 						RestartPolicy: v1.RestartPolicyOnFailure,
 
-						Volumes: []v1.Volume{keysecret, certsecret},
+						Volumes: []v1.Volume{keysecret, certsecret, trustedCA},
 					},
 				},
 			},
@@ -208,6 +258,14 @@ var _ = Describe("MakeJobTemplate", func() {
 
 		gomock.InOrder(
 			helper.EXPECT().GetRelevantSign(mod.Spec, km, kernelVersion).Return(km.Sign, nil),
+			caHelper.
+				EXPECT().
+				GetClusterCA(ctx, mod.Namespace).
+				Return(&ca.ConfigMap{KeyName: clusterCACMKeyName, Name: clusterCACMName}, nil),
+			caHelper.
+				EXPECT().
+				GetServiceCA(ctx, mod.Namespace).
+				Return(&ca.ConfigMap{KeyName: serviceCACMKeyName, Name: serviceCACMName}, nil),
 			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: "builder", Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, svcaccnt *v1.ServiceAccount, _ ...ctrlclient.GetOption) error {
 					svcaccnt.Secrets = []v1.ObjectReference{}
@@ -261,6 +319,8 @@ var _ = Describe("MakeJobTemplate", func() {
 
 		gomock.InOrder(
 			helper.EXPECT().GetRelevantSign(mod.Spec, km, kernelVersion).Return(km.Sign, nil),
+			caHelper.EXPECT().GetClusterCA(ctx, mod.Namespace).Return(&ca.ConfigMap{}, nil),
+			caHelper.EXPECT().GetServiceCA(ctx, mod.Namespace).Return(&ca.ConfigMap{}, nil),
 			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: "builder", Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, svcaccnt *v1.ServiceAccount, _ ...ctrlclient.GetOption) error {
 					svcaccnt.Secrets = []v1.ObjectReference{}
@@ -331,6 +391,8 @@ var _ = Describe("MakeJobTemplate", func() {
 		}
 		gomock.InOrder(
 			helper.EXPECT().GetRelevantSign(mod.Spec, km, kernelVersion).Return(km.Sign, nil),
+			caHelper.EXPECT().GetClusterCA(ctx, mod.Namespace).Return(&ca.ConfigMap{}, nil),
+			caHelper.EXPECT().GetServiceCA(ctx, mod.Namespace).Return(&ca.ConfigMap{}, nil),
 			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: "builder", Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, svcaccnt *v1.ServiceAccount, _ ...ctrlclient.GetOption) error {
 					svcaccnt.Secrets = []v1.ObjectReference{}

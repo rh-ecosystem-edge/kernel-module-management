@@ -89,13 +89,24 @@ spec:
           resources:
           - configmaps
           verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          verbs:
           - get
           - list
           - watch
         - apiGroups:
           - ""
           resources:
-          - secrets
+          - serviceaccounts
           verbs:
           - get
           - list

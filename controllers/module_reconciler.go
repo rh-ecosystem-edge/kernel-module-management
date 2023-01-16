@@ -24,6 +24,7 @@ import (
 	buildv1 "github.com/openshift/api/build/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ca"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/daemonset"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
@@ -62,6 +63,7 @@ type ModuleReconciler struct {
 	metricsAPI       metrics.Metrics
 	filter           *filter.Filter
 	statusUpdaterAPI statusupdater.ModuleStatusUpdater
+	caHelper         ca.Helper
 }
 
 func NewModuleReconciler(
@@ -73,7 +75,8 @@ func NewModuleReconciler(
 	kernelAPI module.KernelMapper,
 	metricsAPI metrics.Metrics,
 	filter *filter.Filter,
-	statusUpdaterAPI statusupdater.ModuleStatusUpdater) *ModuleReconciler {
+	statusUpdaterAPI statusupdater.ModuleStatusUpdater,
+	caHelper ca.Helper) *ModuleReconciler {
 	return &ModuleReconciler{
 		Client:           client,
 		buildAPI:         buildAPI,
@@ -84,6 +87,7 @@ func NewModuleReconciler(
 		metricsAPI:       metricsAPI,
 		filter:           filter,
 		statusUpdaterAPI: statusUpdaterAPI,
+		caHelper:         caHelper,
 	}
 }
 
@@ -93,7 +97,7 @@ func NewModuleReconciler(
 //+kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=create;delete;get;list;patch;watch
 //+kubebuilder:rbac:groups="core",resources=nodes,verbs=get;list;watch
 //+kubebuilder:rbac:groups="core",resources=secrets,verbs=get;list;watch
-//+kubebuilder:rbac:groups="core",resources=configmaps,verbs=get;list;watch
+//+kubebuilder:rbac:groups="core",resources=configmaps,verbs=create;delete;get;list;patch;watch
 //+kubebuilder:rbac:groups="core",resources=serviceaccounts,verbs=create;delete;get;list;patch;watch
 //+kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=use,resourceNames=privileged
 //+kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=create;delete;get;list;patch;watch
@@ -117,6 +121,10 @@ func (r *ModuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}
 
 		return res, fmt.Errorf("failed to get the requested %s KMMO CR: %w", req.NamespacedName, err)
+	}
+
+	if err = r.caHelper.Sync(ctx, req.Namespace, mod); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to synchronize CA ConfigMaps: %v", err)
 	}
 
 	r.setKMMOMetrics(ctx)
