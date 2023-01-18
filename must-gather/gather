@@ -6,7 +6,7 @@ readonly OUTPUT_DIR
 HUB=false
 NS=openshift-operators
 
-readonly COMMON_KINDS='clusterrolebindings,configmaps,events,pods,secrets,roles,rolebindings,serviceaccounts'
+readonly COMMON_KINDS='clusterrolebindings,configmaps,events,pods,roles,rolebindings,serviceaccounts'
 readonly BUILD_KINDS="${COMMON_KINDS},builds,jobs.batch"
 
 collect_common() {
