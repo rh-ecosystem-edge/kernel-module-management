@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ca"
+	buildv1 "github.com/openshift/api/build/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	hubv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api-hub/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ca"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cluster"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/manifestwork"
@@ -181,6 +182,7 @@ func (r *ManagedClusterModuleReconciler) SetupWithManager(mgr ctrl.Manager) erro
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&hubv1beta1.ManagedClusterModule{}).
 		Owns(&workv1.ManifestWork{}).
+		Owns(&buildv1.Build{}).
 		Owns(&batchv1.Job{}).
 		Watches(
 			&source.Kind{Type: &clusterv1.ManagedCluster{}},
