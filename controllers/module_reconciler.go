@@ -34,6 +34,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -455,6 +456,7 @@ func (r *ModuleReconciler) SetupWithManager(mgr ctrl.Manager, kernelLabel string
 		For(&kmmv1beta1.Module{}).
 		Owns(&appsv1.DaemonSet{}).
 		Owns(&buildv1.Build{}).
+		Owns(&batchv1.Job{}).
 		Owns(&v1.ServiceAccount{}).
 		Watches(
 			&source.Kind{Type: &v1.Node{}},
