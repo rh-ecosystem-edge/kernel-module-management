@@ -348,3 +348,5 @@ signimage: ## Build signer binary.
 .PHONY: signimage-build
 signimage-build: ## Build docker image with the signer.
 	docker build -f Dockerfile.signimage -t $(SIGNER_IMG) .
+
+include docs.mk

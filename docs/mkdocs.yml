@@ -1,0 +1,31 @@
+---
+site_name: Kernel Module Management
+repo_url: https://github.com/kubernetes-sigs/kernel-module-management
+edit_uri: edit/main/docs/
+
+docs_dir: mkdocs
+strict: true
+
+nav:
+  - index.md
+  - Documentation:
+      - documentation/install.md
+      - documentation/deploy_kmod.md
+      - documentation/module_loader_image.md
+      - Binary firmwares: documentation/firmwares.md
+      - Secure boot: documentation/secure_boot.md
+      - Preflight validation: documentation/preflight_validation.md
+      - documentation/uninstall.md
+  - Developer:
+      - developer/index.md
+      - developer/use_cases.md
+      - developer/reconciliation_loops.md
+
+plugins:
+  - exclude:
+      glob:
+        - developer/diagrams/*.puml
+        - developer/Makefile
+
+markdown_extensions:
+  - admonition
