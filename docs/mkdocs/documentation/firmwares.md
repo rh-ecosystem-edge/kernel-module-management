@@ -13,14 +13,14 @@ module, when the pod is terminated.
 In addition to building the kernel module itself, include the binary firmware in the builder image.
 
 ```dockerfile
-FROM ubuntu as builder
+FROM registry.redhat.io/ubi8/ubi-minimal as builder
 
 # Build the kmod
 
 RUN ["mkdir", "/firmware"]
 RUN ["curl", "-o", "/firmware/firmware.bin", "https://artifacts.example.com/firmware.bin"]
 
-FROM ubuntu
+FROM registry.redhat.io/ubi8/ubi-minimal
 
 # Copy the kmod, install modprobe, run depmod
 
