@@ -1,11 +1,13 @@
 # Home
 
-Kernel Module Management optionally builds and runs DriverContainers on Kubernetes clusters.
+## Overview
 
-## Getting started
+Kernel Module Management (KMM) is an Openshift operator that manages, builds, signs and deploys out-of-tree kernel modules and device plugins on Openshift clusters.
 
-Install the bleeding edge version of the KMM Operator by running the following command:
 
-```bash
-kubectl apply -k https://github.com/rh-ecosystem-edge/kernel-module-management/config/default
-```
+KMM adds a new `Module` CRD which describes the desired state of an out-of-tree kernel module and its associated device plugin. `Module` resources contain fields that configure how to load the module, associates ModuleLoader images with kernel versions, and optionally instructions to build and sign modules for specific kernel versions.
+KMM is designed to accomodate several kernel versions at once for any kernel module, allowing for seamless node upgrades and reduced application downtime.
+
+## Installation Guide 
+
+Check the [Install](documentation/install.md) section for instructions.
