@@ -174,11 +174,8 @@ spec:
           resources:
           - serviceaccounts
           verbs:
-          - create
-          - delete
           - get
           - list
-          - patch
           - watch
         - apiGroups:
           - image.openshift.io
@@ -265,34 +262,6 @@ spec:
           - patch
           - update
         - apiGroups:
-          - rbac.authorization.k8s.io
-          resourceNames:
-          - device-plugin
-          - module-loader
-          resources:
-          - clusterroles
-          verbs:
-          - bind
-        - apiGroups:
-          - rbac.authorization.k8s.io
-          resources:
-          - rolebindings
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - watch
-        - apiGroups:
-          - security.openshift.io
-          resourceNames:
-          - privileged
-          resources:
-          - securitycontextconstraints
-          verbs:
-          - use
-        - apiGroups:
           - authentication.k8s.io
           resources:
           - tokenreviews
@@ -330,6 +299,10 @@ spec:
                 env:
                 - name: SSL_CERT_DIR
                   value: /etc/pki/ca-trust/extracted/pem
+                - name: OPERATOR_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
                 - name: RELATED_IMAGES_SIGN
                   value: quay.io/edge-infrastructure/kernel-module-management-signimage:latest
                 image: quay.io/edge-infrastructure/kernel-module-management-operator:latest
@@ -452,6 +425,26 @@ spec:
           - create
           - patch
         serviceAccountName: kmm-operator-controller-manager
+      - rules:
+        - apiGroups:
+          - security.openshift.io
+          resourceNames:
+          - privileged
+          resources:
+          - securitycontextconstraints
+          verbs:
+          - use
+        serviceAccountName: kmm-operator-device-plugin
+      - rules:
+        - apiGroups:
+          - security.openshift.io
+          resourceNames:
+          - privileged
+          resources:
+          - securitycontextconstraints
+          verbs:
+          - use
+        serviceAccountName: kmm-operator-module-loader
     strategy: deployment
   installModes:
   - supported: false
