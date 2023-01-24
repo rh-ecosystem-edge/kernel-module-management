@@ -29,7 +29,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/rbac"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
@@ -56,39 +55,40 @@ const ModuleReconcilerName = "Module"
 type ModuleReconciler struct {
 	client.Client
 
-	buildAPI         build.Manager
-	signAPI          sign.SignManager
-	rbacAPI          rbac.RBACCreator
-	daemonAPI        daemonset.DaemonSetCreator
-	kernelAPI        module.KernelMapper
-	metricsAPI       metrics.Metrics
-	filter           *filter.Filter
-	statusUpdaterAPI statusupdater.ModuleStatusUpdater
-	caHelper         ca.Helper
+	buildAPI          build.Manager
+	signAPI           sign.SignManager
+	daemonAPI         daemonset.DaemonSetCreator
+	kernelAPI         module.KernelMapper
+	metricsAPI        metrics.Metrics
+	filter            *filter.Filter
+	statusUpdaterAPI  statusupdater.ModuleStatusUpdater
+	caHelper          ca.Helper
+	operatorNamespace string
 }
 
 func NewModuleReconciler(
 	client client.Client,
 	buildAPI build.Manager,
 	signAPI sign.SignManager,
-	rbacAPI rbac.RBACCreator,
 	daemonAPI daemonset.DaemonSetCreator,
 	kernelAPI module.KernelMapper,
 	metricsAPI metrics.Metrics,
 	filter *filter.Filter,
 	statusUpdaterAPI statusupdater.ModuleStatusUpdater,
-	caHelper ca.Helper) *ModuleReconciler {
+	caHelper ca.Helper,
+	operatorNamespace string,
+) *ModuleReconciler {
 	return &ModuleReconciler{
-		Client:           client,
-		buildAPI:         buildAPI,
-		signAPI:          signAPI,
-		rbacAPI:          rbacAPI,
-		daemonAPI:        daemonAPI,
-		kernelAPI:        kernelAPI,
-		metricsAPI:       metricsAPI,
-		filter:           filter,
-		statusUpdaterAPI: statusUpdaterAPI,
-		caHelper:         caHelper,
+		Client:            client,
+		buildAPI:          buildAPI,
+		signAPI:           signAPI,
+		daemonAPI:         daemonAPI,
+		kernelAPI:         kernelAPI,
+		metricsAPI:        metricsAPI,
+		filter:            filter,
+		statusUpdaterAPI:  statusUpdaterAPI,
+		caHelper:          caHelper,
+		operatorNamespace: operatorNamespace,
 	}
 }
 
@@ -99,10 +99,7 @@ func NewModuleReconciler(
 //+kubebuilder:rbac:groups="core",resources=nodes,verbs=get;list;watch
 //+kubebuilder:rbac:groups="core",resources=secrets,verbs=get;list;watch
 //+kubebuilder:rbac:groups="core",resources=configmaps,verbs=create;delete;get;list;patch;watch
-//+kubebuilder:rbac:groups="core",resources=serviceaccounts,verbs=create;delete;get;list;patch;watch
-//+kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=use,resourceNames=privileged
-//+kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=create;delete;get;list;patch;watch
-//+kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=clusterroles,verbs=bind,resourceNames=module-loader;device-plugin
+//+kubebuilder:rbac:groups="core",resources=serviceaccounts,verbs=get;list;watch
 //+kubebuilder:rbac:groups="build.openshift.io",resources=builds,verbs=get;list;create;delete;watch;patch
 //+kubebuilder:rbac:groups="batch",resources=jobs,verbs=create;list;watch;delete
 
@@ -124,22 +121,13 @@ func (r *ModuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return res, fmt.Errorf("failed to get the requested %s KMMO CR: %w", req.NamespacedName, err)
 	}
 
-	if err = r.caHelper.Sync(ctx, req.Namespace, mod); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to synchronize CA ConfigMaps: %v", err)
+	if req.Namespace != r.operatorNamespace {
+		if err = r.caHelper.Sync(ctx, req.Namespace, mod); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to synchronize CA ConfigMaps: %v", err)
+		}
 	}
 
 	r.setKMMOMetrics(ctx)
-
-	if mod.Spec.ModuleLoader.ServiceAccountName == "" {
-		if err := r.rbacAPI.CreateModuleLoaderRBAC(ctx, *mod); err != nil {
-			return res, fmt.Errorf("could not create module-loader's RBAC: %w", err)
-		}
-	}
-	if mod.Spec.DevicePlugin != nil && mod.Spec.DevicePlugin.ServiceAccountName == "" {
-		if err := r.rbacAPI.CreateDevicePluginRBAC(ctx, *mod); err != nil {
-			return res, fmt.Errorf("could not create device-plugin's RBAC: %w", err)
-		}
-	}
 
 	targetedNodes, err := r.getNodesListBySelector(ctx, mod)
 	if err != nil {
@@ -360,7 +348,7 @@ func (r *ModuleReconciler) handleDriverContainer(ctx context.Context,
 	}
 
 	opRes, err := controllerutil.CreateOrPatch(ctx, r.Client, ds, func() error {
-		return r.daemonAPI.SetDriverContainerAsDesired(ctx, ds, km.ContainerImage, *mod, kernelVersion)
+		return r.daemonAPI.SetDriverContainerAsDesired(ctx, ds, km.ContainerImage, *mod, kernelVersion, mod.Namespace == r.operatorNamespace)
 	})
 
 	if err == nil {
@@ -390,7 +378,7 @@ func (r *ModuleReconciler) handleDevicePlugin(ctx context.Context, mod *kmmv1bet
 	}
 
 	opRes, err := controllerutil.CreateOrPatch(ctx, r.Client, ds, func() error {
-		return r.daemonAPI.SetDevicePluginAsDesired(ctx, ds, mod)
+		return r.daemonAPI.SetDevicePluginAsDesired(ctx, ds, mod, mod.Namespace == r.operatorNamespace)
 	})
 
 	if err == nil {
@@ -457,7 +445,6 @@ func (r *ModuleReconciler) SetupWithManager(mgr ctrl.Manager, kernelLabel string
 		Owns(&appsv1.DaemonSet{}).
 		Owns(&buildv1.Build{}).
 		Owns(&batchv1.Job{}).
-		Owns(&v1.ServiceAccount{}).
 		Watches(
 			&source.Kind{Type: &v1.Node{}},
 			handler.EnqueueRequestsFromMapFunc(r.filter.FindModulesForNode),
