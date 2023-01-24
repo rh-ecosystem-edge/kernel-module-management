@@ -260,7 +260,7 @@ bundle: operator-sdk manifests kustomize ## Generate bundle manifests and metada
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
 
 	OPERATOR_SDK="${OPERATOR_SDK}" \
-	BUNDLE_GEN_FLAGS="${BUNDLE_GEN_FLAGS}" \
+	BUNDLE_GEN_FLAGS="${BUNDLE_GEN_FLAGS} --extra-service-accounts kmm-operator-module-loader,kmm-operator-device-plugin" \
 	PKG=kernel-module-management \
 	SOURCE_DIR=$(dir $(realpath $(lastword $(MAKEFILE_LIST)))) \
 	./hack/generate-bundle
