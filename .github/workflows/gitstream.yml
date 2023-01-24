@@ -65,3 +65,8 @@ jobs:
         run: gitstream make-oldest-draft-pr-ready
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Assign PRs and issues to the upstream commit author
+        run: gitstream assign
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
