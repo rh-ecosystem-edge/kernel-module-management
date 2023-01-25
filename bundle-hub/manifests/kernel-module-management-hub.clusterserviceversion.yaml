@@ -33,6 +33,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
+    operatorframework.io/suggested-namespace: openshift-kmm-hub
     operators.operatorframework.io/builder: operator-sdk-v1.25.2
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
   name: kernel-module-management-hub.v0.0.1

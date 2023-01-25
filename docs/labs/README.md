@@ -5,7 +5,7 @@ KMM Labs is a series of examples and use cases of Kernel Module Management Opera
 Kernel Module Management Operator a.k.a KMM allows to run DriverContainers on Openshift clusters and optionally build 
 in-cluster out-of-tree drivers from sources or even load DevicePlugins needed to manage special hardware on the cluster.
 
-Once KMM is installed a new ReplicaSet will be deployed and a new pod running in the `kmm-operator-system` namespace will include the KMM controller.
+Once KMM is installed a new ReplicaSet will be deployed and a new pod running in the `openshift-kmm` namespace will include the KMM controller.
 
 Also a new CRD called Module will be available in our cluster API which
 will be defined and created by the user. This definition will include:
