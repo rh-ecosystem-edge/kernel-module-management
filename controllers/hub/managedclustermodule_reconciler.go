@@ -35,7 +35,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	hubv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api-hub/v1beta1"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ca"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cluster"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/manifestwork"
@@ -53,7 +52,6 @@ type ManagedClusterModuleReconciler struct {
 	statusupdaterAPI statusupdater.ManagedClusterModuleStatusUpdater
 
 	filter              *filter.Filter
-	caHelper            ca.Helper
 	defaultJobNamespace string
 }
 
@@ -74,7 +72,6 @@ func NewManagedClusterModuleReconciler(
 	clusterAPI cluster.ClusterAPI,
 	statusupdaterAPI statusupdater.ManagedClusterModuleStatusUpdater,
 	filter *filter.Filter,
-	caHelper ca.Helper,
 	defaultJobNamespace string,
 ) *ManagedClusterModuleReconciler {
 	return &ManagedClusterModuleReconciler{
@@ -83,7 +80,6 @@ func NewManagedClusterModuleReconciler(
 		clusterAPI:          clusterAPI,
 		statusupdaterAPI:    statusupdaterAPI,
 		filter:              filter,
-		caHelper:            caHelper,
 		defaultJobNamespace: defaultJobNamespace,
 	}
 }
@@ -101,16 +97,6 @@ func (r *ManagedClusterModuleReconciler) Reconcile(ctx context.Context, req ctrl
 		}
 
 		return res, fmt.Errorf("failed to get the requested CR: %v", err)
-	}
-
-	namespace := mcm.Spec.JobNamespace
-
-	if namespace == "" {
-		namespace = r.defaultJobNamespace
-	}
-
-	if err = r.caHelper.Sync(ctx, namespace, mcm); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to synchronize CA ConfigMaps: %v", err)
 	}
 
 	logger.Info("Requested KMMO ManagedClusterModule")

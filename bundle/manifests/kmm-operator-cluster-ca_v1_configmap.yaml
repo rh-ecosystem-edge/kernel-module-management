@@ -4,4 +4,5 @@ kind: ConfigMap
 metadata:
   labels:
     config.openshift.io/inject-trusted-cabundle: "true"
+    kmm.node.kubernetes.io/ca.type: cluster
   name: kmm-operator-cluster-ca

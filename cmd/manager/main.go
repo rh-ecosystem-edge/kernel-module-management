@@ -53,7 +53,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/preflight"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/rbac"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
 	signjob "github.com/rh-ecosystem-edge/kernel-module-management/internal/sign/job"
@@ -93,6 +92,8 @@ func main() {
 		setupLogger.Error(err, "Could not get the git commit; using <undefined>")
 		commit = "<undefined>"
 	}
+
+	operatorNamespace := cmd.GetEnvOrFatalError(constants.OperatorNamespaceEnvVar, setupLogger)
 
 	managed, err := GetBoolEnv("KMM_MANAGED")
 	if err != nil {
@@ -155,13 +156,13 @@ func main() {
 		client,
 		buildAPI,
 		signAPI,
-		rbac.NewCreator(client, scheme),
 		daemonAPI,
 		kernelAPI,
 		metricsAPI,
 		filterAPI,
 		statusupdater.NewModuleStatusUpdater(client, metricsAPI),
 		caHelper,
+		operatorNamespace,
 	)
 
 	if err = mc.SetupWithManager(mgr, constants.KernelLabel); err != nil {
