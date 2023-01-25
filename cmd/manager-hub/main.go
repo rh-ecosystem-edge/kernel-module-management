@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"errors"
 	"flag"
 	"os"
 
@@ -110,6 +109,8 @@ func main() {
 		cmd.FatalError(setupLogger, err, "unable to create manager")
 	}
 
+	operatorNamespace := cmd.GetEnvOrFatalError(constants.OperatorNamespaceEnvVar, setupLogger)
+
 	client := mgr.GetClient()
 
 	filterAPI := filter.New(client, mgr.GetLogger())
@@ -148,20 +149,12 @@ func main() {
 	ctrlLogger := setupLogger.WithValues("name", hub.ManagedClusterModuleReconcilerName)
 	ctrlLogger.Info("Adding controller")
 
-	const operatorNamespaceEnvVar = "OPERATOR_NAMESPACE"
-
-	operatorNamespace := os.Getenv(operatorNamespaceEnvVar)
-	if operatorNamespace == "" {
-		cmd.FatalError(ctrlLogger, errors.New("empty value"), "Could not determine the current namespace", "name", operatorNamespace)
-	}
-
 	mcmr := hub.NewManagedClusterModuleReconciler(
 		client,
 		manifestwork.NewCreator(client, scheme),
 		cluster.NewClusterAPI(client, module.NewKernelMapper(), buildAPI, signAPI, operatorNamespace),
 		statusupdater.NewManagedClusterModuleStatusUpdater(client),
 		filterAPI,
-		caHelper,
 		operatorNamespace,
 	)
 
