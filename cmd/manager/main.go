@@ -102,6 +102,7 @@ func main() {
 	}
 
 	setupLogger.Info("Creating manager", "git commit", commit)
+	setupLogger.Info("ybettan test")
 
 	options := ctrl.Options{Scheme: scheme}
 
