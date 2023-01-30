@@ -101,6 +101,7 @@ func main() {
 		managed = false
 	}
 
+	//comment
 	setupLogger.Info("Creating manager", "git commit", commit)
 
 	options := ctrl.Options{Scheme: scheme}
