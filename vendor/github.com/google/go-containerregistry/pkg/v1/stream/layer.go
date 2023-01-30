@@ -48,7 +48,6 @@ type Layer struct {
 	mu             sync.Mutex
 	digest, diffID *v1.Hash
 	size           int64
-	mediaType      types.MediaType
 }
 
 var _ v1.Layer = (*Layer)(nil)
@@ -63,21 +62,11 @@ func WithCompressionLevel(level int) LayerOption {
 	}
 }
 
-// WithMediaType is a functional option for overriding the layer's media type.
-func WithMediaType(mt types.MediaType) LayerOption {
-	return func(l *Layer) {
-		l.mediaType = mt
-	}
-}
-
 // NewLayer creates a Layer from an io.ReadCloser.
 func NewLayer(rc io.ReadCloser, opts ...LayerOption) *Layer {
 	layer := &Layer{
 		blob:        rc,
 		compression: gzip.BestSpeed,
-		// We use DockerLayer for now as uncompressed layers
-		// are unimplemented
-		mediaType: types.DockerLayer,
 	}
 
 	for _, opt := range opts {
@@ -119,7 +108,9 @@ func (l *Layer) Size() (int64, error) {
 
 // MediaType implements v1.Layer
 func (l *Layer) MediaType() (types.MediaType, error) {
-	return l.mediaType, nil
+	// We return DockerLayer for now as uncompressed layers
+	// are unimplemented
+	return types.DockerLayer, nil
 }
 
 // Uncompressed implements v1.Layer.
