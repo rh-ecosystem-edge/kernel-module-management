@@ -5,6 +5,8 @@ downstream:
   github_repo_name: rh-ecosystem-edge/kernel-module-management
   local_repo_path: _gitstream_downstream
   max_open_items: 3
+  ignore_authors:
+    - "dependabot[bot]"
 
 log_level: 1000
 
