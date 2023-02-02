@@ -50,6 +50,45 @@ The reconciliation loop for `Module` runs the following steps:
     2. successful build jobs;
     3. successful signing jobs.
 
+## Security and permissions
+
+Loading kernel modules is a highly sensitive operation.
+Once loaded, kernel modules have all possible permissions to do any kind of operation on the node.
+
+### `ServiceAccounts` and `SecurityContextConstraints`
+
+KMM creates privileged workload to load the kernel modules on nodes.
+That workload needs `ServiceAccounts` able to use the `privileged` `SecurityContextConstraint` (SCC).
+
+The authorization model for that workload depends on the `Module`'s namespace, as well as its spec:
+
+- if the `.spec.moduleLoader.serviceAccountName` or `.spec.devicePlugin.serviceAccountName` fields are set, they are
+  always used;
+- if those fields are not set, then:
+    - if the `Module` is created in the operator's namespace (`openshift-kmm` by default), then KMM will use its
+      default, powerful `ServiceAccounts` to run the DaemonSets;
+    - if the `Module` is created in any other namespace, then KMM will run the DaemonSets as the namespace's `default`
+      `ServiceAccount`, which cannot run privileged workload unless you manually allow it to use the `privileged` SCC.
+
+!!! warning "`openshift-kmm` is a trusted namespace"
+
+    When setting up RBAC permissions, keep in mind that any user or ServiceAccount creating a `Module` resource in the
+    `openshift-kmm` namespace will result in KMM automatically running privileged workload on potentially all nodes in
+    cluster.
+
+To allow any `ServiceAccount` to use the `privileged` SCC and hence to run ModuleLoader and / or device plugin pods,
+use the following command:
+
+```shell
+oc adm policy add-scc-to-user privileged -z "${serviceAccountName}" [ -n "${namespace}" ]
+```
+
+### Pod Security standards
+
+OpenShift runs a [synchronization mechanism](https://docs.openshift.com/container-platform/4.12/authentication/understanding-and-managing-pod-security-admission.html)
+that sets the namespace's Pod Security level automatically based on the security contexts in use.
+No action is needed.
+
 ## Example resource
 
 Below is an annotated `Module` example with most options set.
@@ -120,6 +159,8 @@ spec:
             # the container image already exists.
             insecureSkipTLSVerify: false
 
+    serviceAccountName: sa-module-loader  # Optional
+
   devicePlugin:  # Optional
     container:
       image: some.registry/org/device-plugin:latest  # Required if the devicePlugin section is present
@@ -137,7 +178,7 @@ spec:
         configMap:
           name: some-configmap
 
-    serviceAccountName: sa-device-plugin  # Optional; created automatically if not set
+    serviceAccountName: sa-device-plugin  # Optional
 
   imageRepoSecret:  # Optional. Used to pull ModuleLoader and device plugin images
     name: secret-name
