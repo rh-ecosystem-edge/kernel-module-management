@@ -205,6 +205,11 @@ deploy-hub: manifests kustomize ## Deploy controller to the K8s cluster specifie
 	cd config/manager-hub && $(KUSTOMIZE) edit set image controller=$(HUB_IMG)
 	oc apply -k $(KUSTOMIZE_CONFIG_HUB_DEFAULT)
 
+.PHONY: deploy-hub
+deploy-hub: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
+	cd config/manager-hub && $(KUSTOMIZE) edit set image controller=$(HUB_IMG)
+	kubectl apply -k $(KUSTOMIZE_CONFIG_HUB_DEFAULT)
+
 .PHONY: undeploy
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	oc delete -k $(KUSTOMIZE_CONFIG_DEFAULT) --ignore-not-found=$(ignore-not-found)
@@ -212,6 +217,10 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 .PHONY: undeploy-hub
 undeploy-hub: ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	oc delete -k $(KUSTOMIZE_CONFIG_HUB_DEFAULT) --ignore-not-found=$(ignore-not-found)
+
+.PHONY: undeploy-hub
+undeploy-hub: ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
+	kubectl delete -k $(KUSTOMIZE_CONFIG_HUB_DEFAULT) --ignore-not-found=$(ignore-not-found)
 
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 .PHONY: controller-gen
