@@ -8,6 +8,26 @@ before `modprobe` is called to insert the kernel module.
 All files and empty directories are removed from that location before `modprobe -r` is called to unload the kernel
 module, when the pod is terminated.
 
+## Configuring the lookup path on nodes
+
+On OpenShift nodes, the set of default lookup paths for firmwares does not include `/var/lib/firmware`.
+That path can be added with the [Machine Config Operator](https://docs.openshift.com/container-platform/4.12/post_installation_configuration/machine-configuration-tasks.html)
+by creating a `MachineConfig` resource:
+
+```yaml
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: worker
+  name: 99-worker-kernel-args-firmware-path
+spec:
+  kernelArguments:
+    - 'firmware_class.path=/var/lib/firmware'
+```
+
+This will entail a reboot of all worker nodes.
+
 ## Building a ModuleLoader image
 
 In addition to building the kernel module itself, include the binary firmware in the builder image.
