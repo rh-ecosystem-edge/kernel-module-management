@@ -7,13 +7,13 @@ Preflight will try to validate every `Module` loaded in the cluster, in parallel
 
 ## Validation kick-off
 
-Preflight validation is triggered by creating a `PreflightValidation` resource in the cluster. This Spec contains two
+Preflight validation is triggered by creating a `PreflightValidationOCP` resource in the cluster. This Spec contains two
 fields:
 ```go
-type PreflightValidationSpec struct {
-	// KernelVersion describes the kernel image that all Modules need to be checked against.
+type PreflightValidationOCPSpec struct {
+	// releaseImage describes the OCP release image that all Modules need to be checked against.
 	// +kubebuilder:validation:Required
-	KernelVersion string `json:"kernelVersion"`
+	ReleaseImage string `json:"releaseImage"`
 
 	// Boolean flag that determines whether images build during preflight must also
 	// be pushed to a defined repository
@@ -22,7 +22,9 @@ type PreflightValidationSpec struct {
 }
 ```
 
-1. `KernelVersion` - the version of the kernel that the cluster will be upgraded to. Mandatory field
+1. `ReleaseImage` - the name of the release image for the OpenShift Container Platform version the cluster will be
+   upgraded to.
+   Mandatory field.
 2. `PushBuiltImage` - if true, then the images created during the Build and Sign validation will be pushed to their
    repositories (false by default).
 
@@ -32,9 +34,9 @@ Preflight validation will try to validate every module loaded in the cluster. Pr
 a `Module`, once its validation is successful.
 In case module validation has failed, admin can change the module definitions, and Preflight will try to validate the
 module again in the next loop.
-If admin want to run Preflight validation for additional kernel, then another `PreflightValidation` resource should be
-created.
-Once all the modules have been validated, it is recommended to delete the `PreflightValidation` resource.
+If admin want to run Preflight validation for additional kernel, then another `PreflightValidationOCP` resource should
+be created.
+Once all the modules have been validated, it is recommended to delete the `PreflightValidationOCP` resource.
 
 ## Validation status
 
@@ -103,7 +105,7 @@ Image validation consists of 2 stages:
 Build validation is executed only in case image validation has failed, and there is a `build` section in the `Module`
 that is relevant for the upgraded kernel.
 Build validation will try to run build job and validate that it finishes successfully.
-If the `PushBuiltImage` flag is defined in the `PreflightValidation` CR, it will also try to push the resulting image
+If the `PushBuiltImage` flag is defined in the `PreflightValidationOCP` CR, it will also try to push the resulting image
 into its repo.
 The resulting image name is taken from the definition of the `containerImage` field of the `Module` CR.
 
@@ -117,7 +119,7 @@ Sign validation is executed only in case image validation has failed, there is a
 relevant for the upgrade kernel, and build validation finished successfully in case there was a `build` section in the
 `Module` relevant for the upgraded kernel.
 Sign validation will try to run the sign job and validate that it finishes successfully.
-In case the `PushBuiltImage` flag is defined in the `PreflightValidation` CR, it will also try to push the resulting
+In case the `PushBuiltImage` flag is defined in the `PreflightValidationOCP` CR, it will also try to push the resulting
 image to its registry.
 The result image is always the image defined in the `ContainerImage` field of the `Module`.
 The input image is either the output of the Build stage, or an image defined in the `UnsignedImage` field.
@@ -125,18 +127,21 @@ The input image is either the output of the Build stage, or an image defined in 
 !!! note
     In case a `build` section exists, the `sign` section input image is the `build` section's output image.
     Therefore, in order for the input image to be available for the `sign` section, the `PushBuiltImage` flag must be
-    defined in the `PreflightValidation` CR.
+    defined in the `PreflightValidationOCP` CR.
 
 ## Example CR
-Below is an example of the `PreflightValidation` resource in the YAML format.
-In the example, we want to verify all the currently present modules against the upcoming `5.8.18-101.fc31.x86_64`
-kernel, and push the resulting images of Build/Sign into the defined repositories.
+Below is an example of the `PreflightValidationOCP` resource in the YAML format.
+In the example, we want to verify all the currently present modules against the upcoming kernel version including in the
+OCP release `4.11.18`, which release image `quay.io/openshift-release-dev/ocp-release@sha256:22e149142517dfccb47be828f012659b1ccf71d26620e6f62468c264a7ce7863`
+points to.
+`.spec.pushBuiltImage` is true, so KMM will push the resulting images of Build/Sign into the defined repositories.
+
 ```yaml
 apiVersion: kmm.sigs.x-k8s.io/v1beta1
-kind: PreflightValidation
+kind: PreflightValidationOCP
 metadata:
   name: preflight
 spec:
-  kernelVersion: 5.8.18-101.fc31.x86_64
+  releaseImage: quay.io/openshift-release-dev/ocp-release@sha256:22e149142517dfccb47be828f012659b1ccf71d26620e6f62468c264a7ce7863
   pushBuiltImage: true
 ```

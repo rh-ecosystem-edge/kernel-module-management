@@ -15,36 +15,35 @@ To generate dependencies and map files for a specific kernel version, run `depmo
 
 ## Example `Dockerfile`
 
-The `Dockerfile` below can accommodate any kernel available in the Ubuntu repositories.
-Pass the kernel version you are building an image from using the `--build-arg KERNEL_VERSION=1.2.3` Docker CLI switch.
+The example below builds a test kernel module from the KMM repository.
+Please note that a Red Hat subscription is required to download the `kernel-devel` package.
+If you are building your image on OpenShift, consider [using Driver Toolkit](#using-driver-toolkit--dtk-) or [using an 
+entitled build](https://cloud.redhat.com/blog/how-to-use-entitled-image-builds-to-build-drivercontainers-with-ubi-on-openshift).
 
 ```dockerfile
-FROM ubuntu as builder
+FROM registry.redhat.io/ubi8/ubi as builder
 
 ARG KERNEL_VERSION
 
-RUN apt-get update && apt-get install -y bc \
-    bison \
-    flex \
-    libelf-dev \
-    gnupg \
-    wget \
-    git \
-    make \
+RUN dnf install -y \
     gcc \
-    linux-headers-${KERNEL_VERSION}
+    git \
+    kernel-devel-${KERNEL_VERSION} \
+    make
 
 WORKDIR /usr/src
+
 RUN ["git", "clone", "https://github.com/rh-ecosystem-edge/kernel-module-management.git"]
 
 WORKDIR /usr/src/kernel-module-management/ci/kmm-kmod
-RUN ["make"]
 
-FROM ubuntu
+RUN KERNEL_SRC_DIR=/lib/modules/${KERNEL_VERSION}/build make all
+
+FROM registry.redhat.io/ubi8/ubi-minimal
 
 ARG KERNEL_VERSION
 
-RUN apt-get update && apt-get install -y kmod
+RUN microdnf install kmod
 
 COPY --from=builder /usr/src/kernel-module-management/ci/kmm-kmod/kmm_ci_a.ko /opt/lib/modules/${KERNEL_VERSION}/
 COPY --from=builder /usr/src/kernel-module-management/ci/kmm-kmod/kmm_ci_b.ko /opt/lib/modules/${KERNEL_VERSION}/
@@ -61,10 +60,8 @@ The `ConfigMap` needs to be located in the same namespace as the `Module`.
 
 KMM will first check if the image name specified in the `containerImage` field exists.
 If it does, the build will be skipped.
-Otherwise, KMM will create a Job to build your image.
-The [kaniko](https://github.com/GoogleContainerTools/kaniko) build system is used.
-KMM monitors the health of the build job, retrying if necessary.
-
+Otherwise, KMM creates a [`Build`](https://docs.openshift.com/container-platform/4.12/cicd/builds/build-configuration.html)
+object to build your image.
 Once the image is built, KMM proceeds with the `Module` reconciliation.
 
 ```yaml
@@ -93,4 +90,42 @@ Once the image is built, KMM proceeds with the `Module` reconciliation.
     # Optional and not recommended! If true, KMM will skip any TLS server certificate validation when checking if
     # the container image already exists.
     insecureSkipTLSVerify: false
+```
+
+### Using Driver Toolkit (DTK)
+
+[Driver Toolkit](https://docs.openshift.com/container-platform/4.12/hardware_enablement/psap-driver-toolkit.html) is a
+convenient base image that contains most tools and libraries required to build ModuleLoader images for the OpenShift
+version that is currently running in the cluster.
+It is recommended to use DTK as the first stage of a multi-stage `Dockerfile` to build the kernel modules, and to copy
+the `.ko` files into a smaller end-user image such as [`ubi-minimal`](https://catalog.redhat.com/software/containers/ubi8/ubi-minimal).
+
+To leverage DTK in your in-cluster build, use the `DTK_AUTO` build argument.
+The value is automatically set by KMM when creating the `Build` object.
+
+```dockerfile
+ARG DTK_AUTO
+
+FROM ${DTK_AUTO} as builder
+
+ARG KERNEL_VERSION
+
+WORKDIR /usr/src
+
+RUN ["git", "clone", "https://github.com/rh-ecosystem-edge/kernel-module-management.git"]
+
+WORKDIR /usr/src/kernel-module-management/ci/kmm-kmod
+
+RUN KERNEL_SRC_DIR=/lib/modules/${KERNEL_VERSION}/build make all
+
+FROM registry.redhat.io/ubi8/ubi-minimal
+
+ARG KERNEL_VERSION
+
+RUN microdnf install kmod
+
+COPY --from=builder /usr/src/kernel-module-management/ci/kmm-kmod/kmm_ci_a.ko /opt/lib/modules/${KERNEL_VERSION}/
+COPY --from=builder /usr/src/kernel-module-management/ci/kmm-kmod/kmm_ci_b.ko /opt/lib/modules/${KERNEL_VERSION}/
+
+RUN depmod -b /opt ${KERNEL_VERSION}
 ```
