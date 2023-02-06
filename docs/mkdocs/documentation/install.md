@@ -71,6 +71,8 @@ through the OpenShift console or run `oc apply`.
 <details>
 <summary>Additional RBAC for OpenShift 4.10</summary>
 
+Save the content below under `restricted-v2.yml`:
+
 ```yaml
 ---
 allowHostDirVolumePlugin: false
@@ -110,33 +112,11 @@ volumes:
   - persistentVolumeClaim
   - projected
   - secret
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: scc-restricted-v2
-rules:
-  - apiGroups:
-      - security.openshift.io
-    resourceNames:
-      - restricted-v2
-    resources:
-      - securitycontextconstraints
-    verbs:
-      - use
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: kmm-operator-scc-restricted-v2
-  namespace: openshift-kmm
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: scc-restricted-v2
-subjects:
-  - kind: ServiceAccount
-    name: kmm-operator-controller-manager
-    namespace: openshift-kmm
+```
+
+Run the following commands:
+```shell
+oc apply -f restricted-v2.yml
+oc adm policy add-scc-to-user restricted-v2 -z kmm-operator-controller-manager -n openshift-kmm
 ```
 </details>
