@@ -433,8 +433,6 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			},
 		}
 
-		osConfig := module.NodeOSConfig{}
-
 		mod := kmmv1beta1.Module{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      moduleName,
@@ -507,9 +505,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 					return nil
 				},
 			),
-			mockKM.EXPECT().GetNodeOSConfig(&nodeList.Items[0]).Return(&osConfig),
-			mockKM.EXPECT().FindMappingForKernel(&mod.Spec, kernelVersion).Return(&mappings[0], nil),
-			mockKM.EXPECT().PrepareKernelMapping(&mappings[0], &osConfig).Return(&mappings[0], nil),
+			mockKM.EXPECT().GetMergedMappingForKernel(&mod.Spec, kernelVersion).Return(&mappings[0], nil),
 			mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, moduleName, namespace).Return(dsByKernelVersion, nil),
 			mockBM.EXPECT().ShouldSync(gomock.Any(), mod, mappings[0]).Return(true, nil),
 			mockBM.EXPECT().Sync(gomock.Any(), mod, mappings[0], kernelVersion, true, &mod),
@@ -536,8 +532,6 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			kernelVersion      = "1.2.3"
 			serviceAccountName = "module-loader-service-account"
 		)
-
-		osConfig := module.NodeOSConfig{}
 
 		mappings := []kmmv1beta1.KernelMapping{
 			{
@@ -631,9 +625,7 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 		dsByKernelVersion := map[string]*appsv1.DaemonSet{kernelVersion: &ds}
 
 		gomock.InOrder(
-			mockKM.EXPECT().GetNodeOSConfig(&nodeList.Items[0]).Return(&osConfig),
-			mockKM.EXPECT().FindMappingForKernel(&mod.Spec, kernelVersion).Return(&mappings[0], nil),
-			mockKM.EXPECT().PrepareKernelMapping(&mappings[0], &osConfig).Return(&mappings[0], nil),
+			mockKM.EXPECT().GetMergedMappingForKernel(&mod.Spec, kernelVersion).Return(&mappings[0], nil),
 			mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, moduleName, namespace).Return(dsByKernelVersion, nil),
 			mockBM.EXPECT().ShouldSync(gomock.Any(), mod, mappings[0]).Return(true, nil),
 			mockBM.EXPECT().Sync(gomock.Any(), mod, mappings[0], kernelVersion, true, &mod),
