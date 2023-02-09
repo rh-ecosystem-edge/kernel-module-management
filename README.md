@@ -9,10 +9,11 @@ the kernel modules for new incoming kernel versions attached to upgrades.
 [![Go Reference](https://pkg.go.dev/badge/github.com/rh-ecosystem-edge/kernel-module-management.svg)](https://pkg.go.dev/github.com/rh-ecosystem-edge/kernel-module-management)
 
 ## Getting started
-Install the bleeding edge KMMO in one command:
+Install the bleeding edge KMM in one command:
 ```shell
 oc apply -k https://github.com/rh-ecosystem-edge/kernel-module-management/config/default
 ```
 
-## Examples
-You can find examples on different use cases in [labs](https://github.com/rh-ecosystem-edge/kernel-module-management/tree/main/docs/labs).
+## Documentation and lab
+
+You can find examples and labs on the [documentation website](https://openshift-kmm.netlify.app).
