@@ -62,13 +62,12 @@ func (m *maker) MakeBuildTemplate(
 	owner metav1.Object,
 ) (*buildv1.Build, error) {
 
-	kmmBuild := m.helper.GetRelevantBuild(mod.Spec, mapping)
-
+	kmmBuild := mapping.Build
 	containerImage := mapping.ContainerImage
 
 	// if build AND sign are specified, then we will build an intermediate image
 	// and let sign produce the final image specified in spec.moduleLoader.container.km.containerImage
-	if module.ShouldBeSigned(mod.Spec, mapping) {
+	if module.ShouldBeSigned(mapping) {
 		containerImage = module.IntermediateImageName(mod.Name, mod.Namespace, containerImage)
 	}
 

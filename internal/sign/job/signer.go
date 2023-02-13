@@ -19,8 +19,6 @@ import (
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ca"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 )
 
@@ -48,7 +46,6 @@ type hashData struct {
 type signer struct {
 	client    client.Client
 	scheme    *runtime.Scheme
-	helper    sign.Helper
 	jobHelper utils.JobHelper
 	caHelper  ca.Helper
 }
@@ -56,13 +53,11 @@ type signer struct {
 func NewSigner(
 	client client.Client,
 	scheme *runtime.Scheme,
-	helper sign.Helper,
 	jobHelper utils.JobHelper,
 	caHelper ca.Helper) Signer {
 	return &signer{
 		client:    client,
 		scheme:    scheme,
-		helper:    helper,
 		jobHelper: jobHelper,
 		caHelper:  caHelper,
 	}
@@ -78,21 +73,17 @@ func (s *signer) MakeJobTemplate(
 	pushImage bool,
 	owner metav1.Object) (*batchv1.Job, error) {
 
-	signConfig, err := s.helper.GetRelevantSign(mod.Spec, km, targetKernel)
-	if err != nil {
-		return nil, fmt.Errorf("calculate the signing parameters: %v", err)
-	}
+	signConfig := km.Sign
 
 	args := make([]string, 0)
 
 	if pushImage {
 		args = append(args, "-signedimage", km.ContainerImage)
 
-		registryTLS := module.TLSOptions(mod.Spec, km)
-		if registryTLS.Insecure {
+		if km.RegistryTLS.Insecure {
 			args = append(args, "--insecure")
 		}
-		if registryTLS.InsecureSkipTLSVerify {
+		if km.RegistryTLS.InsecureSkipTLSVerify {
 			args = append(args, "--skip-tls-verify")
 		}
 	} else {

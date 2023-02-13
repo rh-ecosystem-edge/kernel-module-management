@@ -122,7 +122,7 @@ func main() {
 
 	metricsAPI := metrics.New()
 	metricsAPI.Register()
-	helperAPI := build.NewHelper()
+	buildHelperAPI := build.NewHelper()
 	registryAPI := registry.NewRegistry()
 	authFactory := auth.NewRegistryAuthGetterFactory(
 		client,
@@ -133,7 +133,7 @@ func main() {
 
 	buildAPI := buildconfig.NewManager(
 		client,
-		buildconfig.NewMaker(client, helperAPI, scheme, kernelOsDtkMapping),
+		buildconfig.NewMaker(client, buildHelperAPI, scheme, kernelOsDtkMapping),
 		buildconfig.NewOpenShiftBuildsHelper(client),
 		authFactory,
 		registryAPI,
@@ -143,14 +143,14 @@ func main() {
 	caHelper := ca.NewHelper(client, scheme)
 
 	signAPI := signjob.NewSignJobManager(
-		signjob.NewSigner(client, scheme, sign.NewSignerHelper(), jobHelperAPI, caHelper),
+		signjob.NewSigner(client, scheme, jobHelperAPI, caHelper),
 		jobHelperAPI,
 		authFactory,
 		registryAPI,
 	)
 
 	daemonAPI := daemonset.NewCreator(client, constants.KernelLabel, scheme)
-	kernelAPI := module.NewKernelMapper()
+	kernelAPI := module.NewKernelMapper(buildHelperAPI, sign.NewSignerHelper())
 
 	mc := controllers.NewModuleReconciler(
 		client,

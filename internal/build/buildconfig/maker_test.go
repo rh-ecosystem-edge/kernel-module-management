@@ -166,7 +166,6 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 		expected.SetAnnotations(annotations)
 
 		gomock.InOrder(
-			mockBuildHelper.EXPECT().GetRelevantBuild(mod.Spec, mapping).Return(mapping.Build),
 			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: dockerfileConfigMap.Name, Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, cm *v1.ConfigMap, _ ...ctrlclient.GetOption) error {
 					cm.Data = dockerfileCMData
@@ -188,13 +187,11 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 
 	Context(fmt.Sprintf("using %s", dtkBuildArg), func() {
 		It("should fail if we couldn't get the DTK image", func() {
-
 			build := &kmmv1beta1.Build{
 				DockerfileConfigMap: &dockerfileConfigMap,
 			}
 
 			gomock.InOrder(
-				mockBuildHelper.EXPECT().GetRelevantBuild(gomock.Any(), gomock.Any()).Return(build),
 				clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
 					func(_ interface{}, _ interface{}, cm *v1.ConfigMap, _ ...ctrlclient.GetOption) error {
 						dockerfileData := fmt.Sprintf("FROM %s", dtkBuildArg)
@@ -206,7 +203,7 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 			)
 
 			mod := kmmv1beta1.Module{}
-			_, err := maker.MakeBuildTemplate(ctx, mod, kmmv1beta1.KernelMapping{}, "", false, &mod)
+			_, err := maker.MakeBuildTemplate(ctx, mod, kmmv1beta1.KernelMapping{Build: build}, "", false, &mod)
 			Expect(err).To(HaveOccurred())
 		})
 
@@ -226,7 +223,6 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 			}
 
 			gomock.InOrder(
-				mockBuildHelper.EXPECT().GetRelevantBuild(gomock.Any(), gomock.Any()).Return(build),
 				clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
 					func(_ interface{}, _ interface{}, cm *v1.ConfigMap, _ ...ctrlclient.GetOption) error {
 						dockerfileData := fmt.Sprintf("FROM %s", dtkBuildArg)
@@ -239,7 +235,7 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 			)
 
 			mod := kmmv1beta1.Module{}
-			bct, err := maker.MakeBuildTemplate(ctx, mod, kmmv1beta1.KernelMapping{}, "", false, &mod)
+			bct, err := maker.MakeBuildTemplate(ctx, mod, kmmv1beta1.KernelMapping{Build: build}, "", false, &mod)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(bct.Spec.CommonSpec.Strategy.DockerStrategy.BuildArgs)).To(Equal(1))
 			Expect(bct.Spec.CommonSpec.Strategy.DockerStrategy.BuildArgs[0].Name).To(Equal(buildArgs[0].Name))

@@ -55,7 +55,7 @@ func (bcm *buildManager) GarbageCollect(ctx context.Context, modName, namespace 
 
 func (bcm *buildManager) ShouldSync(ctx context.Context, mod kmmv1beta1.Module, m kmmv1beta1.KernelMapping) (bool, error) {
 	// if there is no build specified skip
-	if !module.ShouldBeBuilt(mod.Spec, m) {
+	if !module.ShouldBeBuilt(m) {
 		return false, nil
 	}
 
@@ -63,7 +63,7 @@ func (bcm *buildManager) ShouldSync(ctx context.Context, mod kmmv1beta1.Module, 
 
 	// if build AND sign are specified, then we will build an intermediate image
 	// and let sign produce the one specified in targetImage
-	if module.ShouldBeSigned(mod.Spec, m) {
+	if module.ShouldBeSigned(m) {
 		targetImage = module.IntermediateImageName(mod.Name, mod.Namespace, targetImage)
 	}
 

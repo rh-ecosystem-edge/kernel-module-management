@@ -21,7 +21,6 @@ import (
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 )
 
@@ -48,7 +47,6 @@ var _ = Describe("MakeJobTemplate", func() {
 		clnt      *client.MockClient
 		m         Signer
 		mod       kmmv1beta1.Module
-		helper    *sign.MockHelper
 		jobhelper *utils.MockJobHelper
 		caHelper  *ca.MockHelper
 	)
@@ -56,10 +54,9 @@ var _ = Describe("MakeJobTemplate", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		helper = sign.NewMockHelper(ctrl)
 		jobhelper = utils.NewMockJobHelper(ctrl)
 		caHelper = ca.NewMockHelper(ctrl)
-		m = NewSigner(clnt, scheme, helper, jobhelper, caHelper)
+		m = NewSigner(clnt, scheme, jobhelper, caHelper)
 		mod = kmmv1beta1.Module{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      moduleName,
@@ -94,6 +91,7 @@ var _ = Describe("MakeJobTemplate", func() {
 				FilesToSign:   strings.Split(filesToSign, ","),
 			},
 			ContainerImage: signedImage,
+			RegistryTLS:    &kmmv1beta1.TLSOptions{},
 		}
 
 		secretMount := v1.VolumeMount{
@@ -258,7 +256,6 @@ var _ = Describe("MakeJobTemplate", func() {
 		mod.Spec.Selector = nodeSelector
 
 		gomock.InOrder(
-			helper.EXPECT().GetRelevantSign(mod.Spec, km, kernelVersion).Return(km.Sign, nil),
 			caHelper.
 				EXPECT().
 				GetClusterCA(ctx, mod.Namespace).
@@ -316,10 +313,10 @@ var _ = Describe("MakeJobTemplate", func() {
 				FilesToSign:   filelist,
 			},
 			ContainerImage: unsignedImage,
+			RegistryTLS:    &kmmv1beta1.TLSOptions{},
 		}
 
 		gomock.InOrder(
-			helper.EXPECT().GetRelevantSign(mod.Spec, km, kernelVersion).Return(km.Sign, nil),
 			caHelper.EXPECT().GetClusterCA(ctx, mod.Namespace).Return(&ca.ConfigMap{}, nil),
 			caHelper.EXPECT().GetServiceCA(ctx, mod.Namespace).Return(&ca.ConfigMap{}, nil),
 			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: "builder", Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
@@ -391,7 +388,6 @@ var _ = Describe("MakeJobTemplate", func() {
 			},
 		}
 		gomock.InOrder(
-			helper.EXPECT().GetRelevantSign(mod.Spec, km, kernelVersion).Return(km.Sign, nil),
 			caHelper.EXPECT().GetClusterCA(ctx, mod.Namespace).Return(&ca.ConfigMap{}, nil),
 			caHelper.EXPECT().GetServiceCA(ctx, mod.Namespace).Return(&ca.ConfigMap{}, nil),
 			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: "builder", Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
