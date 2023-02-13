@@ -16,5 +16,14 @@ spec:
               - name: build-secret
             dockerfileConfigMap:
               name: kmm-kmod-dockerfile
+          sign:
+            certSecret:
+              name: kmm-kmod-signing-cert
+            keySecret:
+              name: kmm-kmod-signing-key
+            unsignedImageRegistryTLS:
+              insecure: true
+            filesToSign:
+              - /opt/lib/modules/${KERNEL_FULL_VERSION}/kmm_ci_a.ko
   selector:
     task: kmm-ci
