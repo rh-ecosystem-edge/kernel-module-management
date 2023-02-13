@@ -315,7 +315,7 @@ var _ = Describe("preflightHelper_verifyBuild", func() {
 		mapping := kmmv1beta1.KernelMapping{ContainerImage: containerImage}
 
 		mockBuildAPI.EXPECT().Sync(context.Background(), *mod, mapping, kernelVersion, pv.Spec.PushBuiltImage, pv).
-			Return(build.Result{}, fmt.Errorf("some error"))
+			Return(utils.Status(""), fmt.Errorf("some error"))
 
 		res, msg := ph.verifyBuild(context.Background(), pv, &mapping, mod)
 		Expect(res).To(BeFalse())
@@ -327,7 +327,7 @@ var _ = Describe("preflightHelper_verifyBuild", func() {
 		mapping := kmmv1beta1.KernelMapping{ContainerImage: containerImage}
 
 		mockBuildAPI.EXPECT().Sync(context.Background(), *mod, mapping, kernelVersion, pv.Spec.PushBuiltImage, pv).
-			Return(build.Result{Status: build.StatusCompleted}, nil)
+			Return(utils.Status(utils.StatusCompleted), nil)
 
 		res, msg := ph.verifyBuild(context.Background(), pv, &mapping, mod)
 		Expect(res).To(BeTrue())
@@ -339,7 +339,7 @@ var _ = Describe("preflightHelper_verifyBuild", func() {
 		mapping := kmmv1beta1.KernelMapping{ContainerImage: containerImage}
 
 		mockBuildAPI.EXPECT().Sync(context.Background(), *mod, mapping, kernelVersion, pv.Spec.PushBuiltImage, pv).
-			Return(build.Result{Status: build.StatusInProgress}, nil)
+			Return(utils.Status(utils.StatusInProgress), nil)
 
 		res, msg := ph.verifyBuild(context.Background(), pv, &mapping, mod)
 		Expect(res).To(BeFalse())
@@ -377,7 +377,7 @@ var _ = Describe("preflightHelper_verifySign", func() {
 		previousImage := ""
 
 		mockSignAPI.EXPECT().Sync(context.Background(), *mod, mapping, kernelVersion, previousImage, pv.Spec.PushBuiltImage, pv).
-			Return(utils.Result{}, fmt.Errorf("some error"))
+			Return(utils.Status(""), fmt.Errorf("some error"))
 
 		res, msg := ph.verifySign(context.Background(), pv, &mapping, mod)
 		Expect(res).To(BeFalse())
@@ -391,7 +391,7 @@ var _ = Describe("preflightHelper_verifySign", func() {
 		previousImage := ""
 
 		mockSignAPI.EXPECT().Sync(context.Background(), *mod, mapping, kernelVersion, previousImage, pv.Spec.PushBuiltImage, pv).
-			Return(utils.Result{Status: utils.StatusCompleted}, nil)
+			Return(utils.Status(utils.StatusCompleted), nil)
 
 		res, msg := ph.verifySign(context.Background(), pv, &mapping, mod)
 		Expect(res).To(BeTrue())
@@ -405,7 +405,7 @@ var _ = Describe("preflightHelper_verifySign", func() {
 		previousImage := ""
 
 		mockSignAPI.EXPECT().Sync(context.Background(), *mod, mapping, kernelVersion, previousImage, pv.Spec.PushBuiltImage, pv).
-			Return(utils.Result{Status: utils.StatusInProgress}, nil)
+			Return(utils.Status(utils.StatusInProgress), nil)
 
 		res, msg := ph.verifySign(context.Background(), pv, &mapping, mod)
 		Expect(res).To(BeFalse())
