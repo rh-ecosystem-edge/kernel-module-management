@@ -10,7 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	v1 "github.com/openshift/api/build/v1"
-	v1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	api "github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 )
 
 // MockOpenShiftBuildsHelper is a mock of OpenShiftBuildsHelper interface.
@@ -37,16 +37,16 @@ func (m *MockOpenShiftBuildsHelper) EXPECT() *MockOpenShiftBuildsHelperMockRecor
 }
 
 // GetBuild mocks base method.
-func (m *MockOpenShiftBuildsHelper) GetBuild(ctx context.Context, mod v1beta1.Module, targetKernel string) (*v1.Build, error) {
+func (m *MockOpenShiftBuildsHelper) GetBuild(ctx context.Context, mld *api.ModuleLoaderData) (*v1.Build, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBuild", ctx, mod, targetKernel)
+	ret := m.ctrl.Call(m, "GetBuild", ctx, mld)
 	ret0, _ := ret[0].(*v1.Build)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetBuild indicates an expected call of GetBuild.
-func (mr *MockOpenShiftBuildsHelperMockRecorder) GetBuild(ctx, mod, targetKernel interface{}) *gomock.Call {
+func (mr *MockOpenShiftBuildsHelperMockRecorder) GetBuild(ctx, mld interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBuild", reflect.TypeOf((*MockOpenShiftBuildsHelper)(nil).GetBuild), ctx, mod, targetKernel)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBuild", reflect.TypeOf((*MockOpenShiftBuildsHelper)(nil).GetBuild), ctx, mld)
 }

@@ -4,6 +4,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 )
 
@@ -67,9 +68,9 @@ func (m *helper) GetRelevantBuild(moduleBuild *kmmv1beta1.Build, mappingBuild *k
 	return buildConfig
 }
 
-func GetBuildLabels(mod kmmv1beta1.Module, targetKernel string) map[string]string {
+func GetBuildLabels(mld *api.ModuleLoaderData) map[string]string {
 	return map[string]string{
-		constants.ModuleNameLabel:    mod.Name,
-		constants.TargetKernelTarget: targetKernel,
+		constants.ModuleNameLabel:    mld.Name,
+		constants.TargetKernelTarget: mld.KernelVersion,
 	}
 }

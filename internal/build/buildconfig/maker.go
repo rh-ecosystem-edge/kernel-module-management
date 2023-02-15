@@ -8,6 +8,7 @@ import (
 	"github.com/mitchellh/hashstructure"
 	buildv1 "github.com/openshift/api/build/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	kmmbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
@@ -29,9 +30,7 @@ const dtkBuildArg = "DTK_AUTO"
 type Maker interface {
 	MakeBuildTemplate(
 		ctx context.Context,
-		mod kmmv1beta1.Module,
-		mapping kmmv1beta1.KernelMapping,
-		targetKernel string,
+		mld *api.ModuleLoaderData,
 		pushImage bool,
 		owner metav1.Object,
 	) (*buildv1.Build, error)
@@ -55,39 +54,38 @@ func NewMaker(client client.Client, helper kmmbuild.Helper, scheme *runtime.Sche
 
 func (m *maker) MakeBuildTemplate(
 	ctx context.Context,
-	mod kmmv1beta1.Module,
-	mapping kmmv1beta1.KernelMapping,
-	targetKernel string,
+	mld *api.ModuleLoaderData,
 	pushImage bool,
 	owner metav1.Object,
 ) (*buildv1.Build, error) {
 
-	kmmBuild := mapping.Build
-	containerImage := mapping.ContainerImage
+	kmmBuild := mld.Build
+	containerImage := mld.ContainerImage
+	kernelVersion := mld.KernelVersion
 
 	// if build AND sign are specified, then we will build an intermediate image
 	// and let sign produce the final image specified in spec.moduleLoader.container.km.containerImage
-	if module.ShouldBeSigned(mapping) {
-		containerImage = module.IntermediateImageName(mod.Name, mod.Namespace, containerImage)
+	if module.ShouldBeSigned(mld) {
+		containerImage = module.IntermediateImageName(mld.Name, mld.Namespace, containerImage)
 	}
 
 	overrides := []kmmv1beta1.BuildArg{
 		{
 			Name:  "KERNEL_VERSION",
-			Value: targetKernel,
+			Value: kernelVersion,
 		},
 	}
 
-	dockerfileData, err := m.getDockerfileData(ctx, kmmBuild, mod.Namespace)
+	dockerfileData, err := m.getDockerfileData(ctx, kmmBuild, mld.Namespace)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get dockerfile data from configmap: %v", err)
 	}
 
 	if strings.Contains(dockerfileData, dtkBuildArg) {
 
-		dtkImage, err := m.kernelOsDtkMapping.GetImage(targetKernel)
+		dtkImage, err := m.kernelOsDtkMapping.GetImage(kernelVersion)
 		if err != nil {
-			return nil, fmt.Errorf("could not get DTK image for kernel %v: %v", targetKernel, err)
+			return nil, fmt.Errorf("could not get DTK image for kernel %v: %v", kernelVersion, err)
 		}
 		overrides = append(overrides, kmmv1beta1.BuildArg{Name: dtkBuildArg, Value: dtkImage})
 	}
@@ -102,7 +100,7 @@ func (m *maker) MakeBuildTemplate(
 			Kind: "DockerImage",
 			Name: containerImage,
 		},
-		PushSecret: mod.Spec.ImageRepoSecret,
+		PushSecret: mld.ImageRepoSecret,
 	}
 	if !pushImage {
 		buildTarget = buildv1.BuildOutput{}
@@ -120,9 +118,9 @@ func (m *maker) MakeBuildTemplate(
 
 	bc := buildv1.Build{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: mod.Name + "-",
-			Namespace:    mod.Namespace,
-			Labels:       kmmbuild.GetBuildLabels(mod, targetKernel),
+			GenerateName: mld.Name + "-",
+			Namespace:    mld.Namespace,
+			Labels:       kmmbuild.GetBuildLabels(mld),
 			Annotations:  map[string]string{buildHashAnnotation: fmt.Sprintf("%d", sourceConfigHash)},
 		},
 		Spec: buildv1.BuildSpec{
@@ -137,7 +135,7 @@ func (m *maker) MakeBuildTemplate(
 					},
 				},
 				Output:         buildTarget,
-				NodeSelector:   mod.Spec.Selector,
+				NodeSelector:   mld.Selector,
 				MountTrustedCA: pointer.Bool(true),
 			},
 		},

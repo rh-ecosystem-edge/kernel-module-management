@@ -19,6 +19,7 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
@@ -45,8 +46,8 @@ var _ = Describe("MakeJobTemplate", func() {
 	var (
 		ctrl      *gomock.Controller
 		clnt      *client.MockClient
+		mld       api.ModuleLoaderData
 		m         Signer
-		mod       kmmv1beta1.Module
 		jobhelper *utils.MockJobHelper
 		caHelper  *ca.MockHelper
 	)
@@ -57,11 +58,16 @@ var _ = Describe("MakeJobTemplate", func() {
 		jobhelper = utils.NewMockJobHelper(ctrl)
 		caHelper = ca.NewMockHelper(ctrl)
 		m = NewSigner(clnt, scheme, jobhelper, caHelper)
-		mod = kmmv1beta1.Module{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      moduleName,
-				Namespace: namespace,
+		mld = api.ModuleLoaderData{
+			Name:      moduleName,
+			Namespace: namespace,
+			Owner: &kmmv1beta1.Module{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      moduleName,
+					Namespace: namespace,
+				},
 			},
+			KernelVersion: kernelVersion,
 		}
 	})
 
@@ -83,16 +89,14 @@ var _ = Describe("MakeJobTemplate", func() {
 		ctx := context.Background()
 		nodeSelector := map[string]string{"arch": "x64"}
 
-		km := kmmv1beta1.KernelMapping{
-			Sign: &kmmv1beta1.Sign{
-				UnsignedImage: signedImage,
-				KeySecret:     &v1.LocalObjectReference{Name: "securebootkey"},
-				CertSecret:    &v1.LocalObjectReference{Name: "securebootcert"},
-				FilesToSign:   strings.Split(filesToSign, ","),
-			},
-			ContainerImage: signedImage,
-			RegistryTLS:    &kmmv1beta1.TLSOptions{},
+		mld.Sign = &kmmv1beta1.Sign{
+			UnsignedImage: signedImage,
+			KeySecret:     &v1.LocalObjectReference{Name: "securebootkey"},
+			CertSecret:    &v1.LocalObjectReference{Name: "securebootcert"},
+			FilesToSign:   strings.Split(filesToSign, ","),
 		}
+		mld.ContainerImage = signedImage
+		mld.RegistryTLS = &kmmv1beta1.TLSOptions{}
 
 		secretMount := v1.VolumeMount{
 			Name:      "secret-securebootcert",
@@ -171,7 +175,7 @@ var _ = Describe("MakeJobTemplate", func() {
 
 		expected := &batchv1.Job{
 			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: mod.Name + "-sign-",
+				GenerateName: mld.Name + "-sign-",
 				Namespace:    namespace,
 				Labels: map[string]string{
 					constants.ModuleNameLabel:    moduleName,
@@ -224,7 +228,7 @@ var _ = Describe("MakeJobTemplate", func() {
 			},
 		}
 		if imagePullSecret != nil {
-			mod.Spec.ImageRepoSecret = imagePullSecret
+			mld.ImageRepoSecret = imagePullSecret
 			expected.Spec.Template.Spec.Containers[0].VolumeMounts =
 				append(expected.Spec.Template.Spec.Containers[0].VolumeMounts,
 					v1.VolumeMount{
@@ -252,31 +256,30 @@ var _ = Describe("MakeJobTemplate", func() {
 		annotations := map[string]string{constants.JobHashAnnotation: fmt.Sprintf("%d", hash)}
 		expected.SetAnnotations(annotations)
 
-		mod := mod.DeepCopy()
-		mod.Spec.Selector = nodeSelector
+		mld.Selector = nodeSelector
 
 		gomock.InOrder(
 			caHelper.
 				EXPECT().
-				GetClusterCA(ctx, mod.Namespace).
+				GetClusterCA(ctx, mld.Namespace).
 				Return(&ca.ConfigMap{KeyName: clusterCACMKeyName, Name: clusterCACMName}, nil),
 			caHelper.
 				EXPECT().
-				GetServiceCA(ctx, mod.Namespace).
+				GetServiceCA(ctx, mld.Namespace).
 				Return(&ca.ConfigMap{KeyName: serviceCACMKeyName, Name: serviceCACMName}, nil),
-			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: "builder", Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
+			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: "builder", Namespace: mld.Namespace}, gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, svcaccnt *v1.ServiceAccount, _ ...ctrlclient.GetOption) error {
 					svcaccnt.Secrets = []v1.ObjectReference{}
 					return nil
 				},
 			),
-			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: km.Sign.KeySecret.Name, Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
+			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.KeySecret.Name, Namespace: mld.Namespace}, gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
 					secret.Data = privateSignData
 					return nil
 				},
 			),
-			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: km.Sign.CertSecret.Name, Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
+			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.CertSecret.Name, Namespace: mld.Namespace}, gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
 					secret.Data = publicSignData
 					return nil
@@ -284,7 +287,7 @@ var _ = Describe("MakeJobTemplate", func() {
 			),
 		)
 
-		actual, err := m.MakeJobTemplate(ctx, *mod, km, kernelVersion, labels, unsignedImage, true, mod)
+		actual, err := m.MakeJobTemplate(ctx, &mld, labels, unsignedImage, true, mld.Owner)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(
@@ -305,33 +308,31 @@ var _ = Describe("MakeJobTemplate", func() {
 
 	DescribeTable("should set correct kmod-signer flags", func(filelist []string, pushImage bool) {
 		ctx := context.Background()
-		km := kmmv1beta1.KernelMapping{
-			Sign: &kmmv1beta1.Sign{
-				UnsignedImage: signedImage,
-				KeySecret:     &v1.LocalObjectReference{Name: "securebootkey"},
-				CertSecret:    &v1.LocalObjectReference{Name: "securebootcert"},
-				FilesToSign:   filelist,
-			},
-			ContainerImage: unsignedImage,
-			RegistryTLS:    &kmmv1beta1.TLSOptions{},
+		mld.Sign = &kmmv1beta1.Sign{
+			UnsignedImage: signedImage,
+			KeySecret:     &v1.LocalObjectReference{Name: "securebootkey"},
+			CertSecret:    &v1.LocalObjectReference{Name: "securebootcert"},
+			FilesToSign:   filelist,
 		}
+		mld.ContainerImage = unsignedImage
+		mld.RegistryTLS = &kmmv1beta1.TLSOptions{}
 
 		gomock.InOrder(
-			caHelper.EXPECT().GetClusterCA(ctx, mod.Namespace).Return(&ca.ConfigMap{}, nil),
-			caHelper.EXPECT().GetServiceCA(ctx, mod.Namespace).Return(&ca.ConfigMap{}, nil),
-			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: "builder", Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
+			caHelper.EXPECT().GetClusterCA(ctx, mld.Namespace).Return(&ca.ConfigMap{}, nil),
+			caHelper.EXPECT().GetServiceCA(ctx, mld.Namespace).Return(&ca.ConfigMap{}, nil),
+			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: "builder", Namespace: mld.Namespace}, gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, svcaccnt *v1.ServiceAccount, _ ...ctrlclient.GetOption) error {
 					svcaccnt.Secrets = []v1.ObjectReference{}
 					return nil
 				},
 			),
-			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: km.Sign.KeySecret.Name, Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
+			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.KeySecret.Name, Namespace: mld.Namespace}, gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
 					secret.Data = privateSignData
 					return nil
 				},
 			),
-			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: km.Sign.CertSecret.Name, Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
+			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.CertSecret.Name, Namespace: mld.Namespace}, gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
 					secret.Data = publicSignData
 					return nil
@@ -339,7 +340,7 @@ var _ = Describe("MakeJobTemplate", func() {
 			),
 		)
 
-		actual, err := m.MakeJobTemplate(ctx, mod, km, kernelVersion, labels, "", pushImage, &mod)
+		actual, err := m.MakeJobTemplate(ctx, &mld, labels, "", pushImage, mld.Owner)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(actual.Spec.Template.Spec.Containers[0].Args).To(ContainElement("-unsignedimage"))
@@ -378,32 +379,30 @@ var _ = Describe("MakeJobTemplate", func() {
 	DescribeTable("should set correct kmod-signer TLS flags", func(kmRegistryTLS,
 		unsignedImageRegistryTLS kmmv1beta1.TLSOptions, expectedFlag string) {
 		ctx := context.Background()
-		km := kmmv1beta1.KernelMapping{
-			RegistryTLS: &kmRegistryTLS,
-			Sign: &kmmv1beta1.Sign{
-				UnsignedImage:            signedImage,
-				UnsignedImageRegistryTLS: unsignedImageRegistryTLS,
-				KeySecret:                &v1.LocalObjectReference{Name: "securebootkey"},
-				CertSecret:               &v1.LocalObjectReference{Name: "securebootcert"},
-			},
+		mld.Sign = &kmmv1beta1.Sign{
+			UnsignedImage:            signedImage,
+			UnsignedImageRegistryTLS: unsignedImageRegistryTLS,
+			KeySecret:                &v1.LocalObjectReference{Name: "securebootkey"},
+			CertSecret:               &v1.LocalObjectReference{Name: "securebootcert"},
 		}
+		mld.RegistryTLS = &kmRegistryTLS
 		gomock.InOrder(
-			caHelper.EXPECT().GetClusterCA(ctx, mod.Namespace).Return(&ca.ConfigMap{}, nil),
-			caHelper.EXPECT().GetServiceCA(ctx, mod.Namespace).Return(&ca.ConfigMap{}, nil),
-			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: "builder", Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
+			caHelper.EXPECT().GetClusterCA(ctx, mld.Namespace).Return(&ca.ConfigMap{}, nil),
+			caHelper.EXPECT().GetServiceCA(ctx, mld.Namespace).Return(&ca.ConfigMap{}, nil),
+			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: "builder", Namespace: mld.Namespace}, gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, svcaccnt *v1.ServiceAccount, _ ...ctrlclient.GetOption) error {
 					svcaccnt.Secrets = []v1.ObjectReference{}
 					return nil
 				},
 			),
-			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: km.Sign.KeySecret.Name, Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
+			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.KeySecret.Name, Namespace: mld.Namespace}, gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
 					secret.Data = privateSignData
 					return nil
 				},
 			),
 
-			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: km.Sign.CertSecret.Name, Namespace: mod.Namespace}, gomock.Any()).DoAndReturn(
+			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.CertSecret.Name, Namespace: mld.Namespace}, gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
 					secret.Data = publicSignData
 					return nil
@@ -411,7 +410,7 @@ var _ = Describe("MakeJobTemplate", func() {
 			),
 		)
 
-		actual, err := m.MakeJobTemplate(ctx, mod, km, kernelVersion, labels, "", true, &mod)
+		actual, err := m.MakeJobTemplate(ctx, &mld, labels, "", true, mld.Owner)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(actual.Spec.Template.Spec.Containers[0].Args).To(ContainElement(expectedFlag))
