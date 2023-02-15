@@ -15,9 +15,9 @@ import (
 
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
-	kmmbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 )
 
 var _ = Describe("Manager", func() {
@@ -216,15 +216,14 @@ var _ = Describe("Manager", func() {
 				mockKubeClient.EXPECT().Create(ctx, &build),
 			)
 
-			res, err := m.Sync(ctx, mod, mapping, targetKernel, true, &mod)
+			status, err := m.Sync(ctx, mod, mapping, targetKernel, true, &mod)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(res.Status).To(BeEquivalentTo(kmmbuild.StatusCreated))
-			Expect(res.Requeue).To(BeTrue())
+			Expect(status).To(Equal(utils.Status(utils.StatusCreated)))
 		})
 
 		DescribeTable(
 			"should return the Build status when a Build is present",
-			func(phase buildv1.BuildPhase, expectedResult kmmbuild.Result, expectError bool) {
+			func(phase buildv1.BuildPhase, expectedStatus utils.Status, expectError bool) {
 				const buildName = "some-build"
 
 				By("Authenticating with the ServiceAccount's pull secret")
@@ -262,21 +261,21 @@ var _ = Describe("Manager", func() {
 					mockOpenShiftBuildsHelper.EXPECT().GetBuild(ctx, mod, targetKernel).Return(&build, nil),
 				)
 
-				res, err := m.Sync(ctx, mod, mapping, targetKernel, true, &mod)
+				status, err := m.Sync(ctx, mod, mapping, targetKernel, true, &mod)
 
 				if expectError {
 					Expect(err).To(HaveOccurred())
 				} else {
 					Expect(err).NotTo(HaveOccurred())
-					Expect(res).To(BeEquivalentTo(expectedResult))
+					Expect(status).To(Equal(expectedStatus))
 				}
 			},
-			Entry(nil, buildv1.BuildPhaseComplete, kmmbuild.Result{Status: kmmbuild.StatusCompleted}, false),
-			Entry(nil, buildv1.BuildPhaseNew, kmmbuild.Result{Status: kmmbuild.StatusInProgress, Requeue: true}, false),
-			Entry(nil, buildv1.BuildPhasePending, kmmbuild.Result{Status: kmmbuild.StatusInProgress, Requeue: true}, false),
-			Entry(nil, buildv1.BuildPhaseRunning, kmmbuild.Result{Status: kmmbuild.StatusInProgress, Requeue: true}, false),
-			Entry(nil, buildv1.BuildPhaseFailed, kmmbuild.Result{}, true),
-			Entry(nil, buildv1.BuildPhaseCancelled, kmmbuild.Result{}, true),
+			Entry(nil, buildv1.BuildPhaseComplete, utils.Status(utils.StatusCompleted), false),
+			Entry(nil, buildv1.BuildPhaseNew, utils.Status(utils.StatusInProgress), false),
+			Entry(nil, buildv1.BuildPhasePending, utils.Status(utils.StatusInProgress), false),
+			Entry(nil, buildv1.BuildPhaseRunning, utils.Status(utils.StatusInProgress), false),
+			Entry(nil, buildv1.BuildPhaseFailed, utils.Status(""), true),
+			Entry(nil, buildv1.BuildPhaseCancelled, utils.Status(""), true),
 		)
 	})
 })

@@ -85,33 +85,33 @@ func (bcm *buildManager) Sync(
 	targetKernel string,
 	pushImage bool,
 	owner metav1.Object,
-) (kmmbuild.Result, error) {
+) (utils.Status, error) {
 
 	logger := log.FromContext(ctx)
 
 	buildTemplate, err := bcm.maker.MakeBuildTemplate(ctx, mod, m, targetKernel, pushImage, owner)
 	if err != nil {
-		return kmmbuild.Result{}, fmt.Errorf("could not make Build template: %v", err)
+		return "", fmt.Errorf("could not make Build template: %v", err)
 	}
 
 	build, err := bcm.ocpBuildsHelper.GetBuild(ctx, mod, targetKernel)
 	if err != nil {
 		if !errors.Is(err, errNoMatchingBuild) {
-			return kmmbuild.Result{}, fmt.Errorf("error getting the build: %v", err)
+			return "", fmt.Errorf("error getting the build: %v", err)
 		}
 
 		logger.Info("Creating Build")
 
 		if err = bcm.client.Create(ctx, buildTemplate); err != nil {
-			return kmmbuild.Result{}, fmt.Errorf("could not create Build: %v", err)
+			return "", fmt.Errorf("could not create Build: %v", err)
 		}
 
-		return kmmbuild.Result{Status: kmmbuild.StatusCreated, Requeue: true}, nil
+		return utils.StatusCreated, nil
 	}
 
 	changed, err := bcm.isBuildChanged(build, buildTemplate)
 	if err != nil {
-		return kmmbuild.Result{}, fmt.Errorf("could not determine if Build has changed: %v", err)
+		return "", fmt.Errorf("could not determine if Build has changed: %v", err)
 	}
 
 	if changed {
@@ -123,18 +123,18 @@ func (bcm *buildManager) Sync(
 		if err != nil {
 			logger.Info(utils.WarnString(fmt.Sprintf("failed to delete Build %s: %v", build.Name, err)))
 		}
-		return kmmbuild.Result{Status: kmmbuild.StatusInProgress, Requeue: true}, nil
+		return utils.StatusInProgress, nil
 	}
 
 	switch build.Status.Phase {
 	case buildv1.BuildPhaseComplete:
-		return kmmbuild.Result{Status: kmmbuild.StatusCompleted}, nil
+		return utils.StatusCompleted, nil
 	case buildv1.BuildPhaseNew, buildv1.BuildPhasePending, buildv1.BuildPhaseRunning:
-		return kmmbuild.Result{Status: kmmbuild.StatusInProgress, Requeue: true}, nil
+		return utils.StatusInProgress, nil
 	case buildv1.BuildPhaseFailed:
-		return kmmbuild.Result{}, fmt.Errorf("build failed: %v", build.Status.LogSnippet)
+		return utils.StatusFailed, fmt.Errorf("build failed: %v", build.Status.LogSnippet)
 	default:
-		return kmmbuild.Result{}, fmt.Errorf("unknown status: %v", build.Status)
+		return "", fmt.Errorf("unknown status: %v", build.Status)
 	}
 }
 

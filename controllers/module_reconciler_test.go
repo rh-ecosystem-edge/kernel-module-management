@@ -508,9 +508,11 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockKM.EXPECT().GetMergedMappingForKernel(&mod.Spec, kernelVersion).Return(&mappings[0], nil),
 			mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, moduleName, namespace).Return(dsByKernelVersion, nil),
 			mockBM.EXPECT().ShouldSync(gomock.Any(), mod, mappings[0]).Return(true, nil),
-			mockBM.EXPECT().Sync(gomock.Any(), mod, mappings[0], kernelVersion, true, &mod),
+			mockBM.EXPECT().Sync(gomock.Any(), mod, mappings[0], kernelVersion, true, &mod).Return(utils.Status(utils.StatusCompleted), nil),
+			mockMetrics.EXPECT().SetCompletedStage(moduleName, namespace, kernelVersion, metrics.BuildStage, true),
 			mockSM.EXPECT().ShouldSync(gomock.Any(), mod, mappings[0]).Return(true, nil),
-			mockSM.EXPECT().Sync(gomock.Any(), mod, mappings[0], kernelVersion, "", true, &mod),
+			mockSM.EXPECT().Sync(gomock.Any(), mod, mappings[0], kernelVersion, "", true, &mod).Return(utils.Status(utils.StatusCompleted), nil),
+			mockMetrics.EXPECT().SetCompletedStage(moduleName, namespace, kernelVersion, metrics.SignStage, true),
 			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).Return(apierrors.NewNotFound(schema.GroupResource{}, "whatever")),
 			mockDC.EXPECT().SetDriverContainerAsDesired(context.Background(), &ds, imageName, gomock.AssignableToTypeOf(mod), kernelVersion, true),
 			clnt.EXPECT().Create(ctx, gomock.Any()).Return(nil),
@@ -628,9 +630,11 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 			mockKM.EXPECT().GetMergedMappingForKernel(&mod.Spec, kernelVersion).Return(&mappings[0], nil),
 			mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, moduleName, namespace).Return(dsByKernelVersion, nil),
 			mockBM.EXPECT().ShouldSync(gomock.Any(), mod, mappings[0]).Return(true, nil),
-			mockBM.EXPECT().Sync(gomock.Any(), mod, mappings[0], kernelVersion, true, &mod),
+			mockBM.EXPECT().Sync(gomock.Any(), mod, mappings[0], kernelVersion, true, &mod).Return(utils.Status(utils.StatusCompleted), nil),
+			mockMetrics.EXPECT().SetCompletedStage(moduleName, namespace, kernelVersion, metrics.BuildStage, true),
 			mockSM.EXPECT().ShouldSync(gomock.Any(), mod, mappings[0]).Return(true, nil),
-			mockSM.EXPECT().Sync(gomock.Any(), mod, mappings[0], kernelVersion, "", true, &mod),
+			mockSM.EXPECT().Sync(gomock.Any(), mod, mappings[0], kernelVersion, "", true, &mod).Return(utils.Status(utils.StatusCompleted), nil),
+			mockMetrics.EXPECT().SetCompletedStage(moduleName, namespace, kernelVersion, metrics.SignStage, true),
 			mockDC.EXPECT().SetDriverContainerAsDesired(context.Background(), &ds, imageName, gomock.AssignableToTypeOf(mod), kernelVersion, true).Do(
 				func(ctx context.Context, d *appsv1.DaemonSet, _ string, _ kmmv1beta1.Module, _ string, _ bool) {
 					d.SetLabels(map[string]string{"test": "test"})
@@ -795,9 +799,9 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 			namespace,
 		)
 
-		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion)
+		completed, err := mr.handleBuild(context.Background(), mod, km, kernelVersion)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(BeFalse())
+		Expect(completed).To(BeTrue())
 	})
 
 	It("should record that a job was created when the build sync returns StatusCreated", func() {
@@ -813,29 +817,16 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 			},
 			Spec: kmmv1beta1.ModuleSpec{},
 		}
-		buildRes := build.Result{Requeue: true, Status: build.StatusCreated}
 		gomock.InOrder(
 			mockBM.EXPECT().ShouldSync(gomock.Any(), *mod, *km).Return(true, nil),
-			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), true, mod).Return(buildRes, nil),
+			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), true, mod).Return(utils.Status(utils.StatusCreated), nil),
 			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, kernelVersion, metrics.BuildStage, false),
 		)
 
-		mr := NewModuleReconciler(
-			clnt,
-			mockBM,
-			mockSM,
-			mockDC,
-			mockKM,
-			mockMetrics,
-			nil,
-			mockSU,
-			mockCAH,
-			namespace,
-		)
-
-		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion)
+		mr := NewModuleReconciler(clnt, mockBM, mockSM, mockDC, mockKM, mockMetrics, nil, mockSU, mockCAH, namespace)
+		completed, err := mr.handleBuild(context.Background(), mod, km, kernelVersion)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(BeTrue())
+		Expect(completed).To(BeFalse())
 	})
 
 	It("should record that a job was completed, when the build sync returns StatusCompleted", func() {
@@ -851,34 +842,20 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 			},
 			Spec: kmmv1beta1.ModuleSpec{},
 		}
-		buildRes := build.Result{Requeue: false, Status: build.StatusCompleted}
 		gomock.InOrder(
 			mockBM.EXPECT().ShouldSync(gomock.Any(), *mod, *km).Return(true, nil),
-			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), true, mod).Return(buildRes, nil),
+			mockBM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), true, mod).Return(utils.Status(utils.StatusCompleted), nil),
 			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, kernelVersion, metrics.BuildStage, true),
 		)
 
-		mr := NewModuleReconciler(
-			clnt,
-			mockBM,
-			mockSM,
-			mockDC,
-			mockKM,
-			mockMetrics,
-			nil,
-			mockSU,
-			mockCAH,
-			namespace,
-		)
-
-		res, err := mr.handleBuild(context.Background(), mod, km, kernelVersion)
+		mr := NewModuleReconciler(clnt, mockBM, mockSM, mockDC, mockKM, mockMetrics, nil, mockSU, mockCAH, namespace)
+		completed, err := mr.handleBuild(context.Background(), mod, km, kernelVersion)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(BeFalse())
+		Expect(completed).To(BeTrue())
 	})
 
 })
 
-/***************** signing ***********************/
 var _ = Describe("ModuleReconciler_handleSigning", func() {
 	var (
 		ctrl        *gomock.Controller
@@ -933,9 +910,9 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 			namespace,
 		)
 
-		res, err := mr.handleSigning(context.Background(), mod, km, kernelVersion)
+		completed, err := mr.handleSigning(context.Background(), mod, km, kernelVersion)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(BeFalse())
+		Expect(completed).To(BeTrue())
 	})
 
 	It("should record that a job was created when the sign sync returns StatusCreated", func() {
@@ -952,10 +929,9 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 			Spec: kmmv1beta1.ModuleSpec{},
 		}
 
-		signRes := utils.Result{Requeue: true, Status: utils.StatusCreated}
 		gomock.InOrder(
 			mockSM.EXPECT().ShouldSync(gomock.Any(), *mod, *km).Return(true, nil),
-			mockSM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), "", true, mod).Return(signRes, nil),
+			mockSM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), "", true, mod).Return(utils.Status(utils.StatusCreated), nil),
 			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, kernelVersion, metrics.SignStage, false),
 		)
 		mr := NewModuleReconciler(
@@ -971,10 +947,10 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 			namespace,
 		)
 
-		res, err := mr.handleSigning(context.Background(), mod, km, kernelVersion)
+		completed, err := mr.handleSigning(context.Background(), mod, km, kernelVersion)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(BeTrue())
+		Expect(completed).To(BeFalse())
 	})
 
 	It("should record that a job was completed when the sign sync returns StatusCompleted", func() {
@@ -991,10 +967,9 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 			Spec: kmmv1beta1.ModuleSpec{},
 		}
 
-		signRes := utils.Result{Requeue: false, Status: build.StatusCompleted}
 		gomock.InOrder(
 			mockSM.EXPECT().ShouldSync(gomock.Any(), *mod, *km).Return(true, nil),
-			mockSM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), "", true, mod).Return(signRes, nil),
+			mockSM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), "", true, mod).Return(utils.Status(utils.StatusCompleted), nil),
 			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, kernelVersion, metrics.SignStage, true),
 		)
 
@@ -1011,10 +986,10 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 			namespace,
 		)
 
-		res, err := mr.handleSigning(context.Background(), mod, km, kernelVersion)
+		completed, err := mr.handleSigning(context.Background(), mod, km, kernelVersion)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(BeFalse())
+		Expect(completed).To(BeTrue())
 	})
 
 	It("should run sign sync with the previous image as well when module build and sign are specified", func() {
@@ -1032,10 +1007,10 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 			Spec: kmmv1beta1.ModuleSpec{},
 		}
 
-		signRes := utils.Result{Requeue: false, Status: build.StatusCompleted}
 		gomock.InOrder(
 			mockSM.EXPECT().ShouldSync(gomock.Any(), *mod, *km).Return(true, nil),
-			mockSM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), imageName+":"+namespace+"_"+moduleName+"_kmm_unsigned", true, mod).Return(signRes, nil),
+			mockSM.EXPECT().Sync(gomock.Any(), *mod, *km, gomock.Any(), imageName+":"+namespace+"_"+moduleName+"_kmm_unsigned", true, mod).
+				Return(utils.Status(utils.StatusCompleted), nil),
 			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, kernelVersion, metrics.SignStage, true),
 		)
 
@@ -1052,14 +1027,12 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 			namespace,
 		)
 
-		res, err := mr.handleSigning(context.Background(), mod, km, kernelVersion)
+		completed, err := mr.handleSigning(context.Background(), mod, km, kernelVersion)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(BeFalse())
+		Expect(completed).To(BeTrue())
 	})
 })
-
-/***************** end signing ***********************/
 
 var _ = Describe("ModuleReconciler_getNodesListBySelector", func() {
 	var (
