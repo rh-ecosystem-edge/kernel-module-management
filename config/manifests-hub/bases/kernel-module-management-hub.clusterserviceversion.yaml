@@ -5,14 +5,15 @@ metadata:
     alm-examples: '[]'
     capabilities: Basic Install
     operatorframework.io/suggested-namespace: openshift-kmm-hub
+    repository: https://github.com/rh-ecosystem-edge/kernel-module-management
   name: kernel-module-management-hub.v0.0.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-    - description: ManagedClusterModule is the Schema for the managedclustermodules
-        API
+    - description: ManagedClusterModule describes how to load a kernel module on managed
+        clusters
       displayName: Managed Cluster Module
       kind: ManagedClusterModule
       name: managedclustermodules.hub.kmm.sigs.x-k8s.io
@@ -41,9 +42,6 @@ spec:
   - kernel
   - module
   - modules
-  links:
-  - name: Kernel Module Management Hub
-    url: https://github.com/rh-ecosystem-edge/kernel-module-management
   maintainers:
   - email: edge-kmm@redhat.com
     name: Red Hat Ecosystem - Partner Accelerators Team

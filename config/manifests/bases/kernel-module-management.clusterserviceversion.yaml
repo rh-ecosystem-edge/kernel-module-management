@@ -5,13 +5,14 @@ metadata:
     alm-examples: '[]'
     capabilities: Basic Install
     operatorframework.io/suggested-namespace: openshift-kmm
+    repository: https://github.com/rh-ecosystem-edge/kernel-module-management
   name: kernel-module-management.v0.0.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-    - description: Module is the Schema for the modules API
+    - description: Module describes how to load a module on different kernel versions
       displayName: Module
       kind: Module
       name: modules.kmm.sigs.x-k8s.io
@@ -52,9 +53,6 @@ spec:
   - kernel
   - module
   - modules
-  links:
-  - name: kernel module management
-    url: https://github.com/rh-ecosystem-edge/kernel-module-management
   maintainers:
   - email: edge-kmm@redhat.com
     name: Red Hat Ecosystem - Partner Accelerators Team

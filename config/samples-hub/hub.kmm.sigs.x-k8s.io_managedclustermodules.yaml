@@ -3,7 +3,6 @@ kind: ManagedClusterModule
 metadata:
   name: managedclustermodule-sample
 spec:
-  jobNamespace: default
   moduleSpec:
     moduleLoader:
       container:
