@@ -10,7 +10,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 
-	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 )
@@ -61,8 +61,7 @@ var _ = Describe("ImageExists", func() {
 		mockAuthFactory *auth.MockRegistryAuthGetterFactory
 		mockRegistry    *registry.MockRegistry
 
-		mod kmmv1beta1.Module
-		km  kmmv1beta1.KernelMapping
+		mld api.ModuleLoaderData
 		ctx context.Context
 	)
 
@@ -72,26 +71,17 @@ var _ = Describe("ImageExists", func() {
 		mockAuthFactory = auth.NewMockRegistryAuthGetterFactory(ctrl)
 		mockRegistry = registry.NewMockRegistry(ctrl)
 
-		mod = kmmv1beta1.Module{
-			Spec: kmmv1beta1.ModuleSpec{
-				ModuleLoader: kmmv1beta1.ModuleLoaderSpec{
-					Container: kmmv1beta1.ModuleLoaderContainerSpec{},
-				},
-			},
-		}
-
-		km = kmmv1beta1.KernelMapping{}
-
+		mld = api.ModuleLoaderData{}
 		ctx = context.Background()
 	})
 
 	It("should return true if the image exists", func() {
 		gomock.InOrder(
-			mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(&mod),
+			mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(&mld),
 			mockRegistry.EXPECT().ImageExists(ctx, imageName, gomock.Any(), nil).Return(true, nil),
 		)
 
-		exists, err := ImageExists(ctx, mockAuthFactory, mockRegistry, mod, km, imageName)
+		exists, err := ImageExists(ctx, mockAuthFactory, mockRegistry, &mld, imageName)
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(exists).To(BeTrue())
@@ -99,11 +89,11 @@ var _ = Describe("ImageExists", func() {
 
 	It("should return false if the image does not exist", func() {
 		gomock.InOrder(
-			mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(&mod),
+			mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(&mld),
 			mockRegistry.EXPECT().ImageExists(ctx, imageName, gomock.Any(), nil).Return(false, nil),
 		)
 
-		exists, err := ImageExists(ctx, mockAuthFactory, mockRegistry, mod, km, imageName)
+		exists, err := ImageExists(ctx, mockAuthFactory, mockRegistry, &mld, imageName)
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(exists).To(BeFalse())
@@ -111,11 +101,11 @@ var _ = Describe("ImageExists", func() {
 
 	It("should return an error if the registry call fails", func() {
 		gomock.InOrder(
-			mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(&mod),
+			mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(&mld),
 			mockRegistry.EXPECT().ImageExists(ctx, imageName, gomock.Any(), nil).Return(false, errors.New("some-error")),
 		)
 
-		exists, err := ImageExists(ctx, mockAuthFactory, mockRegistry, mod, km, imageName)
+		exists, err := ImageExists(ctx, mockAuthFactory, mockRegistry, &mld, imageName)
 
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("some-error"))
@@ -123,21 +113,17 @@ var _ = Describe("ImageExists", func() {
 	})
 
 	It("should use the ImageRepoSecret if one is specified", func() {
-		mod := kmmv1beta1.Module{
-			Spec: kmmv1beta1.ModuleSpec{
-				ImageRepoSecret: &v1.LocalObjectReference{
-					Name: "secret",
-				},
-			},
+		mld.ImageRepoSecret = &v1.LocalObjectReference{
+			Name: "secret",
 		}
 
 		authGetter := &auth.MockRegistryAuthGetter{}
 		gomock.InOrder(
-			mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(&mod).Return(authGetter),
+			mockAuthFactory.EXPECT().NewRegistryAuthGetterFrom(&mld).Return(authGetter),
 			mockRegistry.EXPECT().ImageExists(ctx, imageName, gomock.Any(), authGetter).Return(false, nil),
 		)
 
-		exists, err := ImageExists(ctx, mockAuthFactory, mockRegistry, mod, km, imageName)
+		exists, err := ImageExists(ctx, mockAuthFactory, mockRegistry, &mld, imageName)
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(exists).To(BeFalse())

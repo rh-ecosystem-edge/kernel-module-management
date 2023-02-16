@@ -16,7 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ca"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
@@ -27,9 +27,7 @@ import (
 type Signer interface {
 	MakeJobTemplate(
 		ctx context.Context,
-		mod kmmv1beta1.Module,
-		km kmmv1beta1.KernelMapping,
-		targetKernel string,
+		mld *api.ModuleLoaderData,
 		labels map[string]string,
 		imageToSign string,
 		pushImage bool,
@@ -65,25 +63,23 @@ func NewSigner(
 
 func (s *signer) MakeJobTemplate(
 	ctx context.Context,
-	mod kmmv1beta1.Module,
-	km kmmv1beta1.KernelMapping,
-	targetKernel string,
+	mld *api.ModuleLoaderData,
 	labels map[string]string,
 	imageToSign string,
 	pushImage bool,
 	owner metav1.Object) (*batchv1.Job, error) {
 
-	signConfig := km.Sign
+	signConfig := mld.Sign
 
 	args := make([]string, 0)
 
 	if pushImage {
-		args = append(args, "-signedimage", km.ContainerImage)
+		args = append(args, "-signedimage", mld.ContainerImage)
 
-		if km.RegistryTLS.Insecure {
+		if mld.RegistryTLS.Insecure {
 			args = append(args, "--insecure")
 		}
-		if km.RegistryTLS.InsecureSkipTLSVerify {
+		if mld.RegistryTLS.InsecureSkipTLSVerify {
 			args = append(args, "--skip-tls-verify")
 		}
 	} else {
@@ -112,12 +108,12 @@ func (s *signer) MakeJobTemplate(
 		args = append(args, "--skip-tls-verify-pull")
 	}
 
-	clusterCACM, err := s.caHelper.GetClusterCA(ctx, mod.Namespace)
+	clusterCACM, err := s.caHelper.GetClusterCA(ctx, mld.Namespace)
 	if err != nil {
 		return nil, fmt.Errorf("could not get the cluster CA ConfigMap: %v", err)
 	}
 
-	servingCACM, err := s.caHelper.GetServiceCA(ctx, mod.Namespace)
+	servingCACM, err := s.caHelper.GetServiceCA(ctx, mld.Namespace)
 	if err != nil {
 		return nil, fmt.Errorf("could not get the serving CA ConfigMap: %v", err)
 	}
@@ -172,8 +168,8 @@ func (s *signer) MakeJobTemplate(
 		},
 	}
 
-	imageSecret := mod.Spec.ImageRepoSecret
-	buildImageSecret, err := s.getSAImageRepoSecret(ctx, &mod, constants.OCPBuilderServiceAccountName)
+	imageSecret := mld.ImageRepoSecret
+	buildImageSecret, err := s.getSAImageRepoSecret(ctx, mld, constants.OCPBuilderServiceAccountName)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get secrets for service account %s: %v", constants.OCPBuilderServiceAccountName, err)
 	}
@@ -210,19 +206,19 @@ func (s *signer) MakeJobTemplate(
 			},
 			RestartPolicy: v1.RestartPolicyNever,
 			Volumes:       volumes,
-			NodeSelector:  mod.Spec.Selector,
+			NodeSelector:  mld.Selector,
 		},
 	}
 
-	specTemplateHash, err := s.getHashAnnotationValue(ctx, signConfig.KeySecret.Name, signConfig.CertSecret.Name, mod.Namespace, &specTemplate)
+	specTemplateHash, err := s.getHashAnnotationValue(ctx, signConfig.KeySecret.Name, signConfig.CertSecret.Name, mld.Namespace, &specTemplate)
 	if err != nil {
 		return nil, fmt.Errorf("could not hash job's definitions: %v", err)
 	}
 
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: mod.Name + "-sign-",
-			Namespace:    mod.Namespace,
+			GenerateName: mld.Name + "-sign-",
+			Namespace:    mld.Namespace,
 			Labels:       labels,
 			Annotations:  map[string]string{constants.JobHashAnnotation: fmt.Sprintf("%d", specTemplateHash)},
 		},
@@ -253,10 +249,10 @@ func (s *signer) getHashAnnotationValue(ctx context.Context, privateSecret, publ
 	return getHashValue(podTemplate, publicKeyData, privateKeyData)
 }
 
-func (s *signer) getSAImageRepoSecret(ctx context.Context, mod *kmmv1beta1.Module, accountName string) ([]v1.ObjectReference, error) {
+func (s *signer) getSAImageRepoSecret(ctx context.Context, mld *api.ModuleLoaderData, accountName string) ([]v1.ObjectReference, error) {
 	serviceaccount := v1.ServiceAccount{}
 
-	namespacedName := types.NamespacedName{Name: accountName, Namespace: mod.Namespace}
+	namespacedName := types.NamespacedName{Name: accountName, Namespace: mld.Namespace}
 
 	err := s.client.Get(ctx, namespacedName, &serviceaccount)
 	if err != nil {

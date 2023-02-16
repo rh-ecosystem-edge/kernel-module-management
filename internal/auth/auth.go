@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/authn/kubernetes"
-	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -66,7 +66,7 @@ func (sarag *serviceAccountRegistryAuthGetter) GetKeyChain(ctx context.Context) 
 }
 
 type RegistryAuthGetterFactory interface {
-	NewRegistryAuthGetterFrom(mod *kmmv1beta1.Module) RegistryAuthGetter
+	NewRegistryAuthGetterFrom(mld *api.ModuleLoaderData) RegistryAuthGetter
 	NewClusterAuthGetter() RegistryAuthGetter
 }
 
@@ -97,16 +97,16 @@ func (af *registryAuthGetterFactory) newServiceAccountRegistryAuthGetter(namespa
 	}
 }
 
-func (af *registryAuthGetterFactory) NewRegistryAuthGetterFrom(mod *kmmv1beta1.Module) RegistryAuthGetter {
-	if mod.Spec.ImageRepoSecret != nil {
+func (af *registryAuthGetterFactory) NewRegistryAuthGetterFrom(mld *api.ModuleLoaderData) RegistryAuthGetter {
+	if mld.ImageRepoSecret != nil {
 		namespacedName := types.NamespacedName{
-			Name:      mod.Spec.ImageRepoSecret.Name,
-			Namespace: mod.Namespace,
+			Name:      mld.ImageRepoSecret.Name,
+			Namespace: mld.Namespace,
 		}
 		return af.newRegistryAuthGetter(namespacedName)
 	}
 	return af.newServiceAccountRegistryAuthGetter(
-		mod.Namespace,
+		mld.Namespace,
 		constants.OCPBuilderServiceAccountName)
 }
 

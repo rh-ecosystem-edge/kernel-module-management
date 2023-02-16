@@ -10,7 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	kmmbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
@@ -53,24 +53,24 @@ func (bcm *buildManager) GarbageCollect(ctx context.Context, modName, namespace 
 	return nil, nil
 }
 
-func (bcm *buildManager) ShouldSync(ctx context.Context, mod kmmv1beta1.Module, m kmmv1beta1.KernelMapping) (bool, error) {
+func (bcm *buildManager) ShouldSync(ctx context.Context, mld *api.ModuleLoaderData) (bool, error) {
 	// if there is no build specified skip
-	if !module.ShouldBeBuilt(m) {
+	if !module.ShouldBeBuilt(mld) {
 		return false, nil
 	}
 
-	targetImage := m.ContainerImage
+	targetImage := mld.ContainerImage
 
 	// if build AND sign are specified, then we will build an intermediate image
 	// and let sign produce the one specified in targetImage
-	if module.ShouldBeSigned(m) {
-		targetImage = module.IntermediateImageName(mod.Name, mod.Namespace, targetImage)
+	if module.ShouldBeSigned(mld) {
+		targetImage = module.IntermediateImageName(mld.Name, mld.Namespace, targetImage)
 	}
 
 	// build is specified and targetImage is either the final image or the intermediate image
 	// tag, depending on whether sign is specified or not. Either way, if targetImage exists
 	// we can skip building it
-	exists, err := module.ImageExists(ctx, bcm.authFactory, bcm.registry, mod, m, targetImage)
+	exists, err := module.ImageExists(ctx, bcm.authFactory, bcm.registry, mld, targetImage)
 	if err != nil {
 		return false, fmt.Errorf("failed to check existence of image %s: %w", targetImage, err)
 	}
@@ -80,21 +80,19 @@ func (bcm *buildManager) ShouldSync(ctx context.Context, mod kmmv1beta1.Module, 
 
 func (bcm *buildManager) Sync(
 	ctx context.Context,
-	mod kmmv1beta1.Module,
-	m kmmv1beta1.KernelMapping,
-	targetKernel string,
+	mld *api.ModuleLoaderData,
 	pushImage bool,
 	owner metav1.Object,
 ) (utils.Status, error) {
 
 	logger := log.FromContext(ctx)
 
-	buildTemplate, err := bcm.maker.MakeBuildTemplate(ctx, mod, m, targetKernel, pushImage, owner)
+	buildTemplate, err := bcm.maker.MakeBuildTemplate(ctx, mld, pushImage, owner)
 	if err != nil {
 		return "", fmt.Errorf("could not make Build template: %v", err)
 	}
 
-	build, err := bcm.ocpBuildsHelper.GetBuild(ctx, mod, targetKernel)
+	build, err := bcm.ocpBuildsHelper.GetBuild(ctx, mld)
 	if err != nil {
 		if !errors.Is(err, errNoMatchingBuild) {
 			return "", fmt.Errorf("error getting the build: %v", err)
@@ -153,7 +151,7 @@ func (bcm *buildManager) isBuildChanged(existingBuild *buildv1.Build, newBuild *
 //go:generate mockgen -source=manager.go -package=buildconfig -destination=mock_manager.go
 
 type OpenShiftBuildsHelper interface {
-	GetBuild(ctx context.Context, mod kmmv1beta1.Module, targetKernel string) (*buildv1.Build, error)
+	GetBuild(ctx context.Context, mld *api.ModuleLoaderData) (*buildv1.Build, error)
 }
 
 type openShiftBuildsHelper struct {
@@ -164,12 +162,12 @@ func NewOpenShiftBuildsHelper(client client.Client) OpenShiftBuildsHelper {
 	return &openShiftBuildsHelper{client: client}
 }
 
-func (osbh *openShiftBuildsHelper) GetBuild(ctx context.Context, mod kmmv1beta1.Module, targetKernel string) (*buildv1.Build, error) {
+func (osbh *openShiftBuildsHelper) GetBuild(ctx context.Context, mld *api.ModuleLoaderData) (*buildv1.Build, error) {
 	buildList := buildv1.BuildList{}
 
 	opts := []client.ListOption{
-		client.MatchingLabels(kmmbuild.GetBuildLabels(mod, targetKernel)),
-		client.InNamespace(mod.Namespace),
+		client.MatchingLabels(kmmbuild.GetBuildLabels(mld)),
+		client.InNamespace(mld.Namespace),
 	}
 
 	if err := osbh.client.List(ctx, &buildList, opts...); err != nil {

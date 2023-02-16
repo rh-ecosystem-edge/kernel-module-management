@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	appsv1 "k8s.io/api/apps/v1"
@@ -34,7 +35,7 @@ const (
 type DaemonSetCreator interface {
 	GarbageCollect(ctx context.Context, existingDS map[string]*appsv1.DaemonSet, validKernels sets.String) ([]string, error)
 	ModuleDaemonSetsByKernelVersion(ctx context.Context, name, namespace string) (map[string]*appsv1.DaemonSet, error)
-	SetDriverContainerAsDesired(ctx context.Context, ds *appsv1.DaemonSet, image string, mod kmmv1beta1.Module, kernelVersion string, useDefaultSA bool) error
+	SetDriverContainerAsDesired(ctx context.Context, ds *appsv1.DaemonSet, mld *api.ModuleLoaderData, useDefaultSA bool) error
 	SetDevicePluginAsDesired(ctx context.Context, ds *appsv1.DaemonSet, mod *kmmv1beta1.Module, useDefaultSA bool) error
 	GetNodeLabelFromPod(pod *v1.Pod, moduleName string) string
 }
@@ -94,25 +95,24 @@ func (dc *daemonSetGenerator) ModuleDaemonSetsByKernelVersion(ctx context.Contex
 func (dc *daemonSetGenerator) SetDriverContainerAsDesired(
 	ctx context.Context,
 	ds *appsv1.DaemonSet,
-	image string,
-	mod kmmv1beta1.Module,
-	kernelVersion string,
+	mld *api.ModuleLoaderData,
 	useDefaultSA bool,
 ) error {
 	if ds == nil {
 		return errors.New("ds cannot be nil")
 	}
 
-	if image == "" {
-		return errors.New("image cannot be empty")
+	if mld.ContainerImage == "" {
+		return errors.New("container image cannot be empty")
 	}
 
+	kernelVersion := mld.KernelVersion
 	if kernelVersion == "" {
 		return errors.New("kernelVersion cannot be empty")
 	}
 
 	standardLabels := map[string]string{
-		constants.ModuleNameLabel: mod.Name,
+		constants.ModuleNameLabel: mld.Name,
 		dc.kernelLabel:            kernelVersion,
 	}
 
@@ -120,7 +120,7 @@ func (dc *daemonSetGenerator) SetDriverContainerAsDesired(
 		OverrideLabels(ds.GetLabels(), standardLabels),
 	)
 
-	nodeSelector := CopyMapStringString(mod.Spec.Selector)
+	nodeSelector := CopyMapStringString(mld.Selector)
 	nodeSelector[dc.kernelLabel] = kernelVersion
 
 	nodeLibModulesPath := "/lib/modules/" + kernelVersion
@@ -131,17 +131,17 @@ func (dc *daemonSetGenerator) SetDriverContainerAsDesired(
 	container := v1.Container{
 		Command:         []string{"sleep", "infinity"},
 		Name:            "module-loader",
-		Image:           image,
-		ImagePullPolicy: mod.Spec.ModuleLoader.Container.ImagePullPolicy,
+		Image:           mld.ContainerImage,
+		ImagePullPolicy: mld.ImagePullPolicy,
 		Lifecycle: &v1.Lifecycle{
 			PostStart: &v1.LifecycleHandler{
 				Exec: &v1.ExecAction{
-					Command: MakeLoadCommand(mod.Spec.ModuleLoader.Container.Modprobe, mod.Name),
+					Command: MakeLoadCommand(mld.Modprobe, mld.Name),
 				},
 			},
 			PreStop: &v1.LifecycleHandler{
 				Exec: &v1.ExecAction{
-					Command: MakeUnloadCommand(mod.Spec.ModuleLoader.Container.Modprobe, mod.Name),
+					Command: MakeUnloadCommand(mld.Modprobe, mld.Name),
 				},
 			},
 		},
@@ -176,7 +176,7 @@ func (dc *daemonSetGenerator) SetDriverContainerAsDesired(
 		},
 	}
 
-	if fw := mod.Spec.ModuleLoader.Container.Modprobe.FirmwarePath; fw != "" {
+	if fw := mld.Modprobe.FirmwarePath; fw != "" {
 		firmwareVolume := v1.Volume{
 			Name: nodeVarLibFirmwareVolumeName,
 			VolumeSource: v1.VolumeSource{
@@ -196,7 +196,7 @@ func (dc *daemonSetGenerator) SetDriverContainerAsDesired(
 		container.VolumeMounts = append(container.VolumeMounts, firmwareVolumeMount)
 	}
 
-	serviceAccountName := mod.Spec.ModuleLoader.ServiceAccountName
+	serviceAccountName := mld.ServiceAccountName
 	if serviceAccountName == "" {
 		if useDefaultSA {
 			serviceAccountName = "kmm-operator-module-loader"
@@ -213,7 +213,7 @@ func (dc *daemonSetGenerator) SetDriverContainerAsDesired(
 			},
 			Spec: v1.PodSpec{
 				Containers:         []v1.Container{container},
-				ImagePullSecrets:   GetPodPullSecrets(mod.Spec.ImageRepoSecret),
+				ImagePullSecrets:   GetPodPullSecrets(mld.ImageRepoSecret),
 				NodeSelector:       nodeSelector,
 				PriorityClassName:  "system-node-critical",
 				ServiceAccountName: serviceAccountName,
@@ -223,7 +223,7 @@ func (dc *daemonSetGenerator) SetDriverContainerAsDesired(
 		Selector: &metav1.LabelSelector{MatchLabels: standardLabels},
 	}
 
-	return controllerutil.SetControllerReference(&mod, ds, dc.scheme)
+	return controllerutil.SetControllerReference(mld.Owner, ds, dc.scheme)
 }
 
 func (dc *daemonSetGenerator) SetDevicePluginAsDesired(

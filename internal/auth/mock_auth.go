@@ -10,7 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	authn "github.com/google/go-containerregistry/pkg/authn"
-	v1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	api "github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 )
 
 // MockRegistryAuthGetter is a mock of RegistryAuthGetter interface.
@@ -89,15 +89,15 @@ func (mr *MockRegistryAuthGetterFactoryMockRecorder) NewClusterAuthGetter() *gom
 }
 
 // NewRegistryAuthGetterFrom mocks base method.
-func (m *MockRegistryAuthGetterFactory) NewRegistryAuthGetterFrom(mod *v1beta1.Module) RegistryAuthGetter {
+func (m *MockRegistryAuthGetterFactory) NewRegistryAuthGetterFrom(mld *api.ModuleLoaderData) RegistryAuthGetter {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NewRegistryAuthGetterFrom", mod)
+	ret := m.ctrl.Call(m, "NewRegistryAuthGetterFrom", mld)
 	ret0, _ := ret[0].(RegistryAuthGetter)
 	return ret0
 }
 
 // NewRegistryAuthGetterFrom indicates an expected call of NewRegistryAuthGetterFrom.
-func (mr *MockRegistryAuthGetterFactoryMockRecorder) NewRegistryAuthGetterFrom(mod interface{}) *gomock.Call {
+func (mr *MockRegistryAuthGetterFactoryMockRecorder) NewRegistryAuthGetterFrom(mld interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewRegistryAuthGetterFrom", reflect.TypeOf((*MockRegistryAuthGetterFactory)(nil).NewRegistryAuthGetterFrom), mod)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewRegistryAuthGetterFrom", reflect.TypeOf((*MockRegistryAuthGetterFactory)(nil).NewRegistryAuthGetterFrom), mld)
 }

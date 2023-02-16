@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 )
@@ -25,29 +25,27 @@ func IntermediateImageName(name, namespace, targetImage string) string {
 	return AppendToTag(targetImage, namespace+"_"+name+"_kmm_unsigned")
 }
 
-// ShouldBeBuilt indicates whether the specified KernelMapping of the
+// ShouldBeBuilt indicates whether the specified ModuleLoaderData of the
 // Module should be built or not.
-func ShouldBeBuilt(km kmmv1beta1.KernelMapping) bool {
-	return km.Build != nil
+func ShouldBeBuilt(mld *api.ModuleLoaderData) bool {
+	return mld.Build != nil
 }
 
-// ShouldBeSigned indicates whether the specified KernelMapping of the
+// ShouldBeSigned indicates whether the specified ModuleLoaderData of the
 // Module should be signed or not.
-func ShouldBeSigned(km kmmv1beta1.KernelMapping) bool {
-	return km.Sign != nil
+func ShouldBeSigned(mld *api.ModuleLoaderData) bool {
+	return mld.Sign != nil
 }
 
 func ImageExists(
 	ctx context.Context,
 	authFactory auth.RegistryAuthGetterFactory,
 	reg registry.Registry,
-	mod kmmv1beta1.Module,
-	km kmmv1beta1.KernelMapping,
+	mld *api.ModuleLoaderData,
 	imageName string) (bool, error) {
 
-	registryAuthGetter := authFactory.NewRegistryAuthGetterFrom(&mod)
-
-	tlsOptions := km.RegistryTLS
+	registryAuthGetter := authFactory.NewRegistryAuthGetterFrom(mld)
+	tlsOptions := mld.RegistryTLS
 	exists, err := reg.ImageExists(ctx, imageName, tlsOptions, registryAuthGetter)
 	if err != nil {
 		return false, fmt.Errorf("could not check if the image is available: %v", err)

@@ -14,6 +14,7 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
@@ -44,12 +45,11 @@ var _ = Describe("Manager", func() {
 		It("should return false if there was no build section", func() {
 			ctx := context.Background()
 
-			mod := kmmv1beta1.Module{}
-			km := kmmv1beta1.KernelMapping{}
+			mld := api.ModuleLoaderData{}
 
 			mgr := NewManager(clnt, nil, nil, authFactory, reg)
 
-			shouldSync, err := mgr.ShouldSync(ctx, mod, km)
+			shouldSync, err := mgr.ShouldSync(ctx, &mld)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(shouldSync).To(BeFalse())
@@ -58,30 +58,23 @@ var _ = Describe("Manager", func() {
 		It("should return false if image already exists", func() {
 			ctx := context.Background()
 
-			km := kmmv1beta1.KernelMapping{
-				Build:          &kmmv1beta1.Build{},
-				ContainerImage: imageName,
-			}
-
-			mod := kmmv1beta1.Module{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      moduleName,
-					Namespace: namespace,
-				},
-				Spec: kmmv1beta1.ModuleSpec{
-					ImageRepoSecret: &v1.LocalObjectReference{Name: "pull-push-secret"},
-				},
+			mld := api.ModuleLoaderData{
+				Name:            moduleName,
+				Namespace:       namespace,
+				Build:           &kmmv1beta1.Build{},
+				ContainerImage:  imageName,
+				ImageRepoSecret: &v1.LocalObjectReference{Name: "pull-push-secret"},
 			}
 
 			authGetter := &auth.MockRegistryAuthGetter{}
 			gomock.InOrder(
-				authFactory.EXPECT().NewRegistryAuthGetterFrom(&mod).Return(authGetter),
+				authFactory.EXPECT().NewRegistryAuthGetterFrom(&mld).Return(authGetter),
 				reg.EXPECT().ImageExists(ctx, imageName, gomock.Any(), authGetter).Return(true, nil),
 			)
 
 			mgr := NewManager(clnt, nil, nil, authFactory, reg)
 
-			shouldSync, err := mgr.ShouldSync(ctx, mod, km)
+			shouldSync, err := mgr.ShouldSync(ctx, &mld)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(shouldSync).To(BeFalse())
@@ -90,30 +83,23 @@ var _ = Describe("Manager", func() {
 		It("should return false and an error if image check fails", func() {
 			ctx := context.Background()
 
-			km := kmmv1beta1.KernelMapping{
-				Build:          &kmmv1beta1.Build{},
-				ContainerImage: imageName,
-			}
-
-			mod := kmmv1beta1.Module{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      moduleName,
-					Namespace: namespace,
-				},
-				Spec: kmmv1beta1.ModuleSpec{
-					ImageRepoSecret: &v1.LocalObjectReference{Name: "pull-push-secret"},
-				},
+			mld := api.ModuleLoaderData{
+				Name:            moduleName,
+				Namespace:       namespace,
+				Build:           &kmmv1beta1.Build{},
+				ContainerImage:  imageName,
+				ImageRepoSecret: &v1.LocalObjectReference{Name: "pull-push-secret"},
 			}
 
 			authGetter := &auth.MockRegistryAuthGetter{}
 			gomock.InOrder(
-				authFactory.EXPECT().NewRegistryAuthGetterFrom(&mod).Return(authGetter),
+				authFactory.EXPECT().NewRegistryAuthGetterFrom(&mld).Return(authGetter),
 				reg.EXPECT().ImageExists(ctx, imageName, gomock.Any(), authGetter).Return(false, errors.New("generic-registry-error")),
 			)
 
 			mgr := NewManager(clnt, nil, nil, authFactory, reg)
 
-			shouldSync, err := mgr.ShouldSync(ctx, mod, km)
+			shouldSync, err := mgr.ShouldSync(ctx, &mld)
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("generic-registry-error"))
@@ -123,29 +109,22 @@ var _ = Describe("Manager", func() {
 		It("should return true if image does not exist", func() {
 			ctx := context.Background()
 
-			km := kmmv1beta1.KernelMapping{
-				Build:          &kmmv1beta1.Build{},
-				ContainerImage: imageName,
-			}
-
-			mod := kmmv1beta1.Module{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      moduleName,
-					Namespace: namespace,
-				},
-				Spec: kmmv1beta1.ModuleSpec{
-					ImageRepoSecret: &v1.LocalObjectReference{Name: "pull-push-secret"},
-				},
+			mld := api.ModuleLoaderData{
+				Name:            moduleName,
+				Namespace:       namespace,
+				Build:           &kmmv1beta1.Build{},
+				ContainerImage:  imageName,
+				ImageRepoSecret: &v1.LocalObjectReference{Name: "pull-push-secret"},
 			}
 
 			authGetter := &auth.MockRegistryAuthGetter{}
 			gomock.InOrder(
-				authFactory.EXPECT().NewRegistryAuthGetterFrom(&mod).Return(authGetter),
+				authFactory.EXPECT().NewRegistryAuthGetterFrom(&mld).Return(authGetter),
 				reg.EXPECT().ImageExists(ctx, imageName, gomock.Any(), authGetter).Return(false, nil))
 
 			mgr := NewManager(clnt, nil, nil, authFactory, reg)
 
-			shouldSync, err := mgr.ShouldSync(ctx, mod, km)
+			shouldSync, err := mgr.ShouldSync(ctx, &mld)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(shouldSync).To(BeTrue())
@@ -183,25 +162,19 @@ var _ = Describe("Manager", func() {
 
 			By("Authenticating with a secret")
 
-			mod := kmmv1beta1.Module{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      moduleName,
-					Namespace: namespace,
-				},
-				Spec: kmmv1beta1.ModuleSpec{
-					ImageRepoSecret: &v1.LocalObjectReference{Name: repoSecretName},
-				},
-			}
-
 			tlsOptions := kmmv1beta1.TLSOptions{}
 
 			buildCfg := kmmv1beta1.Build{
 				BaseImageRegistryTLS: tlsOptions,
 			}
 
-			mapping := kmmv1beta1.KernelMapping{
-				Build:          &buildCfg,
-				ContainerImage: containerImage,
+			mld := api.ModuleLoaderData{
+				Name:            moduleName,
+				Namespace:       namespace,
+				ImageRepoSecret: &v1.LocalObjectReference{Name: repoSecretName},
+				Build:           &buildCfg,
+				ContainerImage:  containerImage,
+				KernelVersion:   targetKernel,
 			}
 
 			m := NewManager(mockKubeClient, mockMaker, mockOpenShiftBuildsHelper, nil, nil)
@@ -211,12 +184,12 @@ var _ = Describe("Manager", func() {
 			}
 
 			gomock.InOrder(
-				mockMaker.EXPECT().MakeBuildTemplate(ctx, mod, mapping, targetKernel, true, &mod).Return(&build, nil),
-				mockOpenShiftBuildsHelper.EXPECT().GetBuild(ctx, mod, targetKernel).Return(nil, errNoMatchingBuild),
+				mockMaker.EXPECT().MakeBuildTemplate(ctx, &mld, true, mld.Owner).Return(&build, nil),
+				mockOpenShiftBuildsHelper.EXPECT().GetBuild(ctx, &mld).Return(nil, errNoMatchingBuild),
 				mockKubeClient.EXPECT().Create(ctx, &build),
 			)
 
-			status, err := m.Sync(ctx, mod, mapping, targetKernel, true, &mod)
+			status, err := m.Sync(ctx, &mld, true, mld.Owner)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status).To(Equal(utils.Status(utils.StatusCreated)))
 		})
@@ -228,22 +201,18 @@ var _ = Describe("Manager", func() {
 
 				By("Authenticating with the ServiceAccount's pull secret")
 
-				mod := kmmv1beta1.Module{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      moduleName,
-						Namespace: namespace,
-					},
-				}
-
 				tlsOptions := kmmv1beta1.TLSOptions{}
 
 				buildCfg := kmmv1beta1.Build{
 					BaseImageRegistryTLS: tlsOptions,
 				}
 
-				mapping := kmmv1beta1.KernelMapping{
+				mld := api.ModuleLoaderData{
+					Name:           moduleName,
+					Namespace:      namespace,
 					Build:          &buildCfg,
 					ContainerImage: containerImage,
+					KernelVersion:  targetKernel,
 				}
 
 				m := NewManager(mockKubeClient, mockMaker, mockOpenShiftBuildsHelper, nil, nil)
@@ -257,11 +226,11 @@ var _ = Describe("Manager", func() {
 				}
 
 				gomock.InOrder(
-					mockMaker.EXPECT().MakeBuildTemplate(ctx, mod, mapping, targetKernel, true, &mod).Return(&build, nil),
-					mockOpenShiftBuildsHelper.EXPECT().GetBuild(ctx, mod, targetKernel).Return(&build, nil),
+					mockMaker.EXPECT().MakeBuildTemplate(ctx, &mld, true, mld.Owner).Return(&build, nil),
+					mockOpenShiftBuildsHelper.EXPECT().GetBuild(ctx, &mld).Return(&build, nil),
 				)
 
-				status, err := m.Sync(ctx, mod, mapping, targetKernel, true, &mod)
+				status, err := m.Sync(ctx, &mld, true, mld.Owner)
 
 				if expectError {
 					Expect(err).To(HaveOccurred())
@@ -299,8 +268,11 @@ var _ = Describe("OpenShiftBuildsHelper_GetBuild", func() {
 			Return(errors.New("random error"))
 
 		osbh := NewOpenShiftBuildsHelper(mockKubeClient)
+		mld := api.ModuleLoaderData{
+			KernelVersion: targetKernel,
+		}
 
-		_, err := osbh.GetBuild(ctx, kmmv1beta1.Module{}, targetKernel)
+		_, err := osbh.GetBuild(ctx, &mld)
 
 		Expect(err).To(HaveOccurred())
 	})
@@ -314,8 +286,11 @@ var _ = Describe("OpenShiftBuildsHelper_GetBuild", func() {
 			})
 
 		osbh := NewOpenShiftBuildsHelper(mockKubeClient)
+		mld := api.ModuleLoaderData{
+			KernelVersion: targetKernel,
+		}
 
-		_, err := osbh.GetBuild(ctx, kmmv1beta1.Module{}, targetKernel)
+		_, err := osbh.GetBuild(ctx, &mld)
 
 		Expect(err).To(HaveOccurred())
 	})
@@ -333,8 +308,11 @@ var _ = Describe("OpenShiftBuildsHelper_GetBuild", func() {
 			})
 
 		osbh := NewOpenShiftBuildsHelper(mockKubeClient)
+		mld := api.ModuleLoaderData{
+			KernelVersion: targetKernel,
+		}
 
-		res, err := osbh.GetBuild(ctx, kmmv1beta1.Module{}, targetKernel)
+		res, err := osbh.GetBuild(ctx, &mld)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(Equal(bc))
