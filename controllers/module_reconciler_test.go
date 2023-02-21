@@ -2,7 +2,7 @@ package controllers
 
 import (
 	"context"
-	"errors"
+	"fmt"
 
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
@@ -25,7 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -35,27 +34,28 @@ const (
 
 var _ = Describe("ModuleReconciler_Reconcile", func() {
 	var (
-		ctrl        *gomock.Controller
-		clnt        *client.MockClient
-		mockBM      *build.MockManager
-		mockSM      *sign.MockSignManager
-		mockDC      *daemonset.MockDaemonSetCreator
-		mockKM      *module.MockKernelMapper
-		mockMetrics *metrics.MockMetrics
-		mockSU      *statusupdater.MockModuleStatusUpdater
-		mockCAH     *ca.MockHelper
+		ctrl            *gomock.Controller
+		mockDC          *daemonset.MockDaemonSetCreator
+		mockReconHelper *MockmoduleReconcilerHelperAPI
+		mockSU          *statusupdater.MockModuleStatusUpdater
+		mockCAH         *ca.MockHelper
+		mr              *ModuleReconciler
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
-		clnt = client.NewMockClient(ctrl)
-		mockBM = build.NewMockManager(ctrl)
-		mockSM = sign.NewMockSignManager(ctrl)
 		mockDC = daemonset.NewMockDaemonSetCreator(ctrl)
-		mockKM = module.NewMockKernelMapper(ctrl)
-		mockMetrics = metrics.NewMockMetrics(ctrl)
+		mockReconHelper = NewMockmoduleReconcilerHelperAPI(ctrl)
 		mockSU = statusupdater.NewMockModuleStatusUpdater(ctrl)
 		mockCAH = ca.NewMockHelper(ctrl)
+
+		mr = &ModuleReconciler{
+			daemonAPI:         mockDC,
+			reconHelperAPI:    mockReconHelper,
+			statusUpdaterAPI:  mockSU,
+			caHelper:          mockCAH,
+			operatorNamespace: "different namespace",
+		}
 	})
 
 	const moduleName = "test-module"
@@ -69,722 +69,334 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 
 	ctx := context.Background()
 
-	It("should do nothing if the Module is not available anymore", func() {
-		clnt.
-			EXPECT().
-			Get(ctx, nsn, &kmmv1beta1.Module{}).
-			Return(
-				apierrors.NewNotFound(schema.GroupResource{}, moduleName),
-			)
+	It("should return ok if module has been deleted", func() {
+		mockReconHelper.EXPECT().getRequestedModule(ctx, nsn).Return(nil, apierrors.NewNotFound(schema.GroupResource{}, "whatever"))
 
-		mr := NewModuleReconciler(
-			clnt,
-			mockBM,
-			mockSM,
-			mockDC,
-			mockKM,
-			mockMetrics,
-			nil,
-			mockSU,
-			mockCAH,
-			namespace,
-		)
+		res, err := mr.Reconcile(ctx, req)
 
-		Expect(
-			mr.Reconcile(ctx, req),
-		).To(
-			Equal(reconcile.Result{}),
-		)
+		Expect(res).To(Equal(reconcile.Result{}))
+		Expect(err).NotTo(HaveOccurred())
 	})
 
-	Context("when the operator's namespace is different than the Module's namespace", func() {
-		const operatorNamespace = "operator-ns"
-
-		It("should return an error if the CAs cannot be synced", func() {
-
-			mod := kmmv1beta1.Module{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      moduleName,
-					Namespace: namespace,
-				},
-			}
-
-			gomock.InOrder(
-				clnt.EXPECT().Get(ctx, req.NamespacedName, gomock.Any()).DoAndReturn(
-					func(_ interface{}, _ interface{}, m *kmmv1beta1.Module, _ ...ctrlclient.GetOption) error {
-						m.ObjectMeta = mod.ObjectMeta
-						m.Spec = mod.Spec
-						return nil
-					},
-				),
-				mockCAH.EXPECT().Sync(ctx, namespace, &mod).Return(errors.New("random error")),
-			)
-
-			mr := NewModuleReconciler(
-				clnt,
-				mockBM,
-				mockSM,
-				mockDC,
-				mockKM,
-				mockMetrics,
-				nil,
-				mockSU,
-				mockCAH,
-				operatorNamespace,
-			)
-
-			_, err := mr.Reconcile(ctx, req)
-			Expect(err).To(HaveOccurred())
-		})
-
-		It("should sync CAs successfully", func() {
-			mod := kmmv1beta1.Module{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      moduleName,
-					Namespace: namespace,
-				},
-			}
-
-			gomock.InOrder(
-				clnt.EXPECT().Get(ctx, req.NamespacedName, gomock.Any()).DoAndReturn(
-					func(_ interface{}, _ interface{}, m *kmmv1beta1.Module, _ ...ctrlclient.GetOption) error {
-						m.ObjectMeta = mod.ObjectMeta
-						m.Spec = mod.Spec
-						return nil
-					},
-				),
-				mockCAH.EXPECT().Sync(ctx, namespace, &mod).Return(nil),
-				clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-					func(_ interface{}, list *kmmv1beta1.ModuleList, _ ...interface{}) error {
-						list.Items = []kmmv1beta1.Module{mod}
-						return nil
-					},
-				),
-				mockMetrics.EXPECT().SetExistingKMMOModules(1),
-				clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-					func(_ interface{}, list *v1.NodeList, _ ...interface{}) error {
-						list.Items = []v1.Node{}
-						return nil
-					},
-				),
-			)
-
-			mr := NewModuleReconciler(
-				clnt,
-				mockBM,
-				mockSM,
-				mockDC,
-				mockKM,
-				mockMetrics,
-				nil,
-				mockSU,
-				mockCAH,
-				operatorNamespace,
-			)
-
-			dsByKernelVersion := make(map[string]*appsv1.DaemonSet)
-
-			gomock.InOrder(
-				mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, moduleName, namespace).Return(dsByKernelVersion, nil),
-				mockDC.EXPECT().GarbageCollect(ctx, dsByKernelVersion, sets.NewString()),
-				mockBM.EXPECT().GarbageCollect(ctx, mod.Name, mod.Namespace, &mod),
-				mockSM.EXPECT().GarbageCollect(ctx, mod.Name, mod.Namespace, &mod),
-				mockSU.EXPECT().ModuleUpdateStatus(ctx, &mod, []v1.Node{}, []v1.Node{}, dsByKernelVersion).Return(nil),
-			)
-
-			_, err := mr.Reconcile(ctx, req)
-			Expect(err).NotTo(HaveOccurred())
-		})
-	})
-
-	It("should add the module loader and device plugin ServiceAccounts if they are not set", func() {
+	It("should return an error if the CAs cannot be synced", func() {
 		mod := kmmv1beta1.Module{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      moduleName,
 				Namespace: namespace,
 			},
-			Spec: kmmv1beta1.ModuleSpec{
-				Selector: map[string]string{"key": "value"},
-				ModuleLoader: kmmv1beta1.ModuleLoaderSpec{
-					ServiceAccountName: "",
-				},
-				DevicePlugin: &kmmv1beta1.DevicePluginSpec{
-					ServiceAccountName: "",
-				},
-			},
-		}
-		ds := appsv1.DaemonSet{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      moduleName + "-device-plugin",
-				Namespace: namespace,
-			},
 		}
 
 		gomock.InOrder(
-			clnt.EXPECT().Get(ctx, req.NamespacedName, gomock.Any()).DoAndReturn(
-				func(_ interface{}, _ interface{}, m *kmmv1beta1.Module, _ ...ctrlclient.GetOption) error {
-					m.ObjectMeta = mod.ObjectMeta
-					m.Spec = mod.Spec
-					return nil
-				},
-			),
-			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ interface{}, list *kmmv1beta1.ModuleList, _ ...interface{}) error {
-					list.Items = []kmmv1beta1.Module{mod}
-					return nil
-				},
-			),
-			mockMetrics.EXPECT().SetExistingKMMOModules(1),
-			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ interface{}, list *v1.NodeList, _ ...interface{}) error {
-					list.Items = []v1.Node{}
-					return nil
-				},
-			),
-			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).Return(apierrors.NewNotFound(schema.GroupResource{}, "whatever")),
-			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).Return(apierrors.NewNotFound(schema.GroupResource{}, "whatever")),
-			mockDC.EXPECT().SetDevicePluginAsDesired(context.Background(), &ds, gomock.AssignableToTypeOf(&mod), true),
-			clnt.EXPECT().Create(ctx, gomock.Any()).Return(nil),
-			mockMetrics.EXPECT().SetCompletedStage(moduleName, namespace, "", metrics.DevicePluginStage, false),
+			mockReconHelper.EXPECT().getRequestedModule(ctx, nsn).Return(&mod, nil),
+			mockCAH.EXPECT().Sync(ctx, namespace, &mod).Return(fmt.Errorf("some error")),
 		)
 
-		mr := NewModuleReconciler(
-			clnt,
-			mockBM,
-			mockSM,
-			mockDC,
-			mockKM,
-			mockMetrics,
-			nil,
-			mockSU,
-			mockCAH,
-			namespace,
-		)
+		res, err := mr.Reconcile(ctx, req)
 
-		dsByKernelVersion := make(map[string]*appsv1.DaemonSet)
-
-		gomock.InOrder(
-			mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, moduleName, namespace).Return(dsByKernelVersion, nil),
-			mockDC.EXPECT().GarbageCollect(ctx, dsByKernelVersion, sets.NewString()),
-			mockBM.EXPECT().GarbageCollect(ctx, mod.Name, mod.Namespace, &mod),
-			mockSM.EXPECT().GarbageCollect(ctx, mod.Name, mod.Namespace, &mod),
-			mockSU.EXPECT().ModuleUpdateStatus(ctx, &mod, []v1.Node{}, []v1.Node{}, dsByKernelVersion).Return(nil),
-		)
-
-		res, err := mr.Reconcile(context.Background(), req)
-		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(Equal(reconcile.Result{}))
+		Expect(err).To(HaveOccurred())
+
 	})
 
-	It("should do nothing when no nodes match the selector", func() {
-		const serviceAccountName = "module-loader-service-account"
-
-		mod := kmmv1beta1.Module{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      moduleName,
-				Namespace: namespace,
-			},
-			Spec: kmmv1beta1.ModuleSpec{
-				Selector: map[string]string{"key": "value"},
-				ModuleLoader: kmmv1beta1.ModuleLoaderSpec{
-					ServiceAccountName: serviceAccountName,
-				},
-			},
+	DescribeTable("check error flows", func(getModuleError, getNodesError, getMappingsError, getDSError, handleBuildError,
+		handleSignError, handleDCError, handlePluginError, gcError bool) {
+		mod := kmmv1beta1.Module{}
+		selectNodesList := []v1.Node{v1.Node{}}
+		kernelNodesList := []v1.Node{v1.Node{}}
+		mappings := map[string]*api.ModuleLoaderData{"kernelVersion": &api.ModuleLoaderData{}}
+		kernelByDS := map[string]*appsv1.DaemonSet{"kernelVersion": &appsv1.DaemonSet{}}
+		returnedError := fmt.Errorf("some error")
+		if getModuleError {
+			mockReconHelper.EXPECT().getRequestedModule(ctx, nsn).Return(nil, returnedError)
+			goto executeTestFunction
 		}
+		mockReconHelper.EXPECT().getRequestedModule(ctx, nsn).Return(&mod, nil)
+		mockCAH.EXPECT().Sync(ctx, namespace, &mod).Return(nil)
+		mockReconHelper.EXPECT().setKMMOMetrics(ctx)
+		if getNodesError {
+			mockReconHelper.EXPECT().getNodesListBySelector(ctx, &mod).Return(nil, returnedError)
+			goto executeTestFunction
+		}
+		mockReconHelper.EXPECT().getNodesListBySelector(ctx, &mod).Return(selectNodesList, nil)
+		if getMappingsError {
+			mockReconHelper.EXPECT().getRelevantKernelMappingsAndNodes(ctx, &mod, selectNodesList).Return(nil, nil, returnedError)
+			goto executeTestFunction
+		}
+		mockReconHelper.EXPECT().getRelevantKernelMappingsAndNodes(ctx, &mod, selectNodesList).Return(mappings, kernelNodesList, nil)
+		if getDSError {
+			mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, mod.Name, mod.Namespace).Return(nil, returnedError)
+			goto executeTestFunction
+		}
+		mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, mod.Name, mod.Namespace).Return(kernelByDS, nil)
+		if handleBuildError {
+			mockReconHelper.EXPECT().handleBuild(ctx, mappings["kernelVersion"]).Return(false, returnedError)
+			goto executeTestFunction
+		}
+		mockReconHelper.EXPECT().handleBuild(ctx, mappings["kernelVersion"]).Return(true, nil)
+		if handleSignError {
+			mockReconHelper.EXPECT().handleSigning(ctx, mappings["kernelVersion"]).Return(false, returnedError)
+			goto executeTestFunction
+		}
+		mockReconHelper.EXPECT().handleSigning(ctx, mappings["kernelVersion"]).Return(true, nil)
+		if handleDCError {
+			mockReconHelper.EXPECT().handleDriverContainer(ctx, mappings["kernelVersion"], kernelByDS).Return(returnedError)
+			goto executeTestFunction
+		}
+		mockReconHelper.EXPECT().handleDriverContainer(ctx, mappings["kernelVersion"], kernelByDS).Return(nil)
+		if handlePluginError {
+			mockReconHelper.EXPECT().handleDevicePlugin(ctx, &mod).Return(returnedError)
+			goto executeTestFunction
+		}
+		mockReconHelper.EXPECT().handleDevicePlugin(ctx, &mod).Return(nil)
+		if gcError {
+			mockReconHelper.EXPECT().garbageCollect(ctx, &mod, mappings, kernelByDS).Return(returnedError)
+			goto executeTestFunction
+		}
+		mockReconHelper.EXPECT().garbageCollect(ctx, &mod, mappings, kernelByDS).Return(nil)
+		mockSU.EXPECT().ModuleUpdateStatus(ctx, &mod, kernelNodesList, selectNodesList, kernelByDS).Return(returnedError)
 
-		gomock.InOrder(
-			clnt.EXPECT().Get(ctx, req.NamespacedName, gomock.Any()).DoAndReturn(
-				func(_ interface{}, _ interface{}, m *kmmv1beta1.Module, _ ...ctrlclient.GetOption) error {
-					m.ObjectMeta = mod.ObjectMeta
-					m.Spec = mod.Spec
-					return nil
-				},
-			),
-			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ interface{}, list *kmmv1beta1.ModuleList, _ ...interface{}) error {
-					list.Items = []kmmv1beta1.Module{mod}
-					return nil
-				},
-			),
-			mockMetrics.EXPECT().SetExistingKMMOModules(1),
-			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ interface{}, list *v1.NodeList, _ ...interface{}) error {
-					list.Items = []v1.Node{}
-					return nil
-				},
-			),
-		)
+	executeTestFunction:
+		res, err := mr.Reconcile(ctx, req)
 
-		mr := NewModuleReconciler(
-			clnt,
-			mockBM,
-			mockSM,
-			mockDC,
-			mockKM,
-			mockMetrics,
-			nil,
-			mockSU,
-			mockCAH,
-			namespace,
-		)
-
-		dsByKernelVersion := make(map[string]*appsv1.DaemonSet)
-
-		gomock.InOrder(
-			mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, moduleName, namespace).Return(dsByKernelVersion, nil),
-			mockDC.EXPECT().GarbageCollect(ctx, dsByKernelVersion, sets.NewString()),
-			mockBM.EXPECT().GarbageCollect(ctx, mod.Name, mod.Namespace, &mod),
-			mockSM.EXPECT().GarbageCollect(ctx, mod.Name, mod.Namespace, &mod),
-			mockSU.EXPECT().ModuleUpdateStatus(ctx, &mod, []v1.Node{}, []v1.Node{}, dsByKernelVersion).Return(nil),
-		)
-
-		res, err := mr.Reconcile(context.Background(), req)
-		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(Equal(reconcile.Result{}))
+		Expect(err).To(HaveOccurred())
+
+	},
+		Entry("getRequestedModule failed", true, false, false, false, false, false, false, false, false),
+		Entry("getNodesListBySelector failed", false, true, false, false, false, false, false, false, false),
+		Entry("getRelevantKernelMappingsAndNodes failed", false, false, true, false, false, false, false, false, false),
+		Entry("ModuleDaemonSetsByKernelVersion failed", false, false, false, true, false, false, false, false, false),
+		Entry("handleBuild failed ", false, false, false, false, true, false, false, false, false),
+		Entry("handleSig failedn", false, false, false, false, false, true, false, false, false),
+		Entry("handleDriverContainer failed", false, false, false, false, false, false, true, false, false),
+		Entry("handleDevicePlugin failed", false, false, false, false, false, false, false, true, false),
+		Entry("garbageCollect failed", false, false, false, false, false, false, false, false, true),
+		Entry("moduleUpdateStatus failed", false, false, false, false, false, false, false, false, false),
+	)
+
+	It("Build has not completed successfully", func() {
+		mod := kmmv1beta1.Module{}
+		selectNodesList := []v1.Node{v1.Node{}}
+		kernelNodesList := []v1.Node{v1.Node{}}
+		mappings := map[string]*api.ModuleLoaderData{"kernelVersion": &api.ModuleLoaderData{}}
+		kernelByDS := map[string]*appsv1.DaemonSet{"kernelVersion": &appsv1.DaemonSet{}}
+		gomock.InOrder(
+			mockReconHelper.EXPECT().getRequestedModule(ctx, nsn).Return(&mod, nil),
+			mockCAH.EXPECT().Sync(ctx, namespace, &mod).Return(nil),
+			mockReconHelper.EXPECT().setKMMOMetrics(ctx),
+			mockReconHelper.EXPECT().getNodesListBySelector(ctx, &mod).Return(selectNodesList, nil),
+			mockReconHelper.EXPECT().getRelevantKernelMappingsAndNodes(ctx, &mod, selectNodesList).Return(mappings, kernelNodesList, nil),
+			mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, mod.Name, mod.Namespace).Return(kernelByDS, nil),
+			mockReconHelper.EXPECT().handleBuild(ctx, mappings["kernelVersion"]).Return(false, nil),
+			mockReconHelper.EXPECT().handleDevicePlugin(ctx, &mod).Return(nil),
+			mockReconHelper.EXPECT().garbageCollect(ctx, &mod, mappings, kernelByDS).Return(nil),
+			mockSU.EXPECT().ModuleUpdateStatus(ctx, &mod, kernelNodesList, selectNodesList, kernelByDS).Return(nil),
+		)
+
+		res, err := mr.Reconcile(ctx, req)
+
+		Expect(res).To(Equal(reconcile.Result{}))
+		Expect(err).NotTo(HaveOccurred())
+
 	})
 
-	It("should remove obsolete DaemonSets when no nodes match the selector", func() {
-		const (
-			kernelVersion      = "1.2.3"
-			serviceAccountName = "module-loader-service-account"
-		)
-
-		mod := kmmv1beta1.Module{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      moduleName,
-				Namespace: namespace,
-			},
-			Spec: kmmv1beta1.ModuleSpec{
-				Selector: map[string]string{"key": "value"},
-				ModuleLoader: kmmv1beta1.ModuleLoaderSpec{
-					ServiceAccountName: serviceAccountName,
-				},
-			},
-		}
-
-		ds := appsv1.DaemonSet{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "some-daemonset",
-				Namespace: namespace,
-			},
-		}
-
+	It("Signing has not completed successfully", func() {
+		mod := kmmv1beta1.Module{}
+		selectNodesList := []v1.Node{v1.Node{}}
+		kernelNodesList := []v1.Node{v1.Node{}}
+		mappings := map[string]*api.ModuleLoaderData{"kernelVersion": &api.ModuleLoaderData{}}
+		kernelByDS := map[string]*appsv1.DaemonSet{"kernelVersion": &appsv1.DaemonSet{}}
 		gomock.InOrder(
-			clnt.EXPECT().Get(ctx, req.NamespacedName, gomock.Any()).DoAndReturn(
-				func(_ interface{}, _ interface{}, m *kmmv1beta1.Module, _ ...ctrlclient.GetOption) error {
-					m.ObjectMeta = mod.ObjectMeta
-					m.Spec = mod.Spec
-					return nil
-				},
-			),
-			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ interface{}, list *kmmv1beta1.ModuleList, _ ...interface{}) error {
-					list.Items = []kmmv1beta1.Module{mod}
-					return nil
-				},
-			),
-			mockMetrics.EXPECT().SetExistingKMMOModules(1),
-			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ interface{}, list *v1.NodeList, _ ...interface{}) error {
-					list.Items = []v1.Node{}
-					return nil
-				},
-			),
+			mockReconHelper.EXPECT().getRequestedModule(ctx, nsn).Return(&mod, nil),
+			mockCAH.EXPECT().Sync(ctx, namespace, &mod).Return(nil),
+			mockReconHelper.EXPECT().setKMMOMetrics(ctx),
+			mockReconHelper.EXPECT().getNodesListBySelector(ctx, &mod).Return(selectNodesList, nil),
+			mockReconHelper.EXPECT().getRelevantKernelMappingsAndNodes(ctx, &mod, selectNodesList).Return(mappings, kernelNodesList, nil),
+			mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, mod.Name, mod.Namespace).Return(kernelByDS, nil),
+			mockReconHelper.EXPECT().handleBuild(ctx, mappings["kernelVersion"]).Return(true, nil),
+			mockReconHelper.EXPECT().handleSigning(ctx, mappings["kernelVersion"]).Return(false, nil),
+			mockReconHelper.EXPECT().handleDevicePlugin(ctx, &mod).Return(nil),
+			mockReconHelper.EXPECT().garbageCollect(ctx, &mod, mappings, kernelByDS).Return(nil),
+			mockSU.EXPECT().ModuleUpdateStatus(ctx, &mod, kernelNodesList, selectNodesList, kernelByDS).Return(nil),
 		)
 
-		mr := NewModuleReconciler(
-			clnt,
-			mockBM,
-			mockSM,
-			mockDC,
-			mockKM,
-			mockMetrics,
-			nil,
-			mockSU,
-			mockCAH,
-			namespace,
-		)
+		res, err := mr.Reconcile(ctx, req)
 
-		dsByKernelVersion := map[string]*appsv1.DaemonSet{kernelVersion: &ds}
-
-		gomock.InOrder(
-			mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, moduleName, namespace).Return(dsByKernelVersion, nil),
-			mockDC.EXPECT().GarbageCollect(ctx, dsByKernelVersion, sets.NewString()),
-			mockBM.EXPECT().GarbageCollect(ctx, mod.Name, mod.Namespace, &mod),
-			mockSM.EXPECT().GarbageCollect(ctx, mod.Name, mod.Namespace, &mod),
-			mockSU.EXPECT().ModuleUpdateStatus(ctx, &mod, []v1.Node{}, []v1.Node{}, dsByKernelVersion).Return(nil),
-		)
-
-		res, err := mr.Reconcile(context.Background(), req)
-		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(Equal(reconcile.Result{}))
+		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("should create a DaemonSet when a node matches the selector", func() {
-		const (
-			imageName          = "test-image"
-			kernelVersion      = "1.2.3"
-			serviceAccountName = "module-loader-service-account"
-		)
-
-		mappings := []kmmv1beta1.KernelMapping{
-			{
-				ContainerImage: imageName,
-				Literal:        kernelVersion,
-			},
-		}
-
-		mod := kmmv1beta1.Module{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      moduleName,
-				Namespace: namespace,
-			},
-			Spec: kmmv1beta1.ModuleSpec{
-				ModuleLoader: kmmv1beta1.ModuleLoaderSpec{
-					ServiceAccountName: serviceAccountName,
-					Container: kmmv1beta1.ModuleLoaderContainerSpec{
-						KernelMappings: mappings,
-					},
-				},
-				Selector: map[string]string{"key": "value"},
-			},
-		}
-
-		returnedMld := api.ModuleLoaderData{
-			ContainerImage:     imageName,
-			Name:               mod.Name,
-			Namespace:          mod.Namespace,
-			ServiceAccountName: serviceAccountName,
-			Selector:           mod.Spec.Selector,
-			KernelVersion:      kernelVersion,
-		}
-
-		nodeList := v1.NodeList{
-			Items: []v1.Node{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: map[string]string{"key": "value"},
-					},
-					Status: v1.NodeStatus{
-						NodeInfo: v1.NodeSystemInfo{KernelVersion: kernelVersion},
-					},
-				},
-			},
-		}
-
-		dsByKernelVersion := make(map[string]*appsv1.DaemonSet)
-
-		mr := NewModuleReconciler(
-			clnt,
-			mockBM,
-			mockSM,
-			mockDC,
-			mockKM,
-			mockMetrics,
-			nil,
-			mockSU,
-			mockCAH,
-			namespace,
-		)
-
-		ds := appsv1.DaemonSet{
-			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: moduleName + "-",
-				Namespace:    namespace,
-			},
-		}
-
+	It("Good flow", func() {
+		mod := kmmv1beta1.Module{}
+		selectNodesList := []v1.Node{v1.Node{}}
+		kernelNodesList := []v1.Node{v1.Node{}}
+		mappings := map[string]*api.ModuleLoaderData{"kernelVersion": &api.ModuleLoaderData{}}
+		kernelByDS := map[string]*appsv1.DaemonSet{"kernelVersion": &appsv1.DaemonSet{}}
 		gomock.InOrder(
-			clnt.EXPECT().Get(ctx, req.NamespacedName, gomock.Any()).DoAndReturn(
-				func(_ interface{}, _ interface{}, m *kmmv1beta1.Module, _ ...ctrlclient.GetOption) error {
-					m.ObjectMeta = mod.ObjectMeta
-					m.Spec = mod.Spec
-					return nil
-				},
-			),
-			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ interface{}, list *kmmv1beta1.ModuleList, _ ...interface{}) error {
-					return nil
-				},
-			),
-			mockMetrics.EXPECT().SetExistingKMMOModules(0),
-			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ interface{}, list *v1.NodeList, _ ...interface{}) error {
-					list.Items = nodeList.Items
-					return nil
-				},
-			),
-			mockKM.EXPECT().GetModuleLoaderDataForKernel(&mod, kernelVersion).Return(&returnedMld, nil),
-			mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, moduleName, namespace).Return(dsByKernelVersion, nil),
-			mockBM.EXPECT().ShouldSync(gomock.Any(), &returnedMld).Return(true, nil),
-			mockBM.EXPECT().Sync(gomock.Any(), &returnedMld, true, returnedMld.Owner).Return(utils.Status(utils.StatusCompleted), nil),
-			mockMetrics.EXPECT().SetCompletedStage(moduleName, namespace, kernelVersion, metrics.BuildStage, true),
-			mockSM.EXPECT().ShouldSync(gomock.Any(), &returnedMld).Return(true, nil),
-			mockSM.EXPECT().Sync(gomock.Any(), &returnedMld, "", true, returnedMld.Owner).Return(utils.Status(utils.StatusCompleted), nil),
-			mockMetrics.EXPECT().SetCompletedStage(moduleName, namespace, kernelVersion, metrics.SignStage, true),
-			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).Return(apierrors.NewNotFound(schema.GroupResource{}, "whatever")),
-			mockDC.EXPECT().SetDriverContainerAsDesired(context.Background(), &ds, gomock.AssignableToTypeOf(&returnedMld), true),
-			clnt.EXPECT().Create(ctx, gomock.Any()).Return(nil),
-			mockMetrics.EXPECT().SetCompletedStage(moduleName, namespace, kernelVersion, metrics.ModuleLoaderStage, false),
-			mockDC.EXPECT().GarbageCollect(ctx, dsByKernelVersion, sets.NewString(kernelVersion)),
-			mockBM.EXPECT().GarbageCollect(ctx, mod.Name, mod.Namespace, &mod),
-			mockSM.EXPECT().GarbageCollect(ctx, mod.Name, mod.Namespace, &mod),
-			mockSU.EXPECT().ModuleUpdateStatus(ctx, &mod, nodeList.Items, nodeList.Items, dsByKernelVersion).Return(nil),
+			mockReconHelper.EXPECT().getRequestedModule(ctx, nsn).Return(&mod, nil),
+			mockCAH.EXPECT().Sync(ctx, namespace, &mod).Return(nil),
+			mockReconHelper.EXPECT().setKMMOMetrics(ctx),
+			mockReconHelper.EXPECT().getNodesListBySelector(ctx, &mod).Return(selectNodesList, nil),
+			mockReconHelper.EXPECT().getRelevantKernelMappingsAndNodes(ctx, &mod, selectNodesList).Return(mappings, kernelNodesList, nil),
+			mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, mod.Name, mod.Namespace).Return(kernelByDS, nil),
+			mockReconHelper.EXPECT().handleBuild(ctx, mappings["kernelVersion"]).Return(true, nil),
+			mockReconHelper.EXPECT().handleSigning(ctx, mappings["kernelVersion"]).Return(true, nil),
+			mockReconHelper.EXPECT().handleDriverContainer(ctx, mappings["kernelVersion"], kernelByDS).Return(nil),
+			mockReconHelper.EXPECT().handleDevicePlugin(ctx, &mod).Return(nil),
+			mockReconHelper.EXPECT().garbageCollect(ctx, &mod, mappings, kernelByDS).Return(nil),
+			mockSU.EXPECT().ModuleUpdateStatus(ctx, &mod, kernelNodesList, selectNodesList, kernelByDS).Return(nil),
 		)
 
-		res, err := mr.Reconcile(context.Background(), req)
-		Expect(err).NotTo(HaveOccurred())
+		res, err := mr.Reconcile(ctx, req)
+
 		Expect(res).To(Equal(reconcile.Result{}))
-	})
-
-	It("should patch the DaemonSet when it already exists", func() {
-		const (
-			imageName          = "test-image"
-			kernelVersion      = "1.2.3"
-			serviceAccountName = "module-loader-service-account"
-		)
-
-		mappings := []kmmv1beta1.KernelMapping{
-			{
-				ContainerImage: imageName,
-				Literal:        kernelVersion,
-			},
-		}
-
-		nodeLabels := map[string]string{"key": "value"}
-
-		mod := kmmv1beta1.Module{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      moduleName,
-				Namespace: namespace,
-			},
-			Spec: kmmv1beta1.ModuleSpec{
-				ModuleLoader: kmmv1beta1.ModuleLoaderSpec{
-					ServiceAccountName: serviceAccountName,
-					Container: kmmv1beta1.ModuleLoaderContainerSpec{
-						KernelMappings: mappings,
-					},
-				},
-				Selector: nodeLabels,
-			},
-		}
-
-		returnedMld := api.ModuleLoaderData{
-			ContainerImage:     imageName,
-			Name:               mod.Name,
-			Namespace:          mod.Namespace,
-			ServiceAccountName: serviceAccountName,
-			Selector:           mod.Spec.Selector,
-			KernelVersion:      kernelVersion,
-		}
-
-		nodeList := v1.NodeList{
-			Items: []v1.Node{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "node1",
-						Labels: nodeLabels,
-					},
-					Status: v1.NodeStatus{
-						NodeInfo: v1.NodeSystemInfo{KernelVersion: kernelVersion},
-					},
-				},
-			},
-		}
-
-		const (
-			dsName      = "some-daemonset"
-			dsNamespace = "test-namespace"
-		)
-
-		ds := appsv1.DaemonSet{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      dsName,
-				Namespace: dsNamespace,
-			},
-		}
-
-		gomock.InOrder(
-			clnt.EXPECT().Get(ctx, req.NamespacedName, gomock.Any()).DoAndReturn(
-				func(_ interface{}, _ interface{}, m *kmmv1beta1.Module, _ ...ctrlclient.GetOption) error {
-					m.ObjectMeta = mod.ObjectMeta
-					m.Spec = mod.Spec
-					return nil
-				},
-			),
-			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ interface{}, list *kmmv1beta1.ModuleList, _ ...interface{}) error {
-					list.Items = []kmmv1beta1.Module{mod}
-					return nil
-				},
-			),
-			mockMetrics.EXPECT().SetExistingKMMOModules(1),
-			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ interface{}, list *v1.NodeList, _ ...interface{}) error {
-					list.Items = nodeList.Items
-					return nil
-				},
-			),
-			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()),
-			clnt.EXPECT().Patch(ctx, gomock.Any(), gomock.Any()),
-		)
-
-		mr := NewModuleReconciler(
-			clnt,
-			mockBM,
-			mockSM,
-			mockDC,
-			mockKM,
-			mockMetrics,
-			nil,
-			mockSU,
-			mockCAH,
-			namespace,
-		)
-
-		dsByKernelVersion := map[string]*appsv1.DaemonSet{kernelVersion: &ds}
-
-		gomock.InOrder(
-			mockKM.EXPECT().GetModuleLoaderDataForKernel(&mod, kernelVersion).Return(&returnedMld, nil),
-			mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, moduleName, namespace).Return(dsByKernelVersion, nil),
-			mockBM.EXPECT().ShouldSync(gomock.Any(), &returnedMld).Return(true, nil),
-			mockBM.EXPECT().Sync(gomock.Any(), &returnedMld, true, returnedMld.Owner).Return(utils.Status(utils.StatusCompleted), nil),
-			mockMetrics.EXPECT().SetCompletedStage(moduleName, namespace, kernelVersion, metrics.BuildStage, true),
-			mockSM.EXPECT().ShouldSync(gomock.Any(), &returnedMld).Return(true, nil),
-			mockSM.EXPECT().Sync(gomock.Any(), &returnedMld, "", true, returnedMld.Owner).Return(utils.Status(utils.StatusCompleted), nil),
-			mockMetrics.EXPECT().SetCompletedStage(moduleName, namespace, kernelVersion, metrics.SignStage, true),
-			mockDC.EXPECT().SetDriverContainerAsDesired(context.Background(), &ds, gomock.AssignableToTypeOf(&returnedMld), true).Do(
-				func(ctx context.Context, d *appsv1.DaemonSet, _ *api.ModuleLoaderData, _ bool) {
-					d.SetLabels(map[string]string{"test": "test"})
-				}),
-			mockDC.EXPECT().GarbageCollect(ctx, dsByKernelVersion, sets.NewString(kernelVersion)),
-			mockBM.EXPECT().GarbageCollect(ctx, mod.Name, mod.Namespace, &mod),
-			mockSM.EXPECT().GarbageCollect(ctx, mod.Name, mod.Namespace, &mod),
-			mockSU.EXPECT().ModuleUpdateStatus(ctx, &mod, nodeList.Items, nodeList.Items, dsByKernelVersion).Return(nil),
-		)
-
-		res, err := mr.Reconcile(context.Background(), req)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(reconcile.Result{}))
-	})
-
-	It("should create a Device plugin if defined in the module", func() {
-		const (
-			imageName     = "test-image"
-			kernelVersion = "1.2.3"
-
-			moduleLoaderServiceAccountName = "module-loader-service-account"
-			devicePluginServiceAccountName = "device-plugin-service-account"
-		)
-
-		mappings := []kmmv1beta1.KernelMapping{
-			{
-				ContainerImage: imageName,
-				Literal:        kernelVersion,
-			},
-		}
-
-		mod := kmmv1beta1.Module{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      moduleName,
-				Namespace: namespace,
-			},
-			Spec: kmmv1beta1.ModuleSpec{
-				DevicePlugin: &kmmv1beta1.DevicePluginSpec{
-					ServiceAccountName: devicePluginServiceAccountName,
-				},
-				ModuleLoader: kmmv1beta1.ModuleLoaderSpec{
-					ServiceAccountName: moduleLoaderServiceAccountName,
-					Container: kmmv1beta1.ModuleLoaderContainerSpec{
-						KernelMappings: mappings,
-					},
-				},
-				Selector: map[string]string{"key": "value"},
-			},
-		}
-
-		mr := NewModuleReconciler(
-			clnt,
-			mockBM,
-			mockSM,
-			mockDC,
-			mockKM,
-			mockMetrics,
-			nil,
-			mockSU,
-			mockCAH,
-			namespace,
-		)
-
-		ds := appsv1.DaemonSet{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      moduleName + "-device-plugin",
-				Namespace: namespace,
-			},
-		}
-
-		gomock.InOrder(
-			clnt.EXPECT().Get(ctx, req.NamespacedName, gomock.Any()).DoAndReturn(
-				func(_ interface{}, _ interface{}, m *kmmv1beta1.Module, _ ...ctrlclient.GetOption) error {
-					m.ObjectMeta = mod.ObjectMeta
-					m.Spec = mod.Spec
-					return nil
-				},
-			),
-			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ interface{}, list *kmmv1beta1.ModuleList, _ ...interface{}) error {
-					return nil
-				},
-			),
-			mockMetrics.EXPECT().SetExistingKMMOModules(0),
-			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ interface{}, list *v1.NodeList, _ ...interface{}) error {
-					list.Items = []v1.Node{}
-					return nil
-				},
-			),
-			mockDC.EXPECT().ModuleDaemonSetsByKernelVersion(ctx, moduleName, namespace).Return(nil, nil),
-			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).Return(apierrors.NewNotFound(schema.GroupResource{}, "whatever")),
-			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).Return(apierrors.NewNotFound(schema.GroupResource{}, "whatever")),
-			mockDC.EXPECT().SetDevicePluginAsDesired(context.Background(), &ds, gomock.AssignableToTypeOf(&mod), true),
-			clnt.EXPECT().Create(ctx, gomock.Any()).Return(nil),
-			mockMetrics.EXPECT().SetCompletedStage(moduleName, namespace, "", metrics.DevicePluginStage, false),
-			mockDC.EXPECT().GarbageCollect(ctx, nil, sets.NewString()),
-			mockBM.EXPECT().GarbageCollect(ctx, mod.Name, mod.Namespace, &mod),
-			mockSM.EXPECT().GarbageCollect(ctx, mod.Name, mod.Namespace, &mod),
-			mockSU.EXPECT().ModuleUpdateStatus(ctx, &mod, []v1.Node{}, []v1.Node{}, nil).Return(nil),
-		)
-
-		res, err := mr.Reconcile(context.Background(), req)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(reconcile.Result{}))
 	})
 })
 
-var _ = Describe("ModuleReconciler_handleBuild", func() {
+var _ = Describe("ModuleReconciler_getNodesListBySelector", func() {
 	var (
-		ctrl        *gomock.Controller
-		clnt        *client.MockClient
-		mockBM      *build.MockManager
-		mockSM      *sign.MockSignManager
-		mockDC      *daemonset.MockDaemonSetCreator
-		mockKM      *module.MockKernelMapper
-		mockMetrics *metrics.MockMetrics
-		mockSU      *statusupdater.MockModuleStatusUpdater
-		mockCAH     *ca.MockHelper
+		ctrl *gomock.Controller
+		clnt *client.MockClient
+		mhr  moduleReconcilerHelperAPI
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mockBM = build.NewMockManager(ctrl)
-		mockSM = sign.NewMockSignManager(ctrl)
-		mockDC = daemonset.NewMockDaemonSetCreator(ctrl)
+		mhr = newModuleReconcilerHelper(clnt, nil, nil, nil, nil, nil, "")
+	})
+
+	It("list failed", func() {
+		clnt.EXPECT().List(context.Background(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("some error"))
+
+		nodes, err := mhr.getNodesListBySelector(context.Background(), &kmmv1beta1.Module{})
+
+		Expect(err).To(HaveOccurred())
+		Expect(nodes).To(BeNil())
+	})
+
+	It("Return only schedulable nodes", func() {
+		node1 := v1.Node{
+			Spec: v1.NodeSpec{
+				Taints: []v1.Taint{
+					v1.Taint{
+						Effect: v1.TaintEffectNoSchedule,
+					},
+				},
+			},
+		}
+		node2 := v1.Node{}
+		node3 := v1.Node{
+			Spec: v1.NodeSpec{
+				Taints: []v1.Taint{
+					v1.Taint{
+						Effect: v1.TaintEffectPreferNoSchedule,
+					},
+				},
+			},
+		}
+		clnt.EXPECT().List(context.Background(), gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ interface{}, list *v1.NodeList, _ ...interface{}) error {
+				list.Items = []v1.Node{node1, node2, node3}
+				return nil
+			},
+		)
+		nodes, err := mhr.getNodesListBySelector(context.Background(), &kmmv1beta1.Module{})
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(nodes).To(Equal([]v1.Node{node2, node3}))
+
+	})
+})
+
+var _ = Describe("ModuleReconciler_getRelevantKernelMappingsAndNodes", func() {
+	var (
+		ctrl   *gomock.Controller
+		mockKM *module.MockKernelMapper
+		mhr    moduleReconcilerHelperAPI
+	)
+
+	BeforeEach(func() {
+		ctrl = gomock.NewController(GinkgoT())
 		mockKM = module.NewMockKernelMapper(ctrl)
+		mhr = newModuleReconcilerHelper(nil, nil, nil, nil, mockKM, nil, "")
+	})
+
+	node1 := v1.Node{
+		Status: v1.NodeStatus{
+			NodeInfo: v1.NodeSystemInfo{
+				KernelVersion: "kernelVersion1",
+			},
+		},
+	}
+	node2 := v1.Node{
+		Status: v1.NodeStatus{
+			NodeInfo: v1.NodeSystemInfo{
+				KernelVersion: "kernelVersion2",
+			},
+		},
+	}
+	node3 := v1.Node{
+		Status: v1.NodeStatus{
+			NodeInfo: v1.NodeSystemInfo{
+				KernelVersion: "kernelVersion1",
+			},
+		},
+	}
+
+	mld1 := api.ModuleLoaderData{Name: "name1"}
+	mld2 := api.ModuleLoaderData{Name: "name2"}
+
+	It("good flow, all mappings exist", func() {
+		nodes := []v1.Node{node1, node2, node3}
+		expectedNodes := []v1.Node{node1, node2, node3}
+		expectedMappings := map[string]*api.ModuleLoaderData{"kernelVersion1": &mld1, "kernelVersion2": &mld2}
+		gomock.InOrder(
+			mockKM.EXPECT().GetModuleLoaderDataForKernel(&kmmv1beta1.Module{}, node1.Status.NodeInfo.KernelVersion).Return(&mld1, nil),
+			mockKM.EXPECT().GetModuleLoaderDataForKernel(&kmmv1beta1.Module{}, node2.Status.NodeInfo.KernelVersion).Return(&mld2, nil),
+		)
+
+		mappings, resNodes, err := mhr.getRelevantKernelMappingsAndNodes(context.Background(), &kmmv1beta1.Module{}, nodes)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resNodes).To(Equal(expectedNodes))
+		Expect(mappings).To(Equal(expectedMappings))
+
+	})
+
+	It("good flow, one mapping does not exist", func() {
+		nodes := []v1.Node{node1, node2, node3}
+		expectedNodes := []v1.Node{node1, node3}
+		expectedMappings := map[string]*api.ModuleLoaderData{"kernelVersion1": &mld1}
+		gomock.InOrder(
+			mockKM.EXPECT().GetModuleLoaderDataForKernel(&kmmv1beta1.Module{}, node1.Status.NodeInfo.KernelVersion).Return(&mld1, nil),
+			mockKM.EXPECT().GetModuleLoaderDataForKernel(&kmmv1beta1.Module{}, node2.Status.NodeInfo.KernelVersion).Return(nil, fmt.Errorf("some error")),
+		)
+
+		mappings, resNodes, err := mhr.getRelevantKernelMappingsAndNodes(context.Background(), &kmmv1beta1.Module{}, nodes)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resNodes).To(Equal(expectedNodes))
+		Expect(mappings).To(Equal(expectedMappings))
+
+	})
+
+})
+
+var _ = Describe("ModuleReconciler_handleBuild", func() {
+	var (
+		ctrl        *gomock.Controller
+		mockBM      *build.MockManager
+		mockMetrics *metrics.MockMetrics
+		mhr         moduleReconcilerHelperAPI
+	)
+
+	BeforeEach(func() {
+		ctrl = gomock.NewController(GinkgoT())
+		mockBM = build.NewMockManager(ctrl)
 		mockMetrics = metrics.NewMockMetrics(ctrl)
-		mockSU = statusupdater.NewMockModuleStatusUpdater(ctrl)
-		mockCAH = ca.NewMockHelper(ctrl)
+		mhr = newModuleReconcilerHelper(nil, mockBM, nil, nil, nil, mockMetrics, "")
 	})
 
 	const (
@@ -800,20 +412,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 			mockBM.EXPECT().ShouldSync(gomock.Any(), mld).Return(false, nil),
 		)
 
-		mr := NewModuleReconciler(
-			clnt,
-			mockBM,
-			mockSM,
-			mockDC,
-			mockKM,
-			mockMetrics,
-			nil,
-			mockSU,
-			mockCAH,
-			namespace,
-		)
-
-		completed, err := mr.handleBuild(context.Background(), mld)
+		completed, err := mhr.handleBuild(context.Background(), mld)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(completed).To(BeTrue())
 	})
@@ -833,8 +432,8 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 			mockMetrics.EXPECT().SetCompletedStage(mld.Name, mld.Namespace, kernelVersion, metrics.BuildStage, false),
 		)
 
-		mr := NewModuleReconciler(clnt, mockBM, mockSM, mockDC, mockKM, mockMetrics, nil, mockSU, mockCAH, namespace)
-		completed, err := mr.handleBuild(context.Background(), &mld)
+		completed, err := mhr.handleBuild(context.Background(), &mld)
+
 		Expect(err).NotTo(HaveOccurred())
 		Expect(completed).To(BeFalse())
 	})
@@ -854,35 +453,26 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 			mockMetrics.EXPECT().SetCompletedStage(mld.Name, mld.Namespace, kernelVersion, metrics.BuildStage, true),
 		)
 
-		mr := NewModuleReconciler(clnt, mockBM, mockSM, mockDC, mockKM, mockMetrics, nil, mockSU, mockCAH, namespace)
-		completed, err := mr.handleBuild(context.Background(), mld)
+		completed, err := mhr.handleBuild(context.Background(), mld)
+
 		Expect(err).NotTo(HaveOccurred())
 		Expect(completed).To(BeTrue())
 	})
-
 })
 
 var _ = Describe("ModuleReconciler_handleSigning", func() {
 	var (
 		ctrl        *gomock.Controller
-		clnt        *client.MockClient
-		mockBM      *build.MockManager
 		mockSM      *sign.MockSignManager
-		mockDC      *daemonset.MockDaemonSetCreator
-		mockKM      *module.MockKernelMapper
 		mockMetrics *metrics.MockMetrics
-		mockSU      *statusupdater.MockModuleStatusUpdater
+		mhr         moduleReconcilerHelperAPI
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
-		clnt = client.NewMockClient(ctrl)
-		mockBM = build.NewMockManager(ctrl)
 		mockSM = sign.NewMockSignManager(ctrl)
-		mockDC = daemonset.NewMockDaemonSetCreator(ctrl)
-		mockKM = module.NewMockKernelMapper(ctrl)
 		mockMetrics = metrics.NewMockMetrics(ctrl)
-		mockSU = statusupdater.NewMockModuleStatusUpdater(ctrl)
+		mhr = newModuleReconcilerHelper(nil, nil, mockSM, nil, nil, mockMetrics, "")
 	})
 
 	const (
@@ -901,20 +491,8 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 			mockSM.EXPECT().ShouldSync(gomock.Any(), mld).Return(false, nil),
 		)
 
-		mr := NewModuleReconciler(
-			clnt,
-			mockBM,
-			mockSM,
-			mockDC,
-			mockKM,
-			mockMetrics,
-			nil,
-			mockSU,
-			nil,
-			namespace,
-		)
+		completed, err := mhr.handleSigning(context.Background(), mld)
 
-		completed, err := mr.handleSigning(context.Background(), mld)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(completed).To(BeTrue())
 	})
@@ -933,20 +511,8 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 			mockSM.EXPECT().Sync(gomock.Any(), &mld, "", true, mld.Owner).Return(utils.Status(utils.StatusCreated), nil),
 			mockMetrics.EXPECT().SetCompletedStage(mld.Name, mld.Namespace, kernelVersion, metrics.SignStage, false),
 		)
-		mr := NewModuleReconciler(
-			clnt,
-			mockBM,
-			mockSM,
-			mockDC,
-			mockKM,
-			mockMetrics,
-			nil,
-			mockSU,
-			nil,
-			namespace,
-		)
 
-		completed, err := mr.handleSigning(context.Background(), &mld)
+		completed, err := mhr.handleSigning(context.Background(), &mld)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(completed).To(BeFalse())
@@ -967,20 +533,7 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 			mockMetrics.EXPECT().SetCompletedStage(mld.Name, mld.Namespace, kernelVersion, metrics.SignStage, true),
 		)
 
-		mr := NewModuleReconciler(
-			clnt,
-			mockBM,
-			mockSM,
-			mockDC,
-			mockKM,
-			mockMetrics,
-			nil,
-			mockSU,
-			nil,
-			namespace,
-		)
-
-		completed, err := mr.handleSigning(context.Background(), &mld)
+		completed, err := mhr.handleSigning(context.Background(), &mld)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(completed).To(BeTrue())
@@ -1004,99 +557,203 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 			mockMetrics.EXPECT().SetCompletedStage(mld.Name, mld.Namespace, kernelVersion, metrics.SignStage, true),
 		)
 
-		mr := NewModuleReconciler(
-			clnt,
-			mockBM,
-			mockSM,
-			mockDC,
-			mockKM,
-			mockMetrics,
-			nil,
-			mockSU,
-			nil,
-			namespace,
-		)
-
-		completed, err := mr.handleSigning(context.Background(), mld)
+		completed, err := mhr.handleSigning(context.Background(), mld)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(completed).To(BeTrue())
 	})
 })
 
-var _ = Describe("ModuleReconciler_getNodesListBySelector", func() {
+var _ = Describe("ModuleReconciler_handleDriverContainer", func() {
 	var (
-		ctrl *gomock.Controller
-		clnt *client.MockClient
-		mr   *ModuleReconciler
+		ctrl        *gomock.Controller
+		clnt        *client.MockClient
+		mockDC      *daemonset.MockDaemonSetCreator
+		mockMetrics *metrics.MockMetrics
+		mhr         moduleReconcilerHelperAPI
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mr = NewModuleReconciler(
-			clnt,
-			nil,
-			nil,
-			nil,
-			nil,
-			nil,
-			nil,
-			nil,
-			nil,
-			namespace,
-		)
+		mockDC = daemonset.NewMockDaemonSetCreator(ctrl)
+		mockMetrics = metrics.NewMockMetrics(ctrl)
+		mhr = newModuleReconcilerHelper(clnt, nil, nil, mockDC, nil, mockMetrics, "namespace")
 	})
 
-	ctx := context.Background()
-	mod := kmmv1beta1.Module{
-		Spec: kmmv1beta1.ModuleSpec{
-			Selector: map[string]string{"key": "value"},
+	It("new daemonset", func() {
+		ctx := context.Background()
+		mld := api.ModuleLoaderData{
+			Name:          "name",
+			Namespace:     "namespace",
+			KernelVersion: "kernelVersion1",
+		}
+		existingDS := map[string]*appsv1.DaemonSet{
+			"kernelVersion2": &appsv1.DaemonSet{}, "kernelVersion3": &appsv1.DaemonSet{},
+		}
+		newDS := &appsv1.DaemonSet{
+			ObjectMeta: metav1.ObjectMeta{Namespace: mld.Namespace},
+		}
+		newDS.GenerateName = mld.Name + "-"
+		gomock.InOrder(
+			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).Return(apierrors.NewNotFound(schema.GroupResource{}, "whatever")),
+			mockDC.EXPECT().SetDriverContainerAsDesired(ctx, newDS, &mld, true).Return(nil),
+			clnt.EXPECT().Create(ctx, gomock.Any()).Return(nil),
+			mockMetrics.EXPECT().SetCompletedStage(mld.Name, mld.Namespace, mld.KernelVersion, metrics.ModuleLoaderStage, false),
+		)
+
+		err := mhr.handleDriverContainer(ctx, &mld, existingDS)
+
+		Expect(err).NotTo(HaveOccurred())
+
+	})
+
+	It("existing daemonset", func() {
+		ctx := context.Background()
+		mld := api.ModuleLoaderData{
+			Name:          "name",
+			Namespace:     "namespace",
+			KernelVersion: "kernelVersion1",
+		}
+		existingDS := map[string]*appsv1.DaemonSet{
+			"kernelVersion1": &appsv1.DaemonSet{}, "kernelVersion2": &appsv1.DaemonSet{},
+		}
+		gomock.InOrder(
+			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).Return(nil),
+			mockDC.EXPECT().SetDriverContainerAsDesired(ctx, existingDS["kernelVersion1"], &mld, true).Return(nil),
+		)
+
+		err := mhr.handleDriverContainer(ctx, &mld, existingDS)
+
+		Expect(err).NotTo(HaveOccurred())
+
+	})
+})
+
+var _ = Describe("ModuleReconciler_handleDevicePlugin", func() {
+	var (
+		ctrl        *gomock.Controller
+		clnt        *client.MockClient
+		mockDC      *daemonset.MockDaemonSetCreator
+		mockMetrics *metrics.MockMetrics
+		mhr         moduleReconcilerHelperAPI
+	)
+
+	BeforeEach(func() {
+		ctrl = gomock.NewController(GinkgoT())
+		clnt = client.NewMockClient(ctrl)
+		mockDC = daemonset.NewMockDaemonSetCreator(ctrl)
+		mockMetrics = metrics.NewMockMetrics(ctrl)
+		mhr = newModuleReconcilerHelper(clnt, nil, nil, mockDC, nil, mockMetrics, "namespace")
+	})
+
+	It("device plugin not defined", func() {
+		ctx := context.Background()
+		mod := kmmv1beta1.Module{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "moduleName",
+				Namespace: "namespace",
+			},
+		}
+
+		err := mhr.handleDevicePlugin(ctx, &mod)
+
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("new daemonset", func() {
+		ctx := context.Background()
+		mod := kmmv1beta1.Module{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "moduleName",
+				Namespace: "namespace",
+			},
+			Spec: kmmv1beta1.ModuleSpec{
+				DevicePlugin: &kmmv1beta1.DevicePluginSpec{},
+			},
+		}
+
+		newDS := &appsv1.DaemonSet{
+			ObjectMeta: metav1.ObjectMeta{Namespace: mod.Namespace, Name: mod.Name + "-device-plugin"},
+		}
+		gomock.InOrder(
+			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).Return(apierrors.NewNotFound(schema.GroupResource{}, "whatever")),
+			mockDC.EXPECT().SetDevicePluginAsDesired(ctx, newDS, &mod, true).Return(nil),
+			clnt.EXPECT().Create(ctx, gomock.Any()).Return(nil),
+			mockMetrics.EXPECT().SetCompletedStage(mod.Name, mod.Namespace, "", metrics.DevicePluginStage, false),
+		)
+
+		err := mhr.handleDevicePlugin(ctx, &mod)
+
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("existing daemonset", func() {
+		ctx := context.Background()
+		mod := kmmv1beta1.Module{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "moduleName",
+				Namespace: "namespace",
+			},
+			Spec: kmmv1beta1.ModuleSpec{
+				DevicePlugin: &kmmv1beta1.DevicePluginSpec{},
+			},
+		}
+
+		existingDS := &appsv1.DaemonSet{
+			ObjectMeta: metav1.ObjectMeta{Namespace: mod.Namespace, Name: mod.Name + "-device-plugin"},
+		}
+		gomock.InOrder(
+			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).Return(nil),
+			mockDC.EXPECT().SetDevicePluginAsDesired(ctx, existingDS, &mod, true).Return(nil),
+		)
+
+		err := mhr.handleDevicePlugin(ctx, &mod)
+
+		Expect(err).NotTo(HaveOccurred())
+	})
+})
+
+var _ = Describe("ModuleReconciler_garbageCollect", func() {
+	var (
+		ctrl   *gomock.Controller
+		mockBM *build.MockManager
+		mockSM *sign.MockSignManager
+		mockDC *daemonset.MockDaemonSetCreator
+		mhr    moduleReconcilerHelperAPI
+	)
+
+	BeforeEach(func() {
+		ctrl = gomock.NewController(GinkgoT())
+		mockBM = build.NewMockManager(ctrl)
+		mockSM = sign.NewMockSignManager(ctrl)
+		mockDC = daemonset.NewMockDaemonSetCreator(ctrl)
+		mhr = newModuleReconcilerHelper(nil, mockBM, mockSM, mockDC, nil, nil, "")
+	})
+
+	mod := &kmmv1beta1.Module{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "moduleName",
+			Namespace: "namespace",
 		},
 	}
 
-	It("no nodes with matching labels", func() {
-		clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ interface{}, list *v1.NodeList, _ ...interface{}) error {
-				list.Items = []v1.Node{}
-				return nil
-			},
-		)
-		nodeList, err := mr.getNodesListBySelector(context.Background(), &mod)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(len(nodeList)).To(Equal(0))
-	})
-
-	It("2 nodes with matching labels, all schedulable", func() {
-		clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ interface{}, list *v1.NodeList, _ ...interface{}) error {
-				list.Items = []v1.Node{v1.Node{}, v1.Node{}}
-				return nil
-			},
-		)
-		nodeList, err := mr.getNodesListBySelector(context.Background(), &mod)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(len(nodeList)).To(Equal(2))
-	})
-
-	It("2 nodes with matching labels, 1 not schedulable", func() {
-		notSchedulableNode := v1.Node{
-			Spec: v1.NodeSpec{
-				Taints: []v1.Taint{
-					{
-						Effect: v1.TaintEffectNoSchedule,
-					},
-				},
-			},
+	It("good flow", func() {
+		mldMappings := map[string]*api.ModuleLoaderData{
+			"kernelVersion1": &api.ModuleLoaderData{}, "kernelVersion2": &api.ModuleLoaderData{},
 		}
-		clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ interface{}, list *v1.NodeList, _ ...interface{}) error {
-				list.Items = []v1.Node{notSchedulableNode, v1.Node{}}
-				return nil
-			},
+		existingDS := map[string]*appsv1.DaemonSet{
+			"kernelVersion2": &appsv1.DaemonSet{}, "kernelVersion3": &appsv1.DaemonSet{},
+		}
+		kernelSet := sets.NewString("kernelVersion1", "kernelVersion2")
+		gomock.InOrder(
+			mockDC.EXPECT().GarbageCollect(context.Background(), existingDS, kernelSet).Return(nil, nil),
+			mockBM.EXPECT().GarbageCollect(context.Background(), mod.Name, mod.Namespace, mod).Return(nil, nil),
+			mockSM.EXPECT().GarbageCollect(context.Background(), mod.Name, mod.Namespace, mod).Return(nil, nil),
 		)
-		nodeList, err := mr.getNodesListBySelector(context.Background(), &mod)
+
+		err := mhr.garbageCollect(context.Background(), mod, mldMappings, existingDS)
+
 		Expect(err).NotTo(HaveOccurred())
-		Expect(len(nodeList)).To(Equal(1))
 	})
 })
