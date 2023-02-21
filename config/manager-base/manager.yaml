@@ -3,6 +3,7 @@ kind: Namespace
 metadata:
   labels:
     control-plane: controller-manager
+    security.openshift.io/scc.podSecurityLabelSync: 'true'
   name: system
 ---
 apiVersion: apps/v1
