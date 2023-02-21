@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 	v1beta12 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/preflight"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -29,6 +30,7 @@ var _ = Describe("PreflightValidationReconciler_Reconcile", func() {
 	var (
 		ctrl          *gomock.Controller
 		clnt          *client.MockClient
+		mockMetrics   *metrics.MockMetrics
 		mockSU        *statusupdater.MockPreflightStatusUpdater
 		mockPreflight *preflight.MockPreflightAPI
 		req           reconcile.Request
@@ -40,6 +42,7 @@ var _ = Describe("PreflightValidationReconciler_Reconcile", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
+		mockMetrics = metrics.NewMockMetrics(ctrl)
 		mockSU = statusupdater.NewMockPreflightStatusUpdater(ctrl)
 		mockPreflight = preflight.NewMockPreflightAPI(ctrl)
 		nsn = types.NamespacedName{
@@ -48,7 +51,7 @@ var _ = Describe("PreflightValidationReconciler_Reconcile", func() {
 		}
 		req = reconcile.Request{NamespacedName: nsn}
 		ctx = context.Background()
-		pr = NewPreflightValidationReconciler(clnt, nil, mockSU, mockPreflight)
+		pr = NewPreflightValidationReconciler(clnt, nil, mockMetrics, mockSU, mockPreflight)
 	})
 
 	It("should do nothing if the Preflight is not available anymore", func() {
@@ -96,6 +99,7 @@ var _ = Describe("PreflightValidationReconciler_Reconcile", func() {
 					return nil
 				},
 			),
+			mockMetrics.EXPECT().SetKMMPreflightsNum(1),
 			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ interface{}, list *v1beta12.ModuleList, _ ...interface{}) error {
 					list.Items = []v1beta12.Module{mod}
@@ -147,6 +151,7 @@ var _ = Describe("PreflightValidationReconciler_Reconcile", func() {
 					return nil
 				},
 			),
+			mockMetrics.EXPECT().SetKMMPreflightsNum(1),
 			clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ interface{}, list *v1beta12.ModuleList, _ ...interface{}) error {
 					list.Items = []v1beta12.Module{mod}
@@ -189,7 +194,7 @@ var _ = Describe("PreflightValidationReconciler_getModulesCheck", func() {
 		mockSU = statusupdater.NewMockPreflightStatusUpdater(ctrl)
 		mockPreflight = preflight.NewMockPreflightAPI(ctrl)
 		ctx = context.Background()
-		pr = NewPreflightValidationReconciler(clnt, nil, mockSU, mockPreflight)
+		pr = NewPreflightValidationReconciler(clnt, nil, nil, mockSU, mockPreflight)
 	})
 
 	It("multiple modules, statuses exist, none deleted", func() {
@@ -348,7 +353,7 @@ var _ = Describe("PreflightValidationReconciler_updatePreflightStatus", func() {
 		mockSU = statusupdater.NewMockPreflightStatusUpdater(ctrl)
 		mockPreflight = preflight.NewMockPreflightAPI(ctrl)
 		ctx = context.Background()
-		pr = NewPreflightValidationReconciler(clnt, nil, mockSU, mockPreflight)
+		pr = NewPreflightValidationReconciler(clnt, nil, nil, mockSU, mockPreflight)
 	})
 
 	It("status verified", func() {
@@ -401,7 +406,7 @@ var _ = Describe("PreflightValidationReconciler_checkPreflightCompletion", func(
 			Name:      preflightName,
 			Namespace: namespace,
 		}
-		pr = NewPreflightValidationReconciler(clnt, nil, mockSU, mockPreflight)
+		pr = NewPreflightValidationReconciler(clnt, nil, nil, mockSU, mockPreflight)
 	})
 
 	It("Get preflight failed", func() {
