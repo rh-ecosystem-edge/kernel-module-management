@@ -4,6 +4,7 @@ metadata:
   labels:
     control-plane: controller-manager
     security.openshift.io/scc.podSecurityLabelSync: 'true'
+    openshift.io/cluster-monitoring: "true"
   name: system
 ---
 apiVersion: apps/v1
