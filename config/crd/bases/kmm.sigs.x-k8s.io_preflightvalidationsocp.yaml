@@ -48,6 +48,10 @@ spec:
                 description: releaseImage describes the OCP release image that all
                   Modules need to be checked against.
                 type: string
+              useRTKernel:
+                description: Boolean flag that determines whether the preflight should
+                  be checked with RT kernel version instead of Full kernel version
+                type: boolean
             required:
             - releaseImage
             type: object

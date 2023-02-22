@@ -29,6 +29,11 @@ type PreflightValidationOCPSpec struct {
 	// +kubebuilder:validation:Required
 	ReleaseImage string `json:"releaseImage"`
 
+	// Boolean flag that determines whether the preflight should be checked with RT kernel version
+	// instead of Full kernel version
+	// +optional
+	UseRTKernel bool `json:"useRTKernel"`
+
 	// Boolean flag that determines whether images build during preflight must also
 	// be pushed to a defined repository
 	// +optional

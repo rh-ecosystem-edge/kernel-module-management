@@ -170,12 +170,19 @@ func (r *PreflightValidationOCPReconciler) preparePreflightValidation(ctx contex
 
 	log.Info("DTK image is", "dtk_image", dtkImage)
 
-	kernelVersion, osVersion, err := r.getKernelVersionAndOSFromDTK(ctx, dtkImage)
+	fullKernelVersion, rtKernelVersion, osVersion, err := r.getKernelVersionAndOSFromDTK(ctx, dtkImage)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get kernel/os version from DTK image %s: %v", dtkImage, err)
 	}
 
-	log.Info("os version and kernel version", "os_version", osVersion, "kernel_version", kernelVersion)
+	log.Info("os version and kernel version from driver-toolkit", "os_version", osVersion, "full_kernel_version", fullKernelVersion, "rt_kernel_version", rtKernelVersion)
+	kernelVersion := fullKernelVersion
+	if pvo.Spec.UseRTKernel {
+		if rtKernelVersion == "" {
+			return nil, fmt.Errorf("rt_kernel_version is missing for this release, probably not and x86_64 architecture")
+		}
+		kernelVersion = rtKernelVersion
+	}
 
 	// os version in the DTK is different then OS version on the node, so in case regular flow
 	// already set the data - we don't want to override it
@@ -232,16 +239,16 @@ func (r *PreflightValidationOCPReconciler) getDTKFromImage(ctx context.Context, 
 	return "", fmt.Errorf("failed to find %s entry in the %s file", driverToolkitSpecName, releaseManifestImagesRefFile)
 }
 
-func (r *PreflightValidationOCPReconciler) getKernelVersionAndOSFromDTK(ctx context.Context, dtkImage string) (string, string, error) {
+func (r *PreflightValidationOCPReconciler) getKernelVersionAndOSFromDTK(ctx context.Context, dtkImage string) (string, string, string, error) {
 	log := ctrl.LoggerFrom(ctx)
 	digests, repo, err := r.registry.GetLayersDigests(ctx, dtkImage, nil, r.registryAuthGetter)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to get layers digests for DTK image %s: %v", dtkImage, err)
+		return "", "", "", fmt.Errorf("failed to get layers digests for DTK image %s: %v", dtkImage, err)
 	}
 	for i := len(digests) - 1; i >= 0; i-- {
 		layer, err := r.registry.GetLayerByDigest(digests[i], repo)
 		if err != nil {
-			return "", "", fmt.Errorf("failed to get layer %d for DTK image %s: %v", i, dtkImage, err)
+			return "", "", "", fmt.Errorf("failed to get layer %d for DTK image %s: %v", i, dtkImage, err)
 		}
 		data, err := r.registry.GetHeaderDataFromLayer(layer, driverToolkitJSONFilePath)
 		if err != nil {
@@ -251,15 +258,15 @@ func (r *PreflightValidationOCPReconciler) getKernelVersionAndOSFromDTK(ctx cont
 		dtkData := dtkRelease{}
 		err = json.Unmarshal(data, &dtkData)
 		if err != nil {
-			return "", "", fmt.Errorf("failed to unmarshal %s data: %v", driverToolkitJSONFilePath, err)
+			return "", "", "", fmt.Errorf("failed to unmarshal %s data: %v", driverToolkitJSONFilePath, err)
 		}
 
 		log.Info("DTK data is:", "dtkData", data)
 		if dtkData.KernelVersion == "" || dtkData.RHELVersion == "" {
-			return "", "", fmt.Errorf("failed format of %s file, both KernelVersion <%s> and RHEL_VERSION <%s> should not be empty",
+			return "", "", "", fmt.Errorf("failed format of %s file, both KernelVersion <%s> and RHEL_VERSION <%s> should not be empty",
 				driverToolkitJSONFilePath, dtkData.KernelVersion, dtkData.RHELVersion)
 		}
-		return dtkData.KernelVersion, dtkData.RHELVersion, nil
+		return dtkData.KernelVersion, dtkData.RTKernelVersion, dtkData.RHELVersion, nil
 	}
-	return "", "", fmt.Errorf("file %s is not present in the image %s", driverToolkitJSONFilePath, dtkImage)
+	return "", "", "", fmt.Errorf("file %s is not present in the image %s", driverToolkitJSONFilePath, dtkImage)
 }
