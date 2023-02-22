@@ -132,11 +132,12 @@ var _ = Describe("PreflightValidationOCPReconciler_getDTKFromImage", func() {
 				mockRegistry.EXPECT().GetHeaderDataFromLayer(nil, driverToolkitJSONFilePath).Return(dtkDataBytes, nil),
 			)
 
-			res1, res2, err := pro.getKernelVersionAndOSFromDTK(ctx, "dtkImage")
+			res1, res2, res3, err := pro.getKernelVersionAndOSFromDTK(ctx, "dtkImage")
 
 			Expect(err).To(BeNil())
 			Expect(res1).To(Equal("kernelVersion"))
-			Expect(res2).To(Equal("rhelVersion"))
+			Expect(res2).To(Equal("rtKernelVersion"))
+			Expect(res3).To(Equal("rhelVersion"))
 		})
 
 		It("etc/driver-toolkit-release.json not present in dtk", func() {
@@ -149,7 +150,7 @@ var _ = Describe("PreflightValidationOCPReconciler_getDTKFromImage", func() {
 				mockRegistry.EXPECT().GetHeaderDataFromLayer(nil, driverToolkitJSONFilePath).Return(nil, fmt.Errorf("some error")),
 			)
 
-			_, _, err := pro.getKernelVersionAndOSFromDTK(ctx, "dtkImage")
+			_, _, _, err := pro.getKernelVersionAndOSFromDTK(ctx, "dtkImage")
 
 			Expect(err).To(HaveOccurred())
 		})
@@ -165,7 +166,7 @@ var _ = Describe("PreflightValidationOCPReconciler_getDTKFromImage", func() {
 				mockRegistry.EXPECT().GetHeaderDataFromLayer(nil, driverToolkitJSONFilePath).Return(dtkDataBytes, nil),
 			)
 
-			_, _, err = pro.getKernelVersionAndOSFromDTK(ctx, "dtkImage")
+			_, _, _, err = pro.getKernelVersionAndOSFromDTK(ctx, "dtkImage")
 
 			Expect(err).To(HaveOccurred())
 		})
@@ -225,6 +226,50 @@ var _ = Describe("PreflightValidationOCPReconciler_getDTKFromImage", func() {
 			pv, err := pro.preparePreflightValidation(ctx, &pvo)
 			Expect(err).To(BeNil())
 			Expect(pv.Spec.KernelVersion).To(Equal(dtkReleaseData.KernelVersion))
+			Expect(pv.Spec.PushBuiltImage).To(Equal(pvo.Spec.PushBuiltImage))
+		})
+
+		It("good flow with RT kernel", func() {
+			dtkReleaseData.RTKernelVersion = ""
+			digests := []string{"digest1", "digest2"}
+			releaseImageData, err := json.Marshal(&releaseOCPData)
+			Expect(err).To(BeNil())
+			dtkDataBytes, err := json.Marshal(&dtkReleaseData)
+			Expect(err).To(BeNil())
+			pvo.Spec.UseRTKernel = true
+			gomock.InOrder(
+				mockRegistry.EXPECT().LastLayer(ctx, "ocpReleaseImage", nil, mockAuth).Return(nil, nil),
+				mockRegistry.EXPECT().GetHeaderDataFromLayer(nil, releaseManifestImagesRefFile).Return(releaseImageData, nil),
+				mockRegistry.EXPECT().GetLayersDigests(ctx, dtkImageReference, nil, mockAuth).Return(digests, &registry.RepoPullConfig{}, nil),
+				mockRegistry.EXPECT().GetLayerByDigest(digests[1], &registry.RepoPullConfig{}).Return(nil, nil),
+				mockRegistry.EXPECT().GetHeaderDataFromLayer(nil, driverToolkitJSONFilePath).Return(dtkDataBytes, nil),
+			)
+
+			_, err = pro.preparePreflightValidation(ctx, &pvo)
+			Expect(err).NotTo(BeNil())
+		})
+
+		It("error flow, RT kernel missing", func() {
+			digests := []string{"digest1", "digest2"}
+			releaseImageData, err := json.Marshal(&releaseOCPData)
+			Expect(err).To(BeNil())
+			dtkDataBytes, err := json.Marshal(&dtkReleaseData)
+			Expect(err).To(BeNil())
+			pvo.Spec.UseRTKernel = true
+			gomock.InOrder(
+				mockRegistry.EXPECT().LastLayer(ctx, "ocpReleaseImage", nil, mockAuth).Return(nil, nil),
+				mockRegistry.EXPECT().GetHeaderDataFromLayer(nil, releaseManifestImagesRefFile).Return(releaseImageData, nil),
+				mockRegistry.EXPECT().GetLayersDigests(ctx, dtkImageReference, nil, mockAuth).Return(digests, &registry.RepoPullConfig{}, nil),
+				mockRegistry.EXPECT().GetLayerByDigest(digests[1], &registry.RepoPullConfig{}).Return(nil, nil),
+				mockRegistry.EXPECT().GetHeaderDataFromLayer(nil, driverToolkitJSONFilePath).Return(dtkDataBytes, nil),
+				mockSKODM.EXPECT().GetImage(dtkReleaseData.RTKernelVersion).Return("", fmt.Errorf("some error")),
+				mockSKODM.EXPECT().SetNodeInfo(dtkReleaseData.RTKernelVersion, dtkReleaseData.RHELVersion),
+				mockSKODM.EXPECT().SetImageStreamInfo(dtkReleaseData.RHELVersion, dtkImageReference),
+			)
+
+			pv, err := pro.preparePreflightValidation(ctx, &pvo)
+			Expect(err).To(BeNil())
+			Expect(pv.Spec.KernelVersion).To(Equal(dtkReleaseData.RTKernelVersion))
 			Expect(pv.Spec.PushBuiltImage).To(Equal(pvo.Spec.PushBuiltImage))
 		})
 	})
