@@ -61,9 +61,10 @@ var _ = Describe("module status update", func() {
 					moduleLoaderAvailable += ds.Status.NumberAvailable
 				}
 			}
+
 			statusWrite := client.NewMockStatusWriter(ctrl)
 			clnt.EXPECT().Status().Return(statusWrite)
-			statusWrite.EXPECT().Update(context.Background(), mod).Return(nil)
+			statusWrite.EXPECT().Patch(context.Background(), mod, gomock.Any()).Return(nil)
 
 			res := su.ModuleUpdateStatus(context.Background(), mod, mappingsNodes, targetedNodes, dsMap)
 
@@ -130,7 +131,7 @@ var _ = Describe("ManagedClusterModule status update", func() {
 	It("", func() {
 		statusWrite := client.NewMockStatusWriter(ctrl)
 		clnt.EXPECT().Status().Return(statusWrite)
-		statusWrite.EXPECT().Update(context.Background(), mcm).Return(nil)
+		statusWrite.EXPECT().Patch(context.Background(), mcm, gomock.Any()).Return(nil)
 
 		mw := workv1.ManifestWork{
 			ObjectMeta: metav1.ObjectMeta{
