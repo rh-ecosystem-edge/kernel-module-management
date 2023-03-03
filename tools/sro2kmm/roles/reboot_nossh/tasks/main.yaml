@@ -1,0 +1,22 @@
+- name: Individual tasks for each node
+  block:
+  - name: Install pre-requisites modules
+    pip:
+      name:
+        - openshift
+        - pyyaml
+        - kubernetes
+        - requests
+        - jmespath
+
+
+  - name: test
+    debug: var=groups['workers']
+
+  - name: Migration loop through nodes 
+    include_tasks: graceful_reboot.yaml
+    #include_tasks: delete_old_pods.yaml
+    loop: "{{ groups['workers'] }}"
+    loop_control:
+      loop_var: node
+

@@ -1,0 +1,17 @@
+- name: Get an existing Service object
+  kubernetes.core.k8s_info:
+    api_version: v1
+    api_key: "{{ k8s_auth_results.k8s_auth.api_key }}"
+    kind: DaemonSet
+    name: "{{ item }}"
+    namespace: "{{ sro_ds_ns }}"
+  loop: "{{ lookup('file', 'temp/selected_ds').splitlines() }}"
+  register: sro_ds_backup
+- name: Copy DS definition backup to local
+  local_action:
+    module: copy
+    content: "{{ sro_ds_backup }}"
+    dest: sro_ds_backup.json
+- name: Register container names
+  shell: cat sro_ds_backup.json | jq '.results[].resources[].spec.template.spec.containers[].name'
+  register: ds_container_names

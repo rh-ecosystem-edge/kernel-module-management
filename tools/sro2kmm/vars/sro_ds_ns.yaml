@@ -1,0 +1,3 @@
+sro_ds_ns: kmm-kmod
+sro_ds:
+   - kmm-kmod-driver-container-841d45031fee8300

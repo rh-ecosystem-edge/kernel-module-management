@@ -1,0 +1,9 @@
+- name: Get Daemonset description and set ds_container_name variable
+  command: /usr/local/bin/oc --kubeconfig "{{ local_kubeconfig }}" get ds "{{ sro_ds[0] }}" -n "{{ sro_ds_ns }}" -o json 
+  register: ds_description
+#- debug: 
+#    var: ds_description.stdout|from_json|json_query('spec.template.spec.containers[0].name')  
+- set_fact:
+    ds_container_name: "{{ ds_description.stdout|from_json|json_query('spec.template.spec.containers[0].name') }}"
+
+

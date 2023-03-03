@@ -1,0 +1,15 @@
+- name: Wait for node "{{ node }}" to be rebooted
+  ansible.builtin.wait_for:
+    timeout: 70 
+  delegate_to: localhost
+- name: Wait for node "{{ node }}" to be healthy
+  command: >
+    /usr/local/bin/oc get node {{ node }}
+    --kubeconfig={{ local_kubeconfig }}
+    --output=jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+  delegate_to: localhost
+  register: oc_get
+  until: oc_get.stdout == "True"
+  retries: 20
+  delay: 20
+  changed_when: false

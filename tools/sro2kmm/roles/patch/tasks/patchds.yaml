@@ -1,0 +1,10 @@
+- name: Patch DaemonSet before rebooting to remove postStart hook
+  kubernetes.core.k8s_json_patch:
+    kind: DaemonSet
+    namespace: "{{ sro_ds_ns }}"
+    name: "{{ item }}"
+    patch:
+      - op: remove
+        path: /spec/template/spec/containers/0/lifecycle/postStart
+  loop: "{{ lookup('file', 'temp/selected_ds').splitlines() }}"
+  register: output

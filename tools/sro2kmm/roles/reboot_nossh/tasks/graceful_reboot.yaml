@@ -1,0 +1,21 @@
+- name: Cordon node. Mark node "{{ node }}" as unschedulable.
+  include_tasks: cordon.yaml
+
+- name: Drain node "{{ node }}", but abort if there are pods not managed by a ReplicationController, Job, or DaemonSet, and use a grace period of 15 minutes.
+  include_tasks: drain.yaml
+
+- name: Reboot node "{{ node }}" within 1 minute
+  include_tasks: reboot.yaml
+
+- name: Wait until node "{{ node }}" is healthy 
+  include_tasks: check_node.yaml
+
+- name: Uncordon. Mark node "{{ node }}" as schedulable.
+  include_tasks: uncordon.yaml
+
+- name: Patch old SRO DS after reboot
+  include_tasks: patch_ds_postreboot.yaml 
+
+- name: Delete old SRO Pods after reboot
+  include_tasks: delete_old_pods.yaml 
+    

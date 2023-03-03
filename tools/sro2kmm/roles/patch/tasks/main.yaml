@@ -1,0 +1,28 @@
+- name: Login and patch SRO DaemonSet in cluster
+  block:
+  - name: Install pre-requisites modules
+    pip:
+      name:
+        - openshift
+        - pyyaml
+        - kubernetes
+        - requests
+        - jmespath
+
+  - name: Install jq
+    ansible.builtin.package:
+      name: jq
+      state: present
+
+  - name: Login to OCP cluster
+    include_tasks: ocplogin.yaml
+
+  - name: Get Containername
+    include_tasks: get_containername.yaml
+
+  - name: Backup existing SRO DaemonSet
+    include_tasks: backupds.yaml
+
+  - name: Patch SRO DaemonSet
+    include_tasks: patchds.yaml
+

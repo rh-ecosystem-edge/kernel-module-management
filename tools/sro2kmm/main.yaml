@@ -1,0 +1,15 @@
+---
+- hosts: localhost
+  environment:
+    K8S_AUTH_KUBECONFIG: "{{ lookup('env', 'HOME') }}/tmp/auth/kubeconfig"
+  vars_files:
+    - vars/ocp.yaml
+    - vars/sro_ds_ns.yaml
+    - vars/dsettings.yaml
+
+  become: true
+  become_method: sudo
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - patch
+    - reboot_nossh

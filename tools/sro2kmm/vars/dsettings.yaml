@@ -1,0 +1,4 @@
+delete_emptydir_data: true
+disable_eviction: true
+force: true
+ignore_daemonsets: true

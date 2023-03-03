@@ -1,0 +1,10 @@
+- name: Patch DaemonSet after rebooting to remove preStop hook
+  kubernetes.core.k8s_json_patch:
+    kind: DaemonSet
+    namespace: "{{ sro_ds_ns }}"
+    name: "{{ item }}"
+    patch:
+      - op: remove
+        path: /spec/template/spec/containers/0/lifecycle/preStop
+  loop: "{{ lookup('file', 'temp/selected_ds').splitlines() }}"
+  register: output

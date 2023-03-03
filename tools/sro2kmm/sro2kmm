@@ -1,0 +1,112 @@
+#!/bin/bash
+#
+set -ex
+#set -eoxu pipefail
+# Clean old temp files
+rm -f temp/* || true
+
+# Checks if dialog exists
+if ! command -v dialog &> /dev/null
+then
+    echo "dialog command could not be found."
+    exit
+fi
+
+# Check passed arguments $1 is SR name $2 is optional menu
+if [ -z "$1" ]; then
+    echo "The SpecialResource name to be migrated should be passed as an argument."
+    echo "USAGE: sro2kmm [SpecialResource name] --menu <show menu with optional drain delete settings>"
+    exit 1
+fi
+
+# Check if --menu or -m is passed as an argument
+if [ -z "$2" ]; then
+    setdmenu="0"
+elif [[ $2 == "--menu" ]] || [[ $2 == "-m" ]]; then
+    setdmenu="1"
+else
+    echo "Not valid drain options. Use --menu or -m"
+    exit 1
+fi
+
+# Check if --verbose or -v is passed as an argument
+if [ -z "$3" ]; then
+    verbose=""
+elif [[ $3 == "--verbose" ]] || [[ $3 == "-v" ]]; then
+    verbose="-vvv"
+else
+    echo "Not valid verbose options. Use --verbose or -v"
+    exit 1
+fi
+
+# Set variables
+sr=$1
+ns=$(oc get sr $sr -o jsonpath='{.items[0]}{.spec.namespace}')
+echo "Namespace $ns"
+dsrawlist=$(oc get ds -n "$ns" -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')
+echo "Dsrawlist: $dsrawlist"
+
+# Function to filter DaemonSets owned by SRO
+# Add only DaemonSets owned by SRO
+rm -f temp/tmpds || true
+while read -r srods; do
+  tmpds=$(oc get ds $srods -n $ns -o json | jq --arg sro "$sr" 'try .metadata | select((.ownerReferences[].kind=="SpecialResource") and (.ownerReferences[].name==$sro)) | .name')
+  if [ -n "$tmpds" ]; then 
+    echo $srods >> temp/tmpds
+  fi
+done <<< "$dsrawlist"
+
+# Build dialog checklist box for possible DaemonSets
+dslist=$(cat temp/tmpds)
+COUNT=0
+while IFS=$'\n' read -r opt; do
+    COUNT=$(( COUNT+1 ))
+    options+=("$opt" "" off)
+done <<< "$dslist"
+
+cmd=(dialog --backtitle "SRO2KMM" --checklist "Choose one or more SRO DaemonSets to migrate" 22 60 16)
+
+#Add selected Daemonsets names to temp file
+choices=($("${cmd[@]}" "${options[@]}" 2>temp/selected_ds 1>/dev/tty))
+
+#Add selected DaemonSets namespace and names to playbook variable
+add_sro_variables() {
+rm -f vars/sro_ds_ns.yaml || true
+echo "sro_ds_ns: $ns" > vars/sro_ds_ns.yaml
+echo "sro_ds:" >> vars/sro_ds_ns.yaml
+cat temp/selected_ds | while read line|| [[ -n $line ]] ; do echo "   - $line" >> vars/sro_ds_ns.yaml; done
+}
+
+add_sro_variables
+
+# Create settings menu for drain delete options
+if [[ $setdmenu == "1" ]]; then
+   ## Boolean settings
+   fundmenu1=(dialog --stdout --separate-output --checklist "Delete Settings for SRO DS"  22 50 10)
+   options1=(1 "Delete emptydir data" off \
+     2 "Disable eviction" off \
+     3 "Force" off \
+     4 "Ignore Daemonsets" off)
+
+   selections1=$("${fundmenu1[@]}" "${options1[@]}" 2>&1 >temp/sel1)
+
+   ## Numeric settings for timeouts
+   #fundmenu2=(dialog --stdout --form "Delete timeout settings (seconds)" 22 50 10)
+   #options2=("Terminate grace period:" 1 1 "" 1 22 25 0 \
+   #  "Wait Sleep:" 2 1 "" 2 22 25 0 \
+   #  "Wait Timeout:" 3 1 "" 3 22 25 0)
+   #selections2=$("${fundmenu2[@]}" "${options2[@]}" 2>&1 >temp/sel2)
+
+  #Create var file from results
+  rm -f vars/dsettings.yaml || true
+  touch vars/dsettings.yaml
+  while IFS=$'\n' read -r line; do
+    [[ $line == 1 ]] && echo "delete_emptydir_data: true" >> vars/dsettings.yaml
+    [[ $line == 2 ]] && echo "disable_eviction: true" >> vars/dsettings.yaml
+    [[ $line == 3 ]] && echo "force: true" >> vars/dsettings.yaml
+    [[ $line == 4 ]] && echo "ignore_daemonsets: true" >> vars/dsettings.yaml
+  done <temp/sel1
+
+fi
+
+./cluster_inventory.sh && time ansible-playbook -i inventory_hosts main.yaml $verbose
