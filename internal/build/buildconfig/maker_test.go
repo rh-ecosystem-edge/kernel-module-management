@@ -10,7 +10,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/google/go-cmp/cmp"
-	"github.com/mitchellh/hashstructure"
+	"github.com/mitchellh/hashstructure/v2"
 	buildv1 "github.com/openshift/api/build/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -157,7 +157,7 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 			},
 		}
 
-		hash, err := hashstructure.Hash(expected.Spec.CommonSpec.Source, nil)
+		hash, err := hashstructure.Hash(expected.Spec.CommonSpec.Source, hashstructure.FormatV2, nil)
 		Expect(err).NotTo(HaveOccurred())
 		annotations := map[string]string{buildHashAnnotation: fmt.Sprintf("%d", hash)}
 		expected.SetAnnotations(annotations)

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mitchellh/hashstructure/v2"
 	buildv1 "github.com/openshift/api/build/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
@@ -33,6 +34,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
+
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
@@ -133,11 +135,6 @@ func (r *ModuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return res, fmt.Errorf("could get kernel mappings and nodes for modules %s: %w", mod.Name, err)
 	}
 
-	dsByKernelVersion, err := r.daemonAPI.ModuleDaemonSetsByKernelVersion(ctx, mod.Name, mod.Namespace)
-	if err != nil {
-		return res, fmt.Errorf("could not get DaemonSets for module %s: %v", mod.Name, err)
-	}
-
 	for kernelVersion, mld := range mldMappings {
 		completedSuccessfully, err := r.reconHelperAPI.handleBuild(ctx, mld)
 		if err != nil {
@@ -161,7 +158,7 @@ func (r *ModuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			continue
 		}
 
-		err = r.reconHelperAPI.handleDriverContainer(ctx, mld, dsByKernelVersion)
+		err = r.reconHelperAPI.handleDriverContainer(ctx, mld)
 		if err != nil {
 			return res, fmt.Errorf("failed to handle driver container for kernel version %s: %v", kernelVersion, err)
 		}
@@ -173,13 +170,18 @@ func (r *ModuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return res, fmt.Errorf("could handle device plugin: %w", err)
 	}
 
+	existingModuleDS, err := r.daemonAPI.GetModuleDaemonSets(ctx, mod.Name, mod.Namespace)
+	if err != nil {
+		return res, fmt.Errorf("could get DaemonSets for module %s, namespace %s: %v", mod.Name, mod.Namespace, err)
+	}
+
 	logger.Info("Run garbage collection")
-	err = r.reconHelperAPI.garbageCollect(ctx, mod, mldMappings, dsByKernelVersion)
+	err = r.reconHelperAPI.garbageCollect(ctx, mod, mldMappings, existingModuleDS)
 	if err != nil {
 		return res, fmt.Errorf("failed to run garbage collection: %v", err)
 	}
 
-	err = r.statusUpdaterAPI.ModuleUpdateStatus(ctx, mod, nodesWithMapping, targetedNodes, dsByKernelVersion)
+	err = r.statusUpdaterAPI.ModuleUpdateStatus(ctx, mod, nodesWithMapping, targetedNodes, existingModuleDS)
 	if err != nil {
 		return res, fmt.Errorf("failed to update status of the module: %w", err)
 	}
@@ -198,9 +200,13 @@ type moduleReconcilerHelperAPI interface {
 	getRelevantKernelMappingsAndNodes(ctx context.Context, mod *kmmv1beta1.Module, targetedNodes []v1.Node) (map[string]*api.ModuleLoaderData, []v1.Node, error)
 	handleBuild(ctx context.Context, mld *api.ModuleLoaderData) (bool, error)
 	handleSigning(ctx context.Context, mld *api.ModuleLoaderData) (bool, error)
-	handleDriverContainer(ctx context.Context, mld *api.ModuleLoaderData, dsByKernelVersion map[string]*appsv1.DaemonSet) error
+	handleDriverContainer(ctx context.Context, mld *api.ModuleLoaderData) error
 	handleDevicePlugin(ctx context.Context, mod *kmmv1beta1.Module) error
-	garbageCollect(ctx context.Context, mod *kmmv1beta1.Module, mldMappings map[string]*api.ModuleLoaderData, existingDS map[string]*appsv1.DaemonSet) error
+	garbageCollect(ctx context.Context, mod *kmmv1beta1.Module, mldMappings map[string]*api.ModuleLoaderData, existingDS []appsv1.DaemonSet) error
+}
+
+type hashData struct {
+	KernelVersion string
 }
 
 type moduleReconcilerHelper struct {
@@ -357,21 +363,18 @@ func (mrh *moduleReconcilerHelper) handleSigning(ctx context.Context, mld *api.M
 }
 
 func (mrh *moduleReconcilerHelper) handleDriverContainer(ctx context.Context,
-	mld *api.ModuleLoaderData,
-	dsByKernelVersion map[string]*appsv1.DaemonSet) error {
+	mld *api.ModuleLoaderData) error {
+
+	hashValue, err := hashstructure.Hash(hashData{KernelVersion: mld.KernelVersion}, hashstructure.FormatV2, nil)
+	if err != nil {
+		return fmt.Errorf("failed to hash kernel version %s for module loader daemonset name: %v", mld.KernelVersion, err)
+	}
+	name := fmt.Sprintf("%s-%x", mld.Name, hashValue)
 	ds := &appsv1.DaemonSet{
-		ObjectMeta: metav1.ObjectMeta{Namespace: mld.Namespace},
+		ObjectMeta: metav1.ObjectMeta{Namespace: mld.Namespace, Name: name},
 	}
 
 	logger := log.FromContext(ctx)
-	if existingDS := dsByKernelVersion[mld.KernelVersion]; existingDS != nil {
-		logger.Info("updating existing driver container DS", "kernel version", mld.KernelVersion, "image", mld.ContainerImage, "name", ds.Name)
-		ds = existingDS
-	} else {
-		logger.Info("creating new driver container DS", "kernel version", mld.KernelVersion, "image", mld.ContainerImage)
-		ds.GenerateName = mld.Name + "-"
-	}
-
 	opRes, err := controllerutil.CreateOrPatch(ctx, mrh.client, ds, func() error {
 		return mrh.daemonAPI.SetDriverContainerAsDesired(ctx, ds, mld, mld.Namespace == mrh.operatorNamespace)
 	})
@@ -407,7 +410,7 @@ func (mrh *moduleReconcilerHelper) handleDevicePlugin(ctx context.Context, mod *
 func (mrh *moduleReconcilerHelper) garbageCollect(ctx context.Context,
 	mod *kmmv1beta1.Module,
 	mldMappings map[string]*api.ModuleLoaderData,
-	existingDS map[string]*appsv1.DaemonSet) error {
+	existingDS []appsv1.DaemonSet) error {
 	logger := log.FromContext(ctx)
 	// Garbage collect old DaemonSets for which there are no nodes.
 	validKernels := sets.KeySet[string](mldMappings)
