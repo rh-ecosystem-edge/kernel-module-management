@@ -126,7 +126,7 @@ vet: ## Run go vet against code.
 
 TEST ?= ./...
 
-.PHONY: test
+.PHONY: unit-test
 unit-test: vet ## Run tests.
 	go test $(TEST) -coverprofile cover.out
 
