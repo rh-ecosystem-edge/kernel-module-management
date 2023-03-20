@@ -1,0 +1,67 @@
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: {{.MachineConfigPoolRef}}
+  name: {{.MachineConfigName}}
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+    systemd:
+      units:
+        - contents: |
+            [Unit]
+            Description=Replace in-tree kernel module with oot kernel module
+            Before=network-pre.target
+            Wants=network-pre.target
+            DefaultDependencies=no
+            [Service]
+            User=root
+            Type=oneshot
+            TimeoutSec=10
+            ExecStartPre=ls /usr/local/bin
+            ExecStart=/usr/local/bin/replace-kernel-module.sh
+            PrivateTmp=yes
+            RemainAfterExit=no
+            TimeoutSec=60
+            [Install]
+            WantedBy=multi-user.target
+          enabled: true
+          name: "replace-kernel-module.service"
+        - contents: |
+            [Unit]
+            Description=Pull oot kernel module image
+            After=network-online.target
+            Wants=network-online.target
+            DefaultDependencies=no
+            [Service]
+            User=root
+            Type=oneshot
+            ExecStart=/usr/local/bin/pull-kernel-module-image.sh
+            PrivateTmp=yes
+            RemainAfterExit=no
+            TimeoutSec=900
+            [Install]
+            WantedBy=multi-user.target
+          enabled: true
+          name: "pull-kernel-module-image.service"
+        - enabled: false
+          mask: true
+          name: crio-wipe.service
+    storage:
+      files:
+        - path: "/usr/local/bin/replace-kernel-module.sh"
+          mode: 511
+          overwrite: true
+          user:
+            name: "root"
+          contents:
+            source: "data:text/plain;base64,{{.ReplaceInTreeDriverContents}}"
+        - path: "/usr/local/bin/pull-kernel-module-image.sh"
+          mode: 493
+          overwrite: true
+          user:
+            name: "root"
+          contents:
+            source: "data:text/plain;base64,{{.PullKernelModuleContents}}"

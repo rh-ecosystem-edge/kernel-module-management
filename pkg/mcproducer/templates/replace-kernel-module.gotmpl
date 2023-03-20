@@ -1,0 +1,20 @@
+#!/bin/bash
+echo "before checking podman images"
+if podman images list | grep {{.Image}} | grep -q {{.Tag}}; then
+    echo "Image {{.Image}}:{{.Tag}} found in the local registry, removing in-tree kernel module"
+    podman run --privileged --entrypoint modprobe {{.Image}}:{{.Tag}} -rd /opt {{.KernelModule}}
+    if [ $? -eq 0 ]; then
+            echo "Succesffully removed the in-tree kernel module {{.KernelModule}}"
+    else
+            echo "failed to remove in-tree kernel module {{.KernelModule}}"
+    fi
+    echo "Running container image to insert the oot kernel module {{.KernelModule}}"
+    podman run --privileged --entrypoint modprobe {{.Image}}:{{.Tag}} -d /opt {{.KernelModule}}
+    if [ $? -eq 0 ]; then
+            echo "OOT kernel module {{.KernelModule}} is inserted"
+    else
+            echo "failed to insert OOT kernel module {{.KernelModule}}"
+    fi
+else
+   echo "Image {{.Image}}:{{.Tag}} is not present in local registry, will try after reboot"
+fi

@@ -1,0 +1,67 @@
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: mcpRef
+  name: name
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+    systemd:
+      units:
+        - contents: |
+            [Unit]
+            Description=Replace in-tree kernel module with oot kernel module
+            Before=network-pre.target
+            Wants=network-pre.target
+            DefaultDependencies=no
+            [Service]
+            User=root
+            Type=oneshot
+            TimeoutSec=10
+            ExecStartPre=ls /usr/local/bin
+            ExecStart=/usr/local/bin/replace-kernel-module.sh
+            PrivateTmp=yes
+            RemainAfterExit=no
+            TimeoutSec=60
+            [Install]
+            WantedBy=multi-user.target
+          enabled: true
+          name: "replace-kernel-module.service"
+        - contents: |
+            [Unit]
+            Description=Pull oot kernel module image
+            After=network-online.target
+            Wants=network-online.target
+            DefaultDependencies=no
+            [Service]
+            User=root
+            Type=oneshot
+            ExecStart=/usr/local/bin/pull-kernel-module-image.sh
+            PrivateTmp=yes
+            RemainAfterExit=no
+            TimeoutSec=900
+            [Install]
+            WantedBy=multi-user.target
+          enabled: true
+          name: "pull-kernel-module-image.service"
+        - enabled: false
+          mask: true
+          name: crio-wipe.service
+    storage:
+      files:
+        - path: "/usr/local/bin/replace-kernel-module.sh"
+          mode: 511
+          overwrite: true
+          user:
+            name: "root"
+          contents:
+            source: "data:text/plain;base64,IyEvYmluL2Jhc2gKZWNobyAiYmVmb3JlIGNoZWNraW5nIHBvZG1hbiBpbWFnZXMiCmlmIHBvZG1hbiBpbWFnZXMgbGlzdCB8IGdyZXAgcXVheS5pby9wcm9qZWN0L3JlcG8gfCBncmVwIC1xIHNvbWUtdGFnMTI7IHRoZW4KICAgIGVjaG8gIkltYWdlIHF1YXkuaW8vcHJvamVjdC9yZXBvOnNvbWUtdGFnMTIgZm91bmQgaW4gdGhlIGxvY2FsIHJlZ2lzdHJ5LCByZW1vdmluZyBpbi10cmVlIGtlcm5lbCBtb2R1bGUiCiAgICBwb2RtYW4gcnVuIC0tcHJpdmlsZWdlZCAtLWVudHJ5cG9pbnQgbW9kcHJvYmUgcXVheS5pby9wcm9qZWN0L3JlcG86c29tZS10YWcxMiAtcmQgL29wdCB0ZXN0S2VybmVsTW9kdWxlTmFtZQogICAgaWYgWyAkPyAtZXEgMCBdOyB0aGVuCiAgICAgICAgICAgIGVjaG8gIlN1Y2Nlc2ZmdWxseSByZW1vdmVkIHRoZSBpbi10cmVlIGtlcm5lbCBtb2R1bGUgdGVzdEtlcm5lbE1vZHVsZU5hbWUiCiAgICBlbHNlCiAgICAgICAgICAgIGVjaG8gImZhaWxlZCB0byByZW1vdmUgaW4tdHJlZSBrZXJuZWwgbW9kdWxlIHRlc3RLZXJuZWxNb2R1bGVOYW1lIgogICAgZmkKICAgIGVjaG8gIlJ1bm5pbmcgY29udGFpbmVyIGltYWdlIHRvIGluc2VydCB0aGUgb290IGtlcm5lbCBtb2R1bGUgdGVzdEtlcm5lbE1vZHVsZU5hbWUiCiAgICBwb2RtYW4gcnVuIC0tcHJpdmlsZWdlZCAtLWVudHJ5cG9pbnQgbW9kcHJvYmUgcXVheS5pby9wcm9qZWN0L3JlcG86c29tZS10YWcxMiAtZCAvb3B0IHRlc3RLZXJuZWxNb2R1bGVOYW1lCiAgICBpZiBbICQ/IC1lcSAwIF07IHRoZW4KICAgICAgICAgICAgZWNobyAiT09UIGtlcm5lbCBtb2R1bGUgdGVzdEtlcm5lbE1vZHVsZU5hbWUgaXMgaW5zZXJ0ZWQiCiAgICBlbHNlCiAgICAgICAgICAgIGVjaG8gImZhaWxlZCB0byBpbnNlcnQgT09UIGtlcm5lbCBtb2R1bGUgdGVzdEtlcm5lbE1vZHVsZU5hbWUiCiAgICBmaQplbHNlCiAgIGVjaG8gIkltYWdlIHF1YXkuaW8vcHJvamVjdC9yZXBvOnNvbWUtdGFnMTIgaXMgbm90IHByZXNlbnQgaW4gbG9jYWwgcmVnaXN0cnksIHdpbGwgdHJ5IGFmdGVyIHJlYm9vdCIKZmkK"
+        - path: "/usr/local/bin/pull-kernel-module-image.sh"
+          mode: 493
+          overwrite: true
+          user:
+            name: "root"
+          contents:
+            source: "data:text/plain;base64,IyEvYmluL2Jhc2gKaWYgcG9kbWFuIGltYWdlIGxpc3QgfCBncmVwIHF1YXkuaW8vcHJvamVjdC9yZXBvIHwgZ3JlcCAtcSBzb21lLXRhZzEyOyB0aGVuCiAgICBlY2hvICJJbWFnZSBxdWF5LmlvL3Byb2plY3QvcmVwbzpzb21lLXRhZzEyIGZvdW5kIGluIHRoZSBsb2NhbCByZWdpc3RyeS5Ob3RoaW5nIHRvIGRvIgplbHNlCiAgICBlY2hvICJJbWFnZSBxdWF5LmlvL3Byb2plY3QvcmVwbzpzb21lLXRhZzEyIG5vdCBmb3VuZCBpbiB0aGUgbG9jYWwgcmVnaXN0cnksIHB1bGxpbmciCiAgICBwb2RtYW4gcHVsbCAtLWF1dGhmaWxlIC92YXIvbGliL2t1YmVsZXQvY29uZmlnLmpzb24gcXVheS5pby9wcm9qZWN0L3JlcG86c29tZS10YWcxMgogICAgaWYgWyAkPyAtZXEgMCBdOyB0aGVuCiAgICAgICAgZWNobyAiSW1hZ2UgcXVheS5pby9wcm9qZWN0L3JlcG86c29tZS10YWcxMiBoYXMgYmVlbiBzdWNjZXNzZnVsbHkgcHVsbGVkLCByZWJvb3RpbmcuLiIKICAgICAgICByZWJvb3QKICAgIGVsc2UKICAgICAgICBlY2hvICJGYWlsZWQgdG8gcHVsbCBpbWFnZSBxdWF5LmlvL3Byb2plY3QvcmVwbzpzb21lLXRhZzEyIgogICAgZmkKZmkK"
