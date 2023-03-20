@@ -74,6 +74,14 @@ func (m *maker) MakeBuildTemplate(
 			Name:  "KERNEL_VERSION",
 			Value: kernelVersion,
 		},
+		{
+			Name:  "MOD_NAME",
+			Value: mld.Name,
+		},
+		{
+			Name:  "MOD_NAMESPACE",
+			Value: mld.Namespace,
+		},
 	}
 
 	dockerfileData, err := m.getDockerfileData(ctx, kmmBuild, mld.Namespace)

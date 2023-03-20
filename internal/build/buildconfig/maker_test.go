@@ -102,10 +102,9 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 		}
 
 		overrides := []kmmv1beta1.BuildArg{
-			{
-				Name:  "KERNEL_VERSION",
-				Value: targetKernel,
-			},
+			{Name: "KERNEL_VERSION", Value: targetKernel},
+			{Name: "MOD_NAME", Value: moduleName},
+			{Name: "MOD_NAMESPACE", Value: namespace},
 		}
 
 		expected := buildv1.Build{
@@ -139,6 +138,8 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 							BuildArgs: append(
 								envVarsFromKMMBuildArgs(buildArgs),
 								v1.EnvVar{Name: "KERNEL_VERSION", Value: targetKernel},
+								v1.EnvVar{Name: "MOD_NAME", Value: moduleName},
+								v1.EnvVar{Name: "MOD_NAMESPACE", Value: namespace},
 							),
 							Volumes: buildVolumesFromBuildSecrets(buildSecrets),
 						},
@@ -168,7 +169,12 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 					return nil
 				},
 			),
-			mockBuildHelper.EXPECT().ApplyBuildArgOverrides(buildArgs, overrides).Return(append(buildArgs, kmmv1beta1.BuildArg{Name: "KERNEL_VERSION", Value: targetKernel})),
+			mockBuildHelper.EXPECT().ApplyBuildArgOverrides(buildArgs, overrides).Return(
+				append(buildArgs,
+					kmmv1beta1.BuildArg{Name: "KERNEL_VERSION", Value: targetKernel},
+					kmmv1beta1.BuildArg{Name: "MOD_NAME", Value: moduleName},
+					kmmv1beta1.BuildArg{Name: "MOD_NAMESPACE", Value: namespace}),
+			),
 		)
 
 		bc, err := maker.MakeBuildTemplate(ctx, &mld, true, mld.Owner)
