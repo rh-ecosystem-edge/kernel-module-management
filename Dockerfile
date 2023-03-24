@@ -1,7 +1,5 @@
 # Build the manager binary
-FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.18-openshift-4.11 as builder
-
-WORKDIR /workspace
+FROM registry.access.redhat.com/ubi8/go-toolset:1.18.9-13 as builder
 
 # Copy the Go Modules manifests
 COPY go.mod go.mod
@@ -29,11 +27,11 @@ ARG TARGET
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 make ${TARGET}
 
-FROM registry.redhat.io/ubi8/ubi-micro:8.7
+FROM registry.access.redhat.com/ubi8/ubi-micro:8.7
 
 ARG TARGET
 
-COPY --from=builder /workspace/${TARGET} /usr/local/bin/manager
+COPY --from=builder /opt/app-root/src/${TARGET} /usr/local/bin/manager
 USER 65534:65534
 
 ENTRYPOINT ["/usr/local/bin/manager"]

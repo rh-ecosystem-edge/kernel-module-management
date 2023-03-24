@@ -1,25 +1,26 @@
-FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.18-openshift-4.11 as builder
-
-WORKDIR /workspace
+FROM registry.access.redhat.com/ubi8/go-toolset:1.18.9-13 as builder
 
 COPY go.mod go.mod
 COPY go.sum go.sum
+COPY vendor vendor
 COPY cmd cmd
 COPY api api
 COPY docs.mk docs.mk
 COPY internal internal
 COPY Makefile Makefile
-COPY vendor vendor
-
-# install the package that will contain the sign utilities
-RUN dnf install -y kernel-devel
 
 # Build
-RUN make signimage
+RUN ["make", "signimage"]
 
-FROM registry.redhat.io/ubi8/ubi-minimal:8.7-1107
+FROM registry.access.redhat.com/ubi8/ubi-minimal:8.7-1085 as ksource
 
-COPY --from=builder /workspace/signimage /usr/src/kernels/*/scripts/sign-file /usr/local/bin/
+# install the package that will contain the sign utilities
+RUN ["microdnf", "install", "kernel-devel"]
+
+FROM registry.access.redhat.com/ubi8/ubi-minimal:8.7-1085
+
+COPY --from=builder /opt/app-root/src/signimage /usr/local/bin/
+COPY --from=ksource /usr/src/kernels/*/scripts/sign-file /usr/local/bin/
 USER 65534:65534
 
 ENTRYPOINT ["/usr/local/bin/signimage"]
