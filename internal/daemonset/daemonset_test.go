@@ -221,7 +221,7 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 								Lifecycle: &v1.Lifecycle{
 									PostStart: &v1.LifecycleHandler{
 										Exec: &v1.ExecAction{
-											Command: MakeLoadCommand(mld.Modprobe, moduleName),
+											Command: MakeLoadCommand(mld.InTreeRemoval, mld.Modprobe, moduleName),
 										},
 									},
 									PreStop: &v1.LifecycleHandler{
@@ -716,7 +716,7 @@ var _ = Describe("MakeLoadCommand", func() {
 		}
 
 		Expect(
-			MakeLoadCommand(spec, moduleName),
+			MakeLoadCommand(false, spec, moduleName),
 		).To(
 			Equal([]string{
 				"/bin/sh",
@@ -726,7 +726,7 @@ var _ = Describe("MakeLoadCommand", func() {
 		)
 	})
 
-	It("should build the command from the spec as expected", func() {
+	It("should build the command from the spec as expected with in-tree removal", func() {
 		const (
 			arg1 = "arg1"
 			arg2 = "arg2"
@@ -740,12 +740,12 @@ var _ = Describe("MakeLoadCommand", func() {
 		}
 
 		Expect(
-			MakeLoadCommand(spec, moduleName),
+			MakeLoadCommand(true, spec, moduleName),
 		).To(
 			Equal([]string{
 				"/bin/sh",
 				"-c",
-				fmt.Sprintf("modprobe -v -d %s %s %s %s", dir, kernelModuleName, arg1, arg2),
+				fmt.Sprintf("modprobe -r -d %s %s && modprobe -v -d %s %s %s %s", dir, kernelModuleName, dir, kernelModuleName, arg1, arg2),
 			}),
 		)
 	})
@@ -759,7 +759,7 @@ var _ = Describe("MakeLoadCommand", func() {
 		}
 
 		Expect(
-			MakeLoadCommand(spec, moduleName),
+			MakeLoadCommand(false, spec, moduleName),
 		).To(
 			Equal([]string{
 				"/bin/sh",
@@ -776,7 +776,7 @@ var _ = Describe("MakeLoadCommand", func() {
 		}
 
 		Expect(
-			MakeLoadCommand(spec, moduleName),
+			MakeLoadCommand(false, spec, moduleName),
 		).To(
 			Equal([]string{
 				"/bin/sh",
