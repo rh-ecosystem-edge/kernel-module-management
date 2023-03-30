@@ -42,6 +42,8 @@ oc apply -f ci/kmm-kmod-dockerfile.yaml
 echo "Add Secrets containing the signing key and certificate..."
 oc apply -f ci/secret_kmm-kmod-signing.yaml
 
+oc wait --for=condition=Available deployment/kmm-operator-controller-manager -n openshift-kmm
+
 echo "Add an kmm-ci Module that contains a valid mapping..."
 oc apply -f ci/module-kmm-ci-build-sign.yaml
 
