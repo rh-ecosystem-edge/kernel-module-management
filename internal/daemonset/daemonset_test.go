@@ -158,7 +158,7 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 
 		err := dc.SetDriverContainerAsDesired(context.Background(), &ds, &mld, false)
 
-		versionLabel := utils.GetModuleVersionLabelName(mld.Namespace, mld.Name)
+		versionLabel := utils.GetModuleLoaderVersionLabelName(mld.Namespace, mld.Name)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(ds.GetLabels()).Should(HaveKeyWithValue(versionLabel, "some version"))
 	})
@@ -398,8 +398,8 @@ var _ = Describe("SetDevicePluginAsDesired", func() {
 
 		err := dc.SetDevicePluginAsDesired(context.Background(), &ds, &mod, false)
 
-		versionLabel := utils.GetModuleVersionLabelName(namespace, moduleName)
 		Expect(err).NotTo(HaveOccurred())
+		versionLabel := utils.GetDevicePluginVersionLabelName(namespace, moduleName)
 		Expect(ds.GetLabels()).Should(HaveKeyWithValue(versionLabel, "some version"))
 	})
 
@@ -602,7 +602,7 @@ var _ = Describe("GarbageCollect", func() {
 				Namespace: "namespace",
 				Labels: map[string]string{
 					kernelLabel:               legitKernelVersion,
-					constants.DaemonSetRole:   moduleLoaderRoleLabelValue,
+					constants.DaemonSetRole:   constants.ModuleLoaderRoleLabelValue,
 					moduleLoaderVersionLabel:  currentModuleVersion,
 					constants.ModuleNameLabel: mod.Name,
 				},
@@ -613,7 +613,7 @@ var _ = Describe("GarbageCollect", func() {
 				Name:      "devicePlugin",
 				Namespace: "namespace",
 				Labels: map[string]string{
-					constants.DaemonSetRole:   devicePluginRoleLabelValue,
+					constants.DaemonSetRole:   constants.DevicePluginRoleLabelValue,
 					devicePluginVersionLabel:  currentModuleVersion,
 					constants.ModuleNameLabel: mod.Name,
 				},
@@ -678,7 +678,7 @@ var _ = Describe("GarbageCollect", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "moduleLoader",
 				Namespace: "namespace",
-				Labels:    map[string]string{kernelLabel: notLegitKernelVersion, constants.DaemonSetRole: moduleLoaderRoleLabelValue, moduleLoaderVersionLabel: currentModuleVersion},
+				Labels:    map[string]string{kernelLabel: notLegitKernelVersion, constants.DaemonSetRole: constants.ModuleLoaderRoleLabelValue, moduleLoaderVersionLabel: currentModuleVersion},
 			},
 		}
 		clnt.EXPECT().Delete(context.Background(), &deleteDS).Return(fmt.Errorf("some error"))

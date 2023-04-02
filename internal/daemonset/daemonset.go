@@ -28,8 +28,6 @@ const (
 	nodeLibModulesVolumeName       = "node-lib-modules"
 	nodeVarLibFirmwarePath         = "/var/lib/firmware"
 	nodeVarLibFirmwareVolumeName   = "node-var-lib-firmware"
-	devicePluginRoleLabelValue     = "device-plugin"
-	moduleLoaderRoleLabelValue     = "module-loader"
 )
 
 //go:generate mockgen -source=daemonset.go -package=daemonset -destination=mock_daemonset.go
@@ -101,19 +99,20 @@ func (dc *daemonSetGenerator) SetDriverContainerAsDesired(
 	standardLabels := map[string]string{
 		constants.ModuleNameLabel: mld.Name,
 		dc.kernelLabel:            kernelVersion,
-		constants.DaemonSetRole:   moduleLoaderRoleLabelValue,
+		constants.DaemonSetRole:   constants.ModuleLoaderRoleLabelValue,
 	}
+	nodeSelector := CopyMapStringString(mld.Selector)
+	nodeSelector[dc.kernelLabel] = kernelVersion
+
 	if mld.ModuleVersion != "" {
-		versionLabel := utils.GetModuleVersionLabelName(mld.Namespace, mld.Name)
+		versionLabel := utils.GetModuleLoaderVersionLabelName(mld.Namespace, mld.Name)
 		standardLabels[versionLabel] = mld.ModuleVersion
+		nodeSelector[versionLabel] = mld.ModuleVersion
 	}
 
 	ds.SetLabels(
 		OverrideLabels(ds.GetLabels(), standardLabels),
 	)
-
-	nodeSelector := CopyMapStringString(mld.Selector)
-	nodeSelector[dc.kernelLabel] = kernelVersion
 
 	nodeLibModulesPath := "/lib/modules/" + kernelVersion
 
@@ -254,11 +253,14 @@ func (dc *daemonSetGenerator) SetDevicePluginAsDesired(
 
 	standardLabels := map[string]string{
 		constants.ModuleNameLabel: mod.Name,
-		constants.DaemonSetRole:   devicePluginRoleLabelValue,
+		constants.DaemonSetRole:   constants.DevicePluginRoleLabelValue,
 	}
+	nodeSelector := map[string]string{getDriverContainerNodeLabel(mod.Namespace, mod.Name, true): ""}
+
 	if mod.Spec.ModuleLoader.Container.Version != "" {
-		versionLabel := utils.GetModuleVersionLabelName(mod.Namespace, mod.Name)
+		versionLabel := utils.GetDevicePluginVersionLabelName(mod.Namespace, mod.Name)
 		standardLabels[versionLabel] = mod.Spec.ModuleLoader.Container.Version
+		nodeSelector[versionLabel] = mod.Spec.ModuleLoader.Container.Version
 	}
 
 	ds.SetLabels(
@@ -297,7 +299,7 @@ func (dc *daemonSetGenerator) SetDevicePluginAsDesired(
 				},
 				PriorityClassName:  "system-node-critical",
 				ImagePullSecrets:   GetPodPullSecrets(mod.Spec.ImageRepoSecret),
-				NodeSelector:       map[string]string{getDriverContainerNodeLabel(mod.Namespace, mod.Name, true): ""},
+				NodeSelector:       nodeSelector,
 				ServiceAccountName: serviceAccountName,
 				Volumes:            append([]v1.Volume{devicePluginVolume}, mod.Spec.DevicePlugin.Volumes...),
 			},
@@ -309,7 +311,7 @@ func (dc *daemonSetGenerator) SetDevicePluginAsDesired(
 
 func (dc *daemonSetGenerator) GetNodeLabelFromPod(pod *v1.Pod, moduleName string, useDeprecatedLabel bool) string {
 	podRole := pod.Labels[constants.DaemonSetRole]
-	if podRole == devicePluginRoleLabelValue {
+	if podRole == constants.DevicePluginRoleLabelValue {
 		return getDevicePluginNodeLabel(pod.Namespace, moduleName, useDeprecatedLabel)
 	}
 	return getDriverContainerNodeLabel(pod.Namespace, moduleName, useDeprecatedLabel)
@@ -370,7 +372,7 @@ func isModuleLoaderDaemonsetWithInvalidKernel(ds *appsv1.DaemonSet, kernelLabel 
 
 func IsDevicePluginDS(ds *appsv1.DaemonSet) bool {
 	dsLabels := ds.GetLabels()
-	return dsLabels[constants.DaemonSetRole] == devicePluginRoleLabelValue
+	return dsLabels[constants.DaemonSetRole] == constants.DevicePluginRoleLabelValue
 }
 
 func GetPodPullSecrets(secret *v1.LocalObjectReference) []v1.LocalObjectReference {
