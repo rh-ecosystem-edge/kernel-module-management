@@ -31,6 +31,8 @@ import (
 var modulelog = logf.Log.WithName("module-resource")
 
 func (m *Module) SetupWebhookWithManager(mgr ctrl.Manager) error {
+	// controller-runtime will set the path to `validate-<group>-<version>-<resource> so we
+	// need to make sure it is set correctly in the +kubebuilder annotation below.
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(m).
 		Complete()
