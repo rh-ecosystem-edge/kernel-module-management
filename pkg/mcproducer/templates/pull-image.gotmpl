@@ -1,13 +1,13 @@
 #!/bin/bash
-if podman image list | grep {{.Image}} | grep -q {{.Tag}}; then
-    echo "Image {{.Image}}:{{.Tag}} found in the local registry.Nothing to do"
+if podman image exists {{.Image}}; then
+    echo "Image {{.Image}} found in the local registry.Nothing to do"
 else
-    echo "Image {{.Image}}:{{.Tag}} not found in the local registry, pulling"
-    podman pull --authfile /var/lib/kubelet/config.json {{.Image}}:{{.Tag}}
+    echo "Image {{.Image}} not found in the local registry, pulling"
+    podman pull --authfile /var/lib/kubelet/config.json {{.Image}}
     if [ $? -eq 0 ]; then
-        echo "Image {{.Image}}:{{.Tag}} has been successfully pulled, rebooting.."
+        echo "Image {{.Image}} has been successfully pulled, rebooting.."
         reboot
     else
-        echo "Failed to pull image {{.Image}}:{{.Tag}}"
+        echo "Failed to pull image {{.Image}}"
     fi
 fi

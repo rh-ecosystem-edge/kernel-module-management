@@ -14,7 +14,7 @@ var _ = Describe("ProduceMachineConfig", func() {
 	)
 
 	It("image name format is invalid", func() {
-		imageName := "quay.io/project/repo@sha256:1f5f1ae25db67aa82707e1b1dc96c8a53ef7094f320b7eeaef12be9a13fa251d"
+		imageName := "quay.io/project/repo@sha2561f5f1ae25db67aa82707e1b1dc96c8a53ef7094f320b7eeaef12be9a13fa251d"
 
 		res, err := ProduceMachineConfig(name, mcpRef, imageName, kernelModuleName)
 

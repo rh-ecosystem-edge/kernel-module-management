@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "before checking podman images"
-if podman image list | grep quay.io/project/repo | grep -q some-tag12; then
+if podman image exists quay.io/project/repo:some-tag12; then
     echo "Image quay.io/project/repo:some-tag12 found in the local registry, removing in-tree kernel module"
     podman run --privileged --entrypoint modprobe quay.io/project/repo:some-tag12 -rd /opt testKernelModuleName
     if [ $? -eq 0 ]; then
