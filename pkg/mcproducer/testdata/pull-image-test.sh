@@ -1,5 +1,5 @@
 #!/bin/bash
-if podman image list | grep quay.io/project/repo | grep -q some-tag12; then
+if podman image exists quay.io/project/repo:some-tag12; then
     echo "Image quay.io/project/repo:some-tag12 found in the local registry.Nothing to do"
 else
     echo "Image quay.io/project/repo:some-tag12 not found in the local registry, pulling"

@@ -28,14 +28,13 @@ var (
 )
 
 func ProduceMachineConfig(machineConfigName, machineConfigPoolRef, kernelModuleImage, kernelModuleName string) (string, error) {
-	tag, err := name.NewTag(kernelModuleImage)
+	err := verifyImageFormat(kernelModuleImage)
 	if err != nil {
-		return "", fmt.Errorf("invalid kernelModuleImage %s, input should be repo:tag format: %v", kernelModuleImage, err)
+		return "", fmt.Errorf("image %s is in incorrect format: %v", kernelModuleImage, err)
 	}
 
 	templateParams := map[string]any{
-		"Image":                tag.Repository.Name(),
-		"Tag":                  tag.Identifier(),
+		"Image":                kernelModuleImage,
 		"KernelModule":         kernelModuleName,
 		"MachineConfigPoolRef": machineConfigPoolRef,
 		"MachineConfigName":    machineConfigName,
@@ -74,4 +73,16 @@ func executeIntoBase64(tmpl *template.Template, params map[string]any) (string, 
 	}
 
 	return buf.String(), nil
+}
+
+func verifyImageFormat(image string) error {
+	_, digestErr := name.NewDigest(image)
+	if digestErr == nil {
+		return nil
+	}
+	_, tagErr := name.NewTag(image)
+	if tagErr == nil {
+		return nil
+	}
+	return fmt.Errorf("invalid image %s, input should be either in tag or digest format. Digest error %v, Tag error %v", image, digestErr, tagErr)
 }
