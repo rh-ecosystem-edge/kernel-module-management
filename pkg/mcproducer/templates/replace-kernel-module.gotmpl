@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "before checking podman images"
-if podman images list | grep {{.Image}} | grep -q {{.Tag}}; then
+if podman image list | grep {{.Image}} | grep -q {{.Tag}}; then
     echo "Image {{.Image}}:{{.Tag}} found in the local registry, removing in-tree kernel module"
     podman run --privileged --entrypoint modprobe {{.Image}}:{{.Tag}} -rd /opt {{.KernelModule}}
     if [ $? -eq 0 ]; then
