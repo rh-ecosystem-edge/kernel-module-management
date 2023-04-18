@@ -129,6 +129,11 @@ func (m *maker) MakeBuildTemplate(
 		return nil, fmt.Errorf("could not hash Build's Buildsource template: %v", err)
 	}
 
+	selector := mld.Selector
+	if len(mld.Build.Selector) != 0 {
+		selector = mld.Build.Selector
+	}
+
 	bc := buildv1.Build{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: mld.Name + "-build-",
@@ -148,7 +153,7 @@ func (m *maker) MakeBuildTemplate(
 					},
 				},
 				Output:         buildTarget,
-				NodeSelector:   mld.Selector,
+				NodeSelector:   selector,
 				MountTrustedCA: pointer.Bool(true),
 			},
 		},
