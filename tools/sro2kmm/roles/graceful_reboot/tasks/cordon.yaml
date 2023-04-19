@@ -1,0 +1,7 @@
+- name: Cordon node. Mark node "{{ node }}" as unschedulable.
+  kubernetes.core.k8s_drain:
+    api_key: "{{ k8s_auth_results.k8s_auth.api_key }}"
+    state: cordon
+    name: "{{ node }}"
+  delegate_to: localhost
+

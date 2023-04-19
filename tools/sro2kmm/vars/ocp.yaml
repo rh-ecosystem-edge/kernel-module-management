@@ -1,0 +1,7 @@
+ocp_cluster_ip: api.ebl-labs-cluster.redhat.com 
+ocp_cluster_username: kubeadmin
+ocp_cluster_password: xxxx-xxxxx-xxxxx-xxxx 
+local_kubeconfig: ~/my_kubeconfig 
+daemonsets_file: data/selected_ds # Path to the file containing the list of DaemonSets
+daemonset_containers_dir: data/containers/  # Directory containing the container list files
+

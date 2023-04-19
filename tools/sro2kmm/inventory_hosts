@@ -1,0 +1,10 @@
+[masters]
+ebl-labs-cluster-ctlplane-0.redhat.com
+ebl-labs-cluster-ctlplane-1.redhat.com
+ebl-labs-cluster-ctlplane-2.redhat.com
+[workers]
+ebl-labs-cluster-ctlplane-0.redhat.com
+ebl-labs-cluster-ctlplane-1.redhat.com
+ebl-labs-cluster-ctlplane-2.redhat.com
+
+[workers:vars]

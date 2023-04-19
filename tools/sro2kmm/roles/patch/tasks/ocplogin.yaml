@@ -1,0 +1,7 @@
+- name: Login to OCP cluster
+  k8s_auth:
+    host: https://{{ ocp_cluster_ip }}:6443
+    username: "{{ ocp_cluster_username }}"
+    password: "{{ ocp_cluster_password }}"
+    validate_certs: false
+  register: k8s_auth_results
