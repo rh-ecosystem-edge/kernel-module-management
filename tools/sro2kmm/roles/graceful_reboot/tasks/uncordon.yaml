@@ -1,0 +1,6 @@
+- name: Uncordon. Mark node "{{ node }}" as schedulable.
+  kubernetes.core.k8s_drain:
+    api_key: "{{ k8s_auth_results.k8s_auth.api_key }}"
+    state: uncordon
+    name: "{{ node }}"
+

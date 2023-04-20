@@ -1,0 +1,33 @@
+---
+- name: Search for all running pods in this node matching SRO DS
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: "{{ sro_ds_ns }}"
+    field_selectors:
+      - spec.nodeName={{ node }}
+    label_selectors:
+      - specialresource.openshift.io/owned = true
+  register: pod_list
+
+- name: Set pod
+  set_fact:
+    pod_name: "{{ pod_list| json_query('resources[*].metadata.name | []') }}"
+- name: Print pod
+  debug:
+    msg: "{{ pod_name }}"
+
+- name: Delete the POD
+  k8s:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ sro_ds_ns }}"
+    name: "{{ pod_name }}"
+    state: absent
+
+- name: Delete the SpecialResource if set in command
+  k8s:
+    api_version: sro.openshift.io/v1beta1
+    kind: SpecialResource
+    name: "{{ sr }}"
+    state: absent
+  when:  delete_sr == "1"

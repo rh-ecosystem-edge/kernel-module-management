@@ -1,0 +1,13 @@
+- name: Drain node "{{ node }}", but abort if there are pods not managed by a ReplicationController, Job, or DaemonSet, and use a grace period of 15 minutes.
+  kubernetes.core.k8s_drain:
+    api_key: "{{ k8s_auth_results.k8s_auth.api_key }}"
+    state: drain 
+    name: "{{ node }}"
+    delete_options:
+        disable_eviction: "{{ disable_eviction | default(omit) }}"
+        ignore_daemonsets: "{{ ignore_daemonsets | default(omit) }}"
+        delete_emptydir_data: "{{ delete_emptydir_data | default(omit) }}"
+        force: "{{ force | default(omit) }}"
+        terminate_grace_period: "{{ terminate_grace_period | default(omit) }}"
+        wait_sleep: "{{ wait_sleep | default(omit) }}"
+        wait_timeout: "{{ wait_timeout | default(omit) }}"

@@ -1,0 +1,2 @@
+- name: Wait for node "{{ node }}" to be in 'Ready' status
+  shell: /usr/local/bin/oc wait --kubeconfig={{ local_kubeconfig }} --for=condition=Ready nodes {{ node }} --timeout=600s

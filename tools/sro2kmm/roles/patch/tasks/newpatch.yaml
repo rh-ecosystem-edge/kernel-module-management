@@ -1,0 +1,2 @@
+- name: Patch all selected DaemonSets and Containers
+  command: /bin/sh data/commands/patch_poststart.sh

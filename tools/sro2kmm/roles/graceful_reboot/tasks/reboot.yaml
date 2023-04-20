@@ -1,0 +1,3 @@
+- name: Reboot node "{{ node }}" within 1 minute
+  command: /usr/local/bin/oc --kubeconfig="{{ local_kubeconfig }}" debug node/"{{ node }}" -- chroot /host shutdown -r 1 
+  delegate_to: localhost

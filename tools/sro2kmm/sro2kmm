@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+#
+set -ex
+#set -eoxu pipefail
+# Clean old data files
+rm -rf data/* || true
+
+# Checks if dialog exists
+if ! command -v dialog &> /dev/null
+then
+    echo "dialog command could not be found."
+    exit
+fi
+## getopt
+readonly sr="$1"
+
+if [ -z "$1" ]; then
+    echo "The SpecialResource name to be migrated should be passed as an argument."
+    echo "USAGE: sro2kmm [SpecialResource name] --menu|-m <show menu with optional drain delete settings> --verbose|-v <full verbose for ansible playbook>"
+    exit 1
+fi
+
+shift
+options=$(getopt -o mv --long menu,verbose -n 'sro2kmm' -- "$@")
+if [[ $? != 0 ]]; then
+    echo "Error: Failed to parse options."
+    exit 1
+fi
+eval set -- "$options"
+
+# Set defaults
+setdmenu=0
+verbose=""
+
+# Process options
+while true; do
+    case "$1" in
+        -m | --menu )
+            setdmenu="1"
+            shift ;;
+        -v | --verbose )
+            verbose="-vvv"
+            shift ;;
+        -- )
+            shift
+            break ;;
+        * )
+            echo "Unknown option: $1"
+            exit 1 ;;
+    esac
+done
+# Set variables
+readonly ns=$(oc get sr $sr -o jsonpath='{.items[0]}{.spec.namespace}')
+readonly dsrawlist=$(oc get ds -n "$ns" -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')
+
+# Function to filter DaemonSets owned by SRO
+# Add only DaemonSets owned by SRO
+rm -rf data || true
+mkdir -p data
+daemonsets_sro_list=()
+while read -r srods; do
+  tmpds=$(oc get ds $srods -n $ns -o json | jq --arg sro "$sr" 'try .metadata | select((.ownerReferences[].kind=="SpecialResource") and (.ownerReferences[].name==$sro)) | .name')
+  if [ -n "$tmpds" ]; then
+    daemonsets_sro_list+=("$srods")
+  fi
+done <<< "$dsrawlist"
+
+# Create warning menu
+dialog --msgbox "This script will reboot selected cluster nodes. You should identify what this process implies and take the additional measures that your systems may require. Access README.md for more details." 0 0
+
+# Build dialog checklist box for possible DaemonSets
+COUNT=0
+for opt in "${daemonsets_sro_list[@]}"; do
+  COUNT=$(( COUNT+1 ))
+  dsoptions+=("$opt" "" off)
+done
+
+cmd=(dialog --backtitle "SRO2KMM" --checklist "Choose one or more SRO DaemonSets to migrate" 22 60 16)
+
+# Add selected Daemonsets names to data file
+choices=($("${cmd[@]}" "${dsoptions[@]}" 2>data/selected_ds 1>/dev/tty))
+selected_ds=$(cat data/selected_ds)
+
+# Add selected DaemonSets namespace, names and containers to playbook variable
+rm -f vars/sro_ds_ns.yaml || true
+echo "sro_ds_ns: $ns" > vars/sro_ds_ns.yaml
+echo "sro_ds:" >> vars/sro_ds_ns.yaml
+while read line|| [[ -n $line ]] ; do 
+  mkdir -p data/$line
+  echo "   - $line" >> vars/sro_ds_ns.yaml 
+	oc get ds "$line" -n "$ns" -o 'jsonpath={range .spec.template.spec.containers[*]}{.name}{"\n"}{end}' >> data/${line}/containers.txt
+ done <<< "$selected_ds"
+
+# Create menus for each selected DaemonSet to make containers choice
+while read -r ds; do
+  cns_ds_list=$(cat data/${ds}/containers.txt)
+  while read -r csn; do
+      optcsn+=("$csn" "" off)
+  done <<< "$cns_ds_list"
+  cmdcsn=(dialog --backtitle "SRO2KMM" --checklist "Choose one or more containers from DaemonSet $ds" 22 60 16)
+  choices=($("${cmdcsn[@]}" "${optcsn[@]}" 2>data/${ds}/containers.txt 1>/dev/tty))
+done <<< "$selected_ds"
+
+# Create settings menu for drain delete options
+if [[ $setdmenu == "1" ]]; then
+  ## Boolean settings
+  fundmenu1=(dialog --separate-output --backtitle "SRO2KMM drain delete options" --checklist "Delete Settings for SRO DS"  22 50 10)
+  options1=(1 "Delete emptydir data" off \
+    2 "Disable eviction" off \
+    3 "Force" off \
+    4 "Ignore Daemonsets" off)
+
+  selections1=($("${fundmenu1[@]}" "${options1[@]}" 2>data/sel1 1>/dev/tty))
+
+# Delete SR Menu
+if (dialog --title "Delete SpecialResource $sr" --yesno "Want to delete the whole SR $sr when migration has finished?" 22 50)
+  then
+    delete_sr="1"
+  else
+    delete_sr="0"
+  fi    
+
+rm -f vars/dsettings.yaml || true
+touch vars/dsettings.yaml
+
+while read -r line; do
+  [[ $line == 1 ]] && echo "delete_emptydir_data: true" >> vars/dsettings.yaml
+  [[ $line == 2 ]] && echo "disable_eviction: true" >> vars/dsettings.yaml
+  [[ $line == 3 ]] && echo "force: true" >> vars/dsettings.yaml
+  [[ $line == 4 ]] && echo "ignore_daemonsets: true" >> vars/dsettings.yaml
+done <data/sel1
+
+fi
+# Add patch commands for all selected DaemonSets and Containers in patch.sh
+mkdir -p data/commands
+while IFS= read -r ds; do
+  echo "DS $ds"
+  container_list=$(cat data/$ds/containers.txt)
+  while IFS= read -r cnts; do
+    echo "#!/bin/bash" >> data/commands/patch_poststart.sh
+    KCFG=$(grep local_kubeconfig vars/ocp.yaml | awk -F: {'print $2'} | tr -d ' ')
+    echo "/usr/local/bin/oc --kubeconfig ${KCFG} patch daemonset -n ${ns} ${ds} -p '{\"spec\": {\"template\": {\"spec\": {\"containers\": [{\"name\": \"${cnts}\", \"lifecycle\": {\"postStart\": {\"exec\": {\"command\": [\"\"]}}}}]}}}}'" >> data/commands/patch_poststart.sh
+  done <<< "$container_list"
+done <<< "$selected_ds"
+# Create same patch for preStop after rebooting
+sed 's/postStart/preStop/g' data/commands/patch_poststart.sh > data/commands/patch_prestop.sh
+
+# You may want to uncomment next line if you want inventory_hosts file to be created based on groups masters and workers. You can also modify inventory file manually to fit your needs.
+#./cluster_inventory.sh 
+time ansible-playbook -e "sr=$sr delete_sr=$delete_sr" -i inventory_hosts main.yaml $verbose
