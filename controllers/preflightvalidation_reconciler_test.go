@@ -106,7 +106,7 @@ var _ = Describe("PreflightValidationReconciler_Reconcile", func() {
 					return nil
 				},
 			),
-			mockSU.EXPECT().PreflightPresetStatuses(ctx, &pv, sets.NewString(mod.Name), []string{}).Return(nil),
+			mockSU.EXPECT().PreflightPresetStatuses(ctx, &pv, sets.New(mod.Name), []string{}).Return(nil),
 			mockPreflight.EXPECT().PreflightUpgradeCheck(ctx, &pv, &mod).Return(true, "some message"),
 			mockSU.EXPECT().PreflightSetVerificationStatus(ctx, &pv, mod.Name, v1beta12.VerificationTrue, "some message").Return(nil),
 			mockSU.EXPECT().PreflightSetVerificationStage(ctx, &pv, mod.Name, v1beta12.VerificationStageDone).Return(nil),
@@ -158,7 +158,7 @@ var _ = Describe("PreflightValidationReconciler_Reconcile", func() {
 					return nil
 				},
 			),
-			mockSU.EXPECT().PreflightPresetStatuses(ctx, &pv, sets.NewString(mod.Name), []string{}).Return(nil),
+			mockSU.EXPECT().PreflightPresetStatuses(ctx, &pv, sets.New(mod.Name), []string{}).Return(nil),
 			mockPreflight.EXPECT().PreflightUpgradeCheck(ctx, &pv, &mod).Return(true, "some message"),
 			mockSU.EXPECT().PreflightSetVerificationStatus(ctx, &pv, mod.Name, v1beta12.VerificationTrue, "some message").Return(nil),
 			mockSU.EXPECT().PreflightSetVerificationStage(ctx, &pv, mod.Name, v1beta12.VerificationStageDone).Return(nil),
@@ -230,7 +230,7 @@ var _ = Describe("PreflightValidationReconciler_getModulesCheck", func() {
 				return nil
 			},
 		)
-		mockSU.EXPECT().PreflightPresetStatuses(ctx, &pv, sets.NewString("moduleName1", "moduleName2"), []string{})
+		mockSU.EXPECT().PreflightPresetStatuses(ctx, &pv, sets.New("moduleName1", "moduleName2"), []string{})
 
 		modulesToCheck, err := pr.getModulesToCheck(ctx, &pv)
 
@@ -270,8 +270,8 @@ var _ = Describe("PreflightValidationReconciler_getModulesCheck", func() {
 					return nil
 				},
 			),
-			mockSU.EXPECT().PreflightPresetStatuses(ctx, &pv, sets.NewString("moduleName1", "moduleName2"), []string{"moduleName2"}).DoAndReturn(
-				func(_ interface{}, pv *v1beta12.PreflightValidation, existingModules sets.String, newModules []string) error {
+			mockSU.EXPECT().PreflightPresetStatuses(ctx, &pv, sets.New("moduleName1", "moduleName2"), []string{"moduleName2"}).DoAndReturn(
+				func(_ interface{}, pv *v1beta12.PreflightValidation, existingModules sets.Set[string], newModules []string) error {
 					pv.Status.CRStatuses[newModules[0]] = &v1beta12.CRStatus{}
 					return nil
 				}),
@@ -323,8 +323,8 @@ var _ = Describe("PreflightValidationReconciler_getModulesCheck", func() {
 					return nil
 				},
 			),
-			mockSU.EXPECT().PreflightPresetStatuses(ctx, &pv, sets.NewString("moduleName1", "moduleName2"), []string{"moduleName2"}).DoAndReturn(
-				func(_ interface{}, pv *v1beta12.PreflightValidation, existingModules sets.String, newModules []string) error {
+			mockSU.EXPECT().PreflightPresetStatuses(ctx, &pv, sets.New("moduleName1", "moduleName2"), []string{"moduleName2"}).DoAndReturn(
+				func(_ interface{}, pv *v1beta12.PreflightValidation, existingModules sets.Set[string], newModules []string) error {
 					pv.Status.CRStatuses[newModules[0]] = &v1beta12.CRStatus{}
 					delete(pv.Status.CRStatuses, "moduleName3")
 					return nil

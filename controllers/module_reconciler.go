@@ -410,7 +410,7 @@ func (mrh *moduleReconcilerHelper) garbageCollect(ctx context.Context,
 	existingDS map[string]*appsv1.DaemonSet) error {
 	logger := log.FromContext(ctx)
 	// Garbage collect old DaemonSets for which there are no nodes.
-	validKernels := sets.StringKeySet(mldMappings)
+	validKernels := sets.KeySet[string](mldMappings)
 
 	deleted, err := mrh.daemonAPI.GarbageCollect(ctx, existingDS, validKernels)
 	if err != nil {
