@@ -8,17 +8,17 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.5.9
 	github.com/google/go-containerregistry v0.14.0
-	github.com/google/go-containerregistry/pkg/authn/kubernetes v0.0.0-20220720195016-31786c6cbb82
+	github.com/google/go-containerregistry/pkg/authn/kubernetes v0.0.0-20230425172351-b7c6e9dc3944
 	github.com/mitchellh/hashstructure v1.1.0
 	github.com/onsi/ginkgo/v2 v2.9.2
 	github.com/onsi/gomega v1.27.6
 	github.com/openshift/api v0.0.0-20230425161039-9a7a7c17dbf8
 	github.com/prometheus/client_golang v1.15.0
-	k8s.io/api v0.26.4
-	k8s.io/apimachinery v0.26.4
-	k8s.io/client-go v0.26.4
+	k8s.io/api v0.27.1
+	k8s.io/apimachinery v0.27.1
+	k8s.io/client-go v0.27.1
 	k8s.io/klog/v2 v2.90.1
-	k8s.io/kubectl v0.26.4
+	k8s.io/kubectl v0.27.1
 	k8s.io/utils v0.0.0-20230406110748-d93618cff8a2
 	open-cluster-management.io/api v0.10.1
 	sigs.k8s.io/controller-runtime v0.14.6
@@ -70,7 +70,6 @@ require (
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/common v0.42.0 // indirect
 	github.com/prometheus/procfs v0.9.0 // indirect
-	github.com/rogpeppe/go-internal v1.10.0 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/spf13/cobra v1.6.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
@@ -91,8 +90,8 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.26.1 // indirect
-	k8s.io/component-base v0.26.4 // indirect
-	k8s.io/kube-openapi v0.0.0-20230224204131-30e856af5c3e // indirect
+	k8s.io/component-base v0.27.1 // indirect
+	k8s.io/kube-openapi v0.0.0-20230327201221-f5883ff37f0c // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
