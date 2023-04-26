@@ -33,7 +33,7 @@ const (
 //go:generate mockgen -source=daemonset.go -package=daemonset -destination=mock_daemonset.go
 
 type DaemonSetCreator interface {
-	GarbageCollect(ctx context.Context, existingDS map[string]*appsv1.DaemonSet, validKernels sets.String) ([]string, error)
+	GarbageCollect(ctx context.Context, existingDS map[string]*appsv1.DaemonSet, validKernels sets.Set[string]) ([]string, error)
 	ModuleDaemonSetsByKernelVersion(ctx context.Context, name, namespace string) (map[string]*appsv1.DaemonSet, error)
 	SetDriverContainerAsDesired(ctx context.Context, ds *appsv1.DaemonSet, mld *api.ModuleLoaderData, useDefaultSA bool) error
 	SetDevicePluginAsDesired(ctx context.Context, ds *appsv1.DaemonSet, mod *kmmv1beta1.Module, useDefaultSA bool) error
@@ -54,7 +54,7 @@ func NewCreator(client client.Client, kernelLabel string, scheme *runtime.Scheme
 	}
 }
 
-func (dc *daemonSetGenerator) GarbageCollect(ctx context.Context, existingDS map[string]*appsv1.DaemonSet, validKernels sets.String) ([]string, error) {
+func (dc *daemonSetGenerator) GarbageCollect(ctx context.Context, existingDS map[string]*appsv1.DaemonSet, validKernels sets.Set[string]) ([]string, error) {
 	deleted := make([]string, 0)
 
 	for kernelVersion, ds := range existingDS {

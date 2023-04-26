@@ -739,7 +739,7 @@ var _ = Describe("ModuleReconciler_garbageCollect", func() {
 		existingDS := map[string]*appsv1.DaemonSet{
 			"kernelVersion2": &appsv1.DaemonSet{}, "kernelVersion3": &appsv1.DaemonSet{},
 		}
-		kernelSet := sets.NewString("kernelVersion1", "kernelVersion2")
+		kernelSet := sets.New("kernelVersion1", "kernelVersion2")
 		gomock.InOrder(
 			mockDC.EXPECT().GarbageCollect(context.Background(), existingDS, kernelSet).Return(nil, nil),
 			mockBM.EXPECT().GarbageCollect(context.Background(), mod.Name, mod.Namespace, mod).Return(nil, nil),

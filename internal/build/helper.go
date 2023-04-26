@@ -28,7 +28,7 @@ func (m *helper) ApplyBuildArgOverrides(args []kmmv1beta1.BuildArg, overrides ..
 		overridesMap[o.Name] = o
 	}
 
-	unusedOverrides := sets.StringKeySet(overridesMap)
+	unusedOverrides := sets.KeySet(overridesMap)
 
 	for i := 0; i < len(args); i++ {
 		argName := args[i].Name
@@ -39,7 +39,7 @@ func (m *helper) ApplyBuildArgOverrides(args []kmmv1beta1.BuildArg, overrides ..
 		}
 	}
 
-	for _, overrideName := range unusedOverrides.List() {
+	for _, overrideName := range unusedOverrides.UnsortedList() {
 		args = append(args, overridesMap[overrideName])
 	}
 

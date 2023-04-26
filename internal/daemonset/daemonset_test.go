@@ -595,7 +595,7 @@ var _ = Describe("GarbageCollect", func() {
 			notLegitKernelVersion: &dsNotLegit,
 		}
 
-		validKernels := sets.NewString(legitKernelVersion)
+		validKernels := sets.New(legitKernelVersion)
 
 		res, err := dc.GarbageCollect(context.Background(), existingDS, validKernels)
 		Expect(err).NotTo(HaveOccurred())
@@ -617,7 +617,7 @@ var _ = Describe("GarbageCollect", func() {
 			"some-kernel-version": &dsNotLegit,
 		}
 
-		_, err := dc.GarbageCollect(context.Background(), existingDS, sets.NewString())
+		_, err := dc.GarbageCollect(context.Background(), existingDS, sets.New[string]())
 		Expect(err).To(HaveOccurred())
 	})
 })
