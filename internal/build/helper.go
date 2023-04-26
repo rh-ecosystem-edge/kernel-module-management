@@ -4,8 +4,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 )
 
 //go:generate mockgen -source=helper.go -package=build -destination=mock_helper.go
@@ -66,11 +64,4 @@ func (m *helper) GetRelevantBuild(moduleBuild *kmmv1beta1.Build, mappingBuild *k
 	// secret and how to use, and if we need to take care of repeated secrets names
 	buildConfig.Secrets = append(buildConfig.Secrets, mappingBuild.Secrets...)
 	return buildConfig
-}
-
-func GetBuildLabels(mld *api.ModuleLoaderData) map[string]string {
-	return map[string]string{
-		constants.ModuleNameLabel:    mld.Name,
-		constants.TargetKernelTarget: mld.KernelVersion,
-	}
 }

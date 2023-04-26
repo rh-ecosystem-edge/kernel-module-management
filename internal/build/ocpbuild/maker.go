@@ -1,4 +1,4 @@
-package buildconfig
+package ocpbuild
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
+	buildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,9 +24,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-const dtkBuildArg = "DTK_AUTO"
+const (
+	BuildType = "build"
 
-//go:generate mockgen -source=maker.go -package=buildconfig -destination=mock_maker.go
+	dtkBuildArg = "DTK_AUTO"
+)
+
+//go:generate mockgen -source=maker.go -package=ocpbuild -destination=mock_maker.go Maker
 
 type Maker interface {
 	MakeBuildTemplate(
@@ -126,10 +131,10 @@ func (m *maker) MakeBuildTemplate(
 
 	bc := buildv1.Build{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: mld.Name + "-",
+			GenerateName: mld.Name + "-build-",
 			Namespace:    mld.Namespace,
-			Labels:       kmmbuild.GetBuildLabels(mld),
-			Annotations:  map[string]string{buildHashAnnotation: fmt.Sprintf("%d", sourceConfigHash)},
+			Labels:       buildutils.GetBuildLabels(mld, BuildType),
+			Annotations:  buildutils.GetBuildAnnotations(sourceConfigHash),
 		},
 		Spec: buildv1.BuildSpec{
 			CommonSpec: buildv1.CommonSpec{

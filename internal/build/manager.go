@@ -3,10 +3,10 @@ package build
 import (
 	"context"
 
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 )
 
 //go:generate mockgen -source=manager.go -package=build -destination=mock_manager.go
@@ -20,5 +20,5 @@ type Manager interface {
 		ctx context.Context,
 		mld *api.ModuleLoaderData,
 		pushImage bool,
-		owner metav1.Object) (utils.Status, error)
+		owner metav1.Object) (build.Status, error)
 }
