@@ -318,6 +318,10 @@ spec:
                   initialDelaySeconds: 15
                   periodSeconds: 20
                 name: manager
+                ports:
+                - containerPort: 9443
+                  name: webhook-server
+                  protocol: TCP
                 readinessProbe:
                   httpGet:
                     path: /readyz
@@ -337,6 +341,9 @@ spec:
                     drop:
                     - ALL
                 volumeMounts:
+                - mountPath: /tmp/k8s-webhook-server/serving-certs
+                  name: cert
+                  readOnly: true
                 - mountPath: /etc/pki/ca-trust/extracted/pem
                   name: trusted-ca
                   readOnly: true
@@ -379,6 +386,10 @@ spec:
                 key: node-role.kubernetes.io/master
                 operator: Equal
               volumes:
+              - name: cert
+                secret:
+                  defaultMode: 420
+                  secretName: kmm-operator-webhook-server-cert
               - name: trusted-ca
                 projected:
                   sources:
@@ -473,3 +484,24 @@ spec:
     name: Red Hat
     url: https://www.redhat.com
   version: 0.0.1
+  webhookdefinitions:
+  - admissionReviewVersions:
+    - v1
+    containerPort: 443
+    deploymentName: kmm-operator-controller-manager
+    failurePolicy: Fail
+    generateName: vmodule.kb.io
+    rules:
+    - apiGroups:
+      - kmm.sigs.x-k8s.io
+      apiVersions:
+      - v1beta1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - modules
+    sideEffects: None
+    targetPort: 9443
+    type: ValidatingAdmissionWebhook
+    webhookPath: /validate-kmm-sigs-x-k8s-io-v1beta1-module

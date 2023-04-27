@@ -222,6 +222,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err = (&kmmv1beta1.Module{}).SetupWebhookWithManager(mgr); err != nil {
+		cmd.FatalError(setupLogger, err, "unable to create webhook", "webhook", "Module")
+	}
+
 	//+kubebuilder:scaffold:builder
 
 	if err = mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
