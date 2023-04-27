@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-set -ex
+set -eu
 #set -eoxu pipefail
 # Clean old data files
 rm -rf data/* || true
