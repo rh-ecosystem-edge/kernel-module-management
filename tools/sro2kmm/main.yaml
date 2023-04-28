@@ -1,7 +1,7 @@
 ---
 - hosts: localhost
   environment:
-    K8S_AUTH_KUBECONFIG: "{{ lookup('env', 'HOME') }}/kubeconfig"
+    K8S_AUTH_KUBECONFIG: "~/my_kubeconfig"
   vars_files:
     - vars/ocp.yaml
     - vars/sro_ds_ns.yaml

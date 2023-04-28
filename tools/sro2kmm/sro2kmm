@@ -5,6 +5,10 @@ set -eu
 # Clean old data files
 rm -rf data/* || true
 
+# Copy set KUBECONFIG from vars/ocp.yaml
+read k8s_config=$(grep local_kubeconfig vars/ocp.yaml | awk {'print $2'})
+sed -i "s#.*K8S_AUTH_KUBECONFIG.*#    K8S_AUTH_KUBECONFIG: \"$k8s_config\"#g" main.yaml
+
 # Checks if dialog exists
 if ! command -v dialog &> /dev/null
 then

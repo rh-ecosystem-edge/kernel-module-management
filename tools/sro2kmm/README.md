@@ -16,8 +16,15 @@ A computer with:
 - Openshift Client (`oc`) with access to OpenShift cluster.
 - SSH access to OpenShift cluster nodes.
 - Kubernetes python packages installed: `python3.8 -m pip install kubernetes --user`
-- Ansible installed: `dnf install ansible-core`
-(Tested on Ansible 2.13.7 and Python 3.8.15.). Further info at [Ansible Documentation](https://docs.ansible.com/ansible/latest/installation_guide/index.html).
+  (Change to your python version accordingly)
+- Ansible installed: `dnf install ansible-core` or `dnf install ansible` depending on your workstation OS version.
+  **Note** : `ansible-core` does not include kubernetes.core collection as `ansible` does. In case of using
+  `ansible-core` you should install `community.okd` collection manually to get mandatory `k8s_auth` module:
+```console
+ansible-galaxy collection install community.okd
+```
+
+Further info at [Ansible Documentation](https://docs.ansible.com/ansible/latest/installation_guide/index.html).
 
 ## Configuration
 
