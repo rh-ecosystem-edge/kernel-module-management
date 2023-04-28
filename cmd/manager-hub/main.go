@@ -174,6 +174,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err = (&v1beta1.ManagedClusterModule{}).SetupWebhookWithManager(mgr); err != nil {
+		cmd.FatalError(setupLogger, err, "unable to create webhook", "webhook", "ManagedClusterModule")
+	}
+
 	//+kubebuilder:scaffold:builder
 
 	if err = mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
