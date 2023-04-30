@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mitchellh/hashstructure"
+	"github.com/mitchellh/hashstructure/v2"
 	buildv1 "github.com/openshift/api/build/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
@@ -119,7 +119,7 @@ func (m *maker) MakeBuildTemplate(
 		Type:       buildv1.BuildSourceDockerfile,
 	}
 
-	sourceConfigHash, err := hashstructure.Hash(sourceConfig, nil)
+	sourceConfigHash, err := hashstructure.Hash(sourceConfig, hashstructure.FormatV2, nil)
 	if err != nil {
 		return nil, fmt.Errorf("could not hash Build's Buildsource template: %v", err)
 	}
