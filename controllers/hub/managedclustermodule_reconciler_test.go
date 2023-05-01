@@ -161,7 +161,7 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 			mockClusterAPI.EXPECT().RequestedManagedClusterModule(ctx, req.NamespacedName).Return(mcm, nil),
 			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, gomock.Any()).Return(&clusterList, nil),
 			mockMW.EXPECT().GarbageCollect(ctx, clusterList, *mcm),
-			mockClusterAPI.EXPECT().GarbageCollectBuilds(ctx, *mcm),
+			mockClusterAPI.EXPECT().GarbageCollectBuildsAndSigns(ctx, *mcm),
 			mockMW.EXPECT().GetOwnedManifestWorks(ctx, *mcm).Return(&manifestWorkList, nil),
 			mockSU.EXPECT().ManagedClusterModuleUpdateStatus(ctx, mcm, manifestWorkList.Items).Return(nil),
 		)
@@ -230,7 +230,7 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 			mockClusterAPI.EXPECT().RequestedManagedClusterModule(ctx, req.NamespacedName).Return(mcm, nil),
 			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, gomock.Any()).Return(&clusterList, nil),
 			mockMW.EXPECT().GarbageCollect(ctx, clusterList, *mcm),
-			mockClusterAPI.EXPECT().GarbageCollectBuilds(ctx, *mcm).Return(nil, errors.New("test")),
+			mockClusterAPI.EXPECT().GarbageCollectBuildsAndSigns(ctx, *mcm).Return(nil, errors.New("test")),
 		)
 
 		mr := NewManagedClusterModuleReconciler(
@@ -264,7 +264,7 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 			mockClusterAPI.EXPECT().RequestedManagedClusterModule(ctx, req.NamespacedName).Return(mcm, nil),
 			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, gomock.Any()).Return(&clusterList, nil),
 			mockMW.EXPECT().GarbageCollect(ctx, clusterList, *mcm),
-			mockClusterAPI.EXPECT().GarbageCollectBuilds(ctx, *mcm),
+			mockClusterAPI.EXPECT().GarbageCollectBuildsAndSigns(ctx, *mcm),
 			mockMW.EXPECT().GetOwnedManifestWorks(ctx, *mcm).Return(nil, errors.New("generic-error")),
 		)
 
@@ -300,7 +300,7 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 			mockClusterAPI.EXPECT().RequestedManagedClusterModule(ctx, req.NamespacedName).Return(mcm, nil),
 			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, gomock.Any()).Return(&clusterList, nil),
 			mockMW.EXPECT().GarbageCollect(ctx, clusterList, *mcm),
-			mockClusterAPI.EXPECT().GarbageCollectBuilds(ctx, *mcm),
+			mockClusterAPI.EXPECT().GarbageCollectBuildsAndSigns(ctx, *mcm),
 			mockMW.EXPECT().GetOwnedManifestWorks(ctx, *mcm).Return(&manifestWorkList, nil),
 			mockSU.EXPECT().ManagedClusterModuleUpdateStatus(ctx, mcm, manifestWorkList.Items).Return(errors.New("generic-error")),
 		)
@@ -354,7 +354,7 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, gomock.Any()).Return(&clusterList, nil),
 			mockClusterAPI.EXPECT().BuildAndSign(gomock.Any(), mcm, clusterList.Items[0]).Return(false, nil),
 			mockMW.EXPECT().GarbageCollect(ctx, clusterList, mcm),
-			mockClusterAPI.EXPECT().GarbageCollectBuilds(ctx, mcm),
+			mockClusterAPI.EXPECT().GarbageCollectBuildsAndSigns(ctx, mcm),
 			mockMW.EXPECT().GetOwnedManifestWorks(ctx, mcm).Return(&manifestWorkList, nil),
 			mockSU.EXPECT().ManagedClusterModuleUpdateStatus(ctx, &mcm, manifestWorkList.Items).Return(nil),
 		)
@@ -411,7 +411,7 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 			mockMW.EXPECT().SetManifestWorkAsDesired(context.Background(), &mw, gomock.AssignableToTypeOf(mcm)),
 			clnt.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil),
 			mockMW.EXPECT().GarbageCollect(ctx, clusterList, mcm),
-			mockClusterAPI.EXPECT().GarbageCollectBuilds(ctx, mcm),
+			mockClusterAPI.EXPECT().GarbageCollectBuildsAndSigns(ctx, mcm),
 			mockMW.EXPECT().GetOwnedManifestWorks(ctx, mcm).Return(&manifestWorkList, nil),
 			mockSU.EXPECT().ManagedClusterModuleUpdateStatus(ctx, &mcm, manifestWorkList.Items).Return(nil),
 		)
@@ -472,7 +472,7 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 				}),
 			clnt.EXPECT().Patch(gomock.Any(), gomock.Any(), gomock.Any()),
 			mockMW.EXPECT().GarbageCollect(ctx, clusterList, mcm),
-			mockClusterAPI.EXPECT().GarbageCollectBuilds(ctx, mcm),
+			mockClusterAPI.EXPECT().GarbageCollectBuildsAndSigns(ctx, mcm),
 			mockMW.EXPECT().GetOwnedManifestWorks(ctx, mcm).Return(&manifestWorkList, nil),
 			mockSU.EXPECT().ManagedClusterModuleUpdateStatus(ctx, &mcm, manifestWorkList.Items).Return(nil),
 		)
