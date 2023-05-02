@@ -160,6 +160,7 @@ var _ = Describe("prepareModuleLoaderData", func() {
 		kh = newKernelMapperHelper(buildHelper, signHelper)
 		mod = kmmv1beta1.Module{}
 		mod.Spec.ModuleLoader.Container.ContainerImage = "spec container image"
+		mod.Spec.ModuleLoader.Container.ImagePullPolicy = "Always"
 		mapping = kmmv1beta1.KernelMapping{}
 	})
 
@@ -189,6 +190,7 @@ var _ = Describe("prepareModuleLoaderData", func() {
 			Selector:           mod.Spec.Selector,
 			ServiceAccountName: mod.Spec.ModuleLoader.ServiceAccountName,
 			Modprobe:           mod.Spec.ModuleLoader.Container.Modprobe,
+			ImagePullPolicy:    mod.Spec.ModuleLoader.Container.ImagePullPolicy,
 			KernelVersion:      kernelVersion,
 		}
 
