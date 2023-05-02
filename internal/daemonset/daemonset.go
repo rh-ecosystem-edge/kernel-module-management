@@ -34,7 +34,7 @@ const (
 //go:generate mockgen -source=daemonset.go -package=daemonset -destination=mock_daemonset.go
 
 type DaemonSetCreator interface {
-	GarbageCollect(ctx context.Context, existingDS []appsv1.DaemonSet, validKernels sets.Set[string]) ([]string, error)
+	GarbageCollect(ctx context.Context, mod *kmmv1beta1.Module, existingDS []appsv1.DaemonSet, validKernels sets.Set[string]) ([]string, error)
 	GetModuleDaemonSets(ctx context.Context, name, namespace string) ([]appsv1.DaemonSet, error)
 	SetDriverContainerAsDesired(ctx context.Context, ds *appsv1.DaemonSet, mld *api.ModuleLoaderData, useDefaultSA bool) error
 	SetDevicePluginAsDesired(ctx context.Context, ds *appsv1.DaemonSet, mod *kmmv1beta1.Module, useDefaultSA bool) error
@@ -55,11 +55,19 @@ func NewCreator(client client.Client, kernelLabel string, scheme *runtime.Scheme
 	}
 }
 
-func (dc *daemonSetGenerator) GarbageCollect(ctx context.Context, existingDS []appsv1.DaemonSet, validKernels sets.Set[string]) ([]string, error) {
+func (dc *daemonSetGenerator) GarbageCollect(ctx context.Context, mod *kmmv1beta1.Module, existingDS []appsv1.DaemonSet, validKernels sets.Set[string]) ([]string, error) {
 	deleted := make([]string, 0)
 
+	versionLabel := utils.GetModuleVersionLabelName(mod.Namespace, mod.Name)
 	for _, ds := range existingDS {
-		if !IsDevicePluginDS(&ds) && !validKernels.Has(ds.Labels[dc.kernelLabel]) {
+		if isOlderVersionUnusedDaemonset(&ds, versionLabel, mod.Spec.ModuleLoader.Container.Version) {
+			if err := dc.client.Delete(ctx, &ds); err != nil {
+				return nil, fmt.Errorf("could not delete DaemonSet %s: %v", ds.Name, err)
+			}
+			deleted = append(deleted, ds.Name)
+			continue
+		}
+		if isModuleLoaderDaemonsetWithInvalidKernel(&ds, dc.kernelLabel, validKernels) {
 			if err := dc.client.Delete(ctx, &ds); err != nil {
 				return nil, fmt.Errorf("could not delete DaemonSet %s: %v", ds.Name, err)
 			}
@@ -94,6 +102,10 @@ func (dc *daemonSetGenerator) SetDriverContainerAsDesired(
 		constants.ModuleNameLabel: mld.Name,
 		dc.kernelLabel:            kernelVersion,
 		constants.DaemonSetRole:   moduleLoaderRoleLabelValue,
+	}
+	if mld.ModuleVersion != "" {
+		versionLabel := utils.GetModuleVersionLabelName(mld.Namespace, mld.Name)
+		standardLabels[versionLabel] = mld.ModuleVersion
 	}
 
 	ds.SetLabels(
@@ -243,6 +255,10 @@ func (dc *daemonSetGenerator) SetDevicePluginAsDesired(
 		constants.ModuleNameLabel: mod.Name,
 		constants.DaemonSetRole:   devicePluginRoleLabelValue,
 	}
+	if mod.Spec.ModuleLoader.Container.Version != "" {
+		versionLabel := utils.GetModuleVersionLabelName(mod.Namespace, mod.Name)
+		standardLabels[versionLabel] = mod.Spec.ModuleLoader.Container.Version
+	}
 
 	ds.SetLabels(
 		OverrideLabels(ds.GetLabels(), standardLabels),
@@ -335,6 +351,14 @@ func getDevicePluginNodeLabel(namespace, moduleName string, useDeprecatedLabel b
 		return fmt.Sprintf("kmm.node.kubernetes.io/%s.device-plugin-ready", moduleName)
 	}
 	return fmt.Sprintf("kmm.node.kubernetes.io/%s.%s.device-plugin-ready", namespace, moduleName)
+}
+
+func isOlderVersionUnusedDaemonset(ds *appsv1.DaemonSet, moduleVersionLabel, moduleVersion string) bool {
+	return ds.Labels[moduleVersionLabel] != moduleVersion && ds.Status.DesiredNumberScheduled == 0
+}
+
+func isModuleLoaderDaemonsetWithInvalidKernel(ds *appsv1.DaemonSet, kernelLabel string, validKernels sets.Set[string]) bool {
+	return !IsDevicePluginDS(ds) && !validKernels.Has(ds.Labels[kernelLabel])
 }
 
 func IsDevicePluginDS(ds *appsv1.DaemonSet) bool {

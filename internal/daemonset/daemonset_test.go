@@ -2,7 +2,6 @@ package daemonset
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/golang/mock/gomock"
@@ -13,6 +12,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -32,10 +32,14 @@ const (
 var (
 	ctrl *gomock.Controller
 	clnt *client.MockClient
+	dc   DaemonSetCreator
 )
 
 var _ = Describe("SetDriverContainerAsDesired", func() {
-	dg := NewCreator(nil, kernelLabel, scheme)
+
+	BeforeEach(func() {
+		dc = NewCreator(nil, kernelLabel, scheme)
+	})
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
@@ -44,7 +48,7 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 
 	It("should return an error if the DaemonSet is nil", func() {
 		Expect(
-			dg.SetDriverContainerAsDesired(context.Background(), nil, &api.ModuleLoaderData{}, false),
+			dc.SetDriverContainerAsDesired(context.Background(), nil, &api.ModuleLoaderData{}, false),
 		).To(
 			HaveOccurred(),
 		)
@@ -52,7 +56,7 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 
 	It("should return an error if the image is empty", func() {
 		Expect(
-			dg.SetDriverContainerAsDesired(context.Background(), &appsv1.DaemonSet{}, &api.ModuleLoaderData{}, false),
+			dc.SetDriverContainerAsDesired(context.Background(), &appsv1.DaemonSet{}, &api.ModuleLoaderData{}, false),
 		).To(
 			HaveOccurred(),
 		)
@@ -60,7 +64,7 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 
 	It("should return an error if the kernel version is empty", func() {
 		Expect(
-			dg.SetDriverContainerAsDesired(context.Background(), &appsv1.DaemonSet{}, &api.ModuleLoaderData{}, false),
+			dc.SetDriverContainerAsDesired(context.Background(), &appsv1.DaemonSet{}, &api.ModuleLoaderData{}, false),
 		).To(
 			HaveOccurred(),
 		)
@@ -76,7 +80,7 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 
 		ds := appsv1.DaemonSet{}
 
-		err := dg.SetDriverContainerAsDesired(context.Background(), &ds, &mld, false)
+		err := dc.SetDriverContainerAsDesired(context.Background(), &ds, &mld, false)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(ds.Spec.Template.Spec.Containers).To(HaveLen(1))
 		Expect(ds.Spec.Template.Spec.Volumes).To(HaveLen(1))
@@ -111,7 +115,7 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 
 		ds := appsv1.DaemonSet{}
 
-		err := dg.SetDriverContainerAsDesired(context.Background(), &ds, &mld, false)
+		err := dc.SetDriverContainerAsDesired(context.Background(), &ds, &mld, false)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(ds.Spec.Template.Spec.Volumes).To(HaveLen(2))
 		Expect(ds.Spec.Template.Spec.Volumes[1]).To(Equal(vol))
@@ -121,11 +125,6 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 
 	DescribeTable("should add the default ServiceAccount to the module loader",
 		func(useDefaultSA bool, expectedSA string) {
-			/*
-				mod := kmmv1beta1.Module{
-					Spec: kmmv1beta1.ModuleSpec{},
-				}
-			*/
 			mld := api.ModuleLoaderData{
 				Owner:          &kmmv1beta1.Module{},
 				ContainerImage: "test-image",
@@ -134,13 +133,34 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 
 			ds := appsv1.DaemonSet{}
 
-			err := dg.SetDriverContainerAsDesired(context.Background(), &ds, &mld, useDefaultSA)
+			err := dc.SetDriverContainerAsDesired(context.Background(), &ds, &mld, useDefaultSA)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ds.Spec.Template.Spec.ServiceAccountName).To(Equal(expectedSA))
 		},
 		Entry(nil, false, ""),
 		Entry(nil, true, "kmm-operator-module-loader"),
 	)
+
+	It("should add module version in case it is defined for the module", func() {
+		mld := api.ModuleLoaderData{
+			Name:      moduleName,
+			Namespace: namespace,
+			Modprobe: kmmv1beta1.ModprobeSpec{
+				FirmwarePath: "/opt/lib/firmware/example",
+			},
+			Owner:          &kmmv1beta1.Module{},
+			ContainerImage: "some image",
+			KernelVersion:  kernelVersion,
+			ModuleVersion:  "some version",
+		}
+		ds := appsv1.DaemonSet{}
+
+		err := dc.SetDriverContainerAsDesired(context.Background(), &ds, &mld, false)
+
+		versionLabel := utils.GetModuleVersionLabelName(mld.Namespace, mld.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ds.GetLabels()).Should(HaveKeyWithValue(versionLabel, "some version"))
+	})
 
 	It("should work as expected", func() {
 		const (
@@ -179,7 +199,8 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 			},
 		}
 
-		err := dg.SetDriverContainerAsDesired(context.Background(), &ds, &mld, false)
+		err := dc.SetDriverContainerAsDesired(context.Background(), &ds, &mld, false)
+
 		Expect(err).NotTo(HaveOccurred())
 
 		podLabels := map[string]string{
@@ -284,11 +305,14 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 })
 
 var _ = Describe("SetDevicePluginAsDesired", func() {
-	dg := NewCreator(nil, kernelLabel, scheme)
+
+	BeforeEach(func() {
+		dc = NewCreator(nil, kernelLabel, scheme)
+	})
 
 	It("should return an error if the DaemonSet is nil", func() {
 		Expect(
-			dg.SetDevicePluginAsDesired(context.Background(), nil, &kmmv1beta1.Module{}, false),
+			dc.SetDevicePluginAsDesired(context.Background(), nil, &kmmv1beta1.Module{}, false),
 		).To(
 			HaveOccurred(),
 		)
@@ -297,7 +321,7 @@ var _ = Describe("SetDevicePluginAsDesired", func() {
 	It("should return an error if DevicePlugin not set in the Spec", func() {
 		ds := appsv1.DaemonSet{}
 		Expect(
-			dg.SetDevicePluginAsDesired(context.Background(), &ds, &kmmv1beta1.Module{}, false),
+			dc.SetDevicePluginAsDesired(context.Background(), &ds, &kmmv1beta1.Module{}, false),
 		).To(
 			HaveOccurred(),
 		)
@@ -317,7 +341,8 @@ var _ = Describe("SetDevicePluginAsDesired", func() {
 
 		ds := appsv1.DaemonSet{}
 
-		err := dg.SetDevicePluginAsDesired(context.Background(), &ds, &mod, false)
+		err := dc.SetDevicePluginAsDesired(context.Background(), &ds, &mod, false)
+
 		Expect(err).NotTo(HaveOccurred())
 		Expect(ds.Spec.Template.Spec.Volumes).To(HaveLen(2))
 		Expect(ds.Spec.Template.Spec.Volumes[1]).To(Equal(vol))
@@ -333,13 +358,48 @@ var _ = Describe("SetDevicePluginAsDesired", func() {
 
 			ds := appsv1.DaemonSet{}
 
-			err := dg.SetDevicePluginAsDesired(context.Background(), &ds, &mod, useDefaultSA)
+			err := dc.SetDevicePluginAsDesired(context.Background(), &ds, &mod, useDefaultSA)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ds.Spec.Template.Spec.ServiceAccountName).To(Equal(expectedSA))
 		},
 		Entry(nil, false, ""),
 		Entry(nil, true, "kmm-operator-device-plugin"),
 	)
+
+	It("should add module version if it was defined in the Module", func() {
+		vol := v1.Volume{Name: "test-volume"}
+
+		mod := kmmv1beta1.Module{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      moduleName,
+				Namespace: namespace,
+			},
+			Spec: kmmv1beta1.ModuleSpec{
+				ModuleLoader: kmmv1beta1.ModuleLoaderSpec{
+					Container: kmmv1beta1.ModuleLoaderContainerSpec{
+						Version: "some version",
+					},
+				},
+				DevicePlugin: &kmmv1beta1.DevicePluginSpec{
+					Container: kmmv1beta1.DevicePluginContainerSpec{Image: devicePluginImage},
+					Volumes:   []v1.Volume{vol},
+				},
+			},
+		}
+
+		ds := appsv1.DaemonSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      moduleName,
+				Namespace: namespace,
+			},
+		}
+
+		err := dc.SetDevicePluginAsDesired(context.Background(), &ds, &mod, false)
+
+		versionLabel := utils.GetModuleVersionLabelName(namespace, moduleName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ds.GetLabels()).Should(HaveKeyWithValue(versionLabel, "some version"))
+	})
 
 	It("should work as expected", func() {
 		const (
@@ -417,7 +477,8 @@ var _ = Describe("SetDevicePluginAsDesired", func() {
 			},
 		}
 
-		err := dg.SetDevicePluginAsDesired(context.Background(), &ds, &mod, false)
+		err := dc.SetDevicePluginAsDesired(context.Background(), &ds, &mod, false)
+
 		Expect(err).NotTo(HaveOccurred())
 
 		podLabels := map[string]string{
@@ -504,54 +565,122 @@ var _ = Describe("SetDevicePluginAsDesired", func() {
 })
 
 var _ = Describe("GarbageCollect", func() {
+	const (
+		legitKernelVersion    = "legit-kernel-version"
+		notLegitKernelVersion = "not-legit-kernel-version"
+		currentModuleVersion  = "current label"
+	)
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
+		dc = NewCreator(clnt, kernelLabel, scheme)
 	})
 
-	It("should only delete one of the two DaemonSets if only one is not used", func() {
-		const (
-			legitKernelVersion    = "legit-kernel-version"
-			legitName             = "legit"
-			notLegitKernelVersion = "not-legit-kernel-version"
-			notLegitName          = "not-legit"
-		)
+	mod := &kmmv1beta1.Module{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "moduleName",
+			Namespace: "namespace",
+		},
+		Spec: kmmv1beta1.ModuleSpec{
+			ModuleLoader: kmmv1beta1.ModuleLoaderSpec{
+				Container: kmmv1beta1.ModuleLoaderContainerSpec{
+					Version: currentModuleVersion,
+				},
+			},
+		},
+	}
+	versionLabel := utils.GetModuleVersionLabelName(mod.Namespace, mod.Name)
 
-		dsLegit := appsv1.DaemonSet{
-			ObjectMeta: metav1.ObjectMeta{Name: legitName, Namespace: namespace, Labels: map[string]string{kernelLabel: legitKernelVersion}},
+	DescribeTable("device-plugin and modue-loader GC", func(devicePluginFormerLabel, moduleLoaderFormerLabel, moduleLoaderInvalidKernel bool,
+		devicePluginFormerDesired, moduleLoaderFormerDesired int) {
+		moduleLoaderDS := appsv1.DaemonSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "moduleLoader",
+				Namespace: "namespace",
+				Labels:    map[string]string{kernelLabel: legitKernelVersion, constants.DaemonSetRole: moduleLoaderRoleLabelValue, versionLabel: currentModuleVersion},
+			},
+		}
+		devicePluginDS := appsv1.DaemonSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "devicePlugin",
+				Namespace: "namespace",
+				Labels:    map[string]string{constants.DaemonSetRole: devicePluginRoleLabelValue, versionLabel: currentModuleVersion},
+			},
+		}
+		devicePluginFormerVersionDS := &appsv1.DaemonSet{}
+		moduleLoaderFormerVersionDS := &appsv1.DaemonSet{}
+		moduleLoaderIllegalKernelVersionDS := &appsv1.DaemonSet{}
+
+		existingDS := []appsv1.DaemonSet{moduleLoaderDS, devicePluginDS}
+		expectedDeleteNames := []string{}
+		if devicePluginFormerLabel {
+			devicePluginFormerVersionDS = devicePluginDS.DeepCopy()
+			devicePluginFormerVersionDS.SetName("devicePluginFormer")
+			devicePluginFormerVersionDS.Labels[versionLabel] = "former label"
+			devicePluginFormerVersionDS.Status.DesiredNumberScheduled = int32(devicePluginFormerDesired)
+			existingDS = append(existingDS, *devicePluginFormerVersionDS)
+		}
+		if moduleLoaderFormerLabel {
+			moduleLoaderFormerVersionDS = moduleLoaderDS.DeepCopy()
+			moduleLoaderFormerVersionDS.SetName("moduleLoaderFormer")
+			moduleLoaderFormerVersionDS.Labels[versionLabel] = "former label"
+			moduleLoaderFormerVersionDS.Status.DesiredNumberScheduled = int32(moduleLoaderFormerDesired)
+			existingDS = append(existingDS, *moduleLoaderFormerVersionDS)
+		}
+		if moduleLoaderInvalidKernel {
+			moduleLoaderIllegalKernelVersionDS = moduleLoaderDS.DeepCopy()
+			moduleLoaderIllegalKernelVersionDS.SetName("moduleLoaderInvalidKernel")
+			moduleLoaderIllegalKernelVersionDS.Labels[kernelLabel] = notLegitKernelVersion
+			existingDS = append(existingDS, *moduleLoaderIllegalKernelVersionDS)
 		}
 
-		dsNotLegit := appsv1.DaemonSet{
-			ObjectMeta: metav1.ObjectMeta{Name: notLegitName, Namespace: namespace, Labels: map[string]string{kernelLabel: notLegitKernelVersion}},
+		if devicePluginFormerLabel && devicePluginFormerDesired == 0 {
+			expectedDeleteNames = append(expectedDeleteNames, "devicePluginFormer")
+			clnt.EXPECT().Delete(context.Background(), devicePluginFormerVersionDS).Return(nil)
+		}
+		if moduleLoaderFormerLabel && moduleLoaderFormerDesired == 0 {
+			expectedDeleteNames = append(expectedDeleteNames, "moduleLoaderFormer")
+			clnt.EXPECT().Delete(context.Background(), moduleLoaderFormerVersionDS).Return(nil)
+		}
+		if moduleLoaderInvalidKernel {
+			expectedDeleteNames = append(expectedDeleteNames, "moduleLoaderInvalidKernel")
+			clnt.EXPECT().Delete(context.Background(), moduleLoaderIllegalKernelVersionDS).Return(nil)
 		}
 
-		clnt.EXPECT().Delete(context.Background(), &dsNotLegit).AnyTimes()
+		res, err := dc.GarbageCollect(context.Background(), mod, existingDS, sets.New[string](legitKernelVersion))
 
-		dc := NewCreator(clnt, kernelLabel, scheme)
-
-		existingDS := []appsv1.DaemonSet{dsLegit, dsNotLegit}
-
-		validKernels := sets.New(legitKernelVersion)
-
-		res, err := dc.GarbageCollect(context.Background(), existingDS, validKernels)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal([]string{notLegitName}))
-	})
+		Expect(res).To(Equal(expectedDeleteNames))
+	},
+		Entry("no deletes", false, false, false, 0, 0),
+		Entry("former device plugin", true, false, false, 0, 0),
+		Entry("former device plugin has desired", true, false, false, 1, 0),
+		Entry("former module loader", false, true, false, 0, 0),
+		Entry("former module loader has desired", false, true, false, 0, 1),
+		Entry("illegal kernel version", false, false, true, 0, 0),
+		Entry("former device plugin, former module loader, illegal kernel version", true, true, true, 0, 0),
+	)
 
 	It("should return an error if a deletion failed", func() {
-		clnt.EXPECT().Delete(context.Background(), gomock.Any()).Return(
-			errors.New("client returns some error"),
-		)
-
-		dc := NewCreator(clnt, kernelLabel, scheme)
-
-		dsNotLegit := appsv1.DaemonSet{
-			ObjectMeta: metav1.ObjectMeta{Name: "name", Namespace: "namespace", Labels: map[string]string{kernelLabel: "kernel version"}},
+		deleteDS := appsv1.DaemonSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "moduleLoader",
+				Namespace: "namespace",
+				Labels:    map[string]string{kernelLabel: notLegitKernelVersion, constants.DaemonSetRole: moduleLoaderRoleLabelValue, versionLabel: currentModuleVersion},
+			},
 		}
+		clnt.EXPECT().Delete(context.Background(), &deleteDS).Return(fmt.Errorf("some error"))
 
-		existingDS := []appsv1.DaemonSet{dsNotLegit}
+		existingDS := []appsv1.DaemonSet{deleteDS}
 
-		_, err := dc.GarbageCollect(context.Background(), existingDS, sets.New[string]())
+		_, err := dc.GarbageCollect(context.Background(), mod, existingDS, sets.New[string](legitKernelVersion))
+		Expect(err).To(HaveOccurred())
+
+		deleteDS.Labels[versionLabel] = "former label"
+		clnt.EXPECT().Delete(context.Background(), &deleteDS).Return(fmt.Errorf("some error"))
+
+		existingDS = []appsv1.DaemonSet{deleteDS}
+		_, err = dc.GarbageCollect(context.Background(), mod, existingDS, sets.New[string](legitKernelVersion))
 		Expect(err).To(HaveOccurred())
 	})
 })
