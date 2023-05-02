@@ -3,8 +3,6 @@ kind: ConfigMap
 metadata:
   annotations:
     service.beta.openshift.io/inject-cabundle: "true"
-  labels:
-    kmm.node.kubernetes.io/ca.type: "service"
   name: service-ca
   namespace: system
 data: {}

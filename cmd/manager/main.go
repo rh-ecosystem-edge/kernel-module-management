@@ -22,10 +22,7 @@ import (
 	"os"
 	"strconv"
 
-	buildv1 "github.com/openshift/api/build/v1"
-	imagev1 "github.com/openshift/api/image/v1"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ca"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
+	buildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -42,12 +39,15 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	buildv1 "github.com/openshift/api/build/v1"
+	imagev1 "github.com/openshift/api/image/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/controllers"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build/buildconfig"
+	buildocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build/ocpbuild"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cmd"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/daemonset"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
@@ -55,10 +55,9 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/preflight"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
-	signjob "github.com/rh-ecosystem-edge/kernel-module-management/internal/sign/job"
+	signocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/sign/ocpbuild"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -131,20 +130,18 @@ func main() {
 		),
 	)
 
-	buildAPI := buildconfig.NewManager(
+	buildAPI := buildocpbuild.NewManager(
 		client,
-		buildconfig.NewMaker(client, buildHelperAPI, scheme, kernelOsDtkMapping),
-		buildconfig.NewOpenShiftBuildsHelper(client),
+		buildocpbuild.NewMaker(client, buildHelperAPI, scheme, kernelOsDtkMapping),
+		buildutils.NewOpenShiftBuildsHelper(client, buildocpbuild.BuildType),
 		authFactory,
 		registryAPI,
 	)
 
-	jobHelperAPI := utils.NewJobHelper(client)
-	caHelper := ca.NewHelper(client, scheme)
-
-	signAPI := signjob.NewSignJobManager(
-		signjob.NewSigner(client, scheme, jobHelperAPI, caHelper),
-		jobHelperAPI,
+	signAPI := signocpbuild.NewManager(
+		client,
+		signocpbuild.NewMaker(client, cmd.GetEnvOrFatalError("RELATED_IMAGES_SIGN", setupLogger), scheme),
+		buildutils.NewOpenShiftBuildsHelper(client, signocpbuild.BuildType),
 		authFactory,
 		registryAPI,
 	)
@@ -161,7 +158,6 @@ func main() {
 		metricsAPI,
 		filterAPI,
 		statusupdater.NewModuleStatusUpdater(client),
-		caHelper,
 		operatorNamespace,
 	)
 

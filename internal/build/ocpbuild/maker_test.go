@@ -1,16 +1,15 @@
-package buildconfig
+package ocpbuild
 
 import (
 	"context"
 	"errors"
 	"fmt"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-
 	"github.com/golang/mock/gomock"
 	"github.com/google/go-cmp/cmp"
 	"github.com/mitchellh/hashstructure/v2"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	buildv1 "github.com/openshift/api/build/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,6 +23,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
+	buildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
 )
 
 var _ = Describe("Maker_MakeBuildTemplate", func() {
@@ -109,11 +109,12 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 
 		expected := buildv1.Build{
 			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: moduleName + "-",
+				GenerateName: moduleName + "-build-",
 				Namespace:    namespace,
 				Labels: map[string]string{
-					constants.ModuleNameLabel:    moduleName,
-					constants.TargetKernelTarget: targetKernel,
+					constants.ModuleNameLabel:     moduleName,
+					constants.TargetKernelTarget:  targetKernel,
+					"kmm.openshift.io/build.type": BuildType,
 				},
 				OwnerReferences: []metav1.OwnerReference{
 					{
@@ -159,7 +160,7 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 
 		hash, err := hashstructure.Hash(expected.Spec.CommonSpec.Source, hashstructure.FormatV2, nil)
 		Expect(err).NotTo(HaveOccurred())
-		annotations := map[string]string{buildHashAnnotation: fmt.Sprintf("%d", hash)}
+		annotations := map[string]string{buildutils.HashAnnotation: fmt.Sprintf("%d", hash)}
 		expected.SetAnnotations(annotations)
 
 		gomock.InOrder(

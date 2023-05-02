@@ -22,6 +22,9 @@ import (
 
 	buildv1 "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
+	buildocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build/ocpbuild"
+	signocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/sign/ocpbuild"
+	buildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -44,8 +47,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/controllers/hub"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build/buildconfig"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ca"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cluster"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cmd"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
@@ -55,10 +56,8 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
-	signjob "github.com/rh-ecosystem-edge/kernel-module-management/internal/sign/job"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -121,7 +120,7 @@ func main() {
 
 	buildHelperAPI := build.NewHelper()
 	registryAPI := registry.NewRegistry()
-	jobHelperAPI := utils.NewJobHelper(client)
+
 	authFactory := auth.NewRegistryAuthGetterFactory(
 		client,
 		kubernetes.NewForConfigOrDie(
@@ -129,19 +128,18 @@ func main() {
 		),
 	)
 
-	buildAPI := buildconfig.NewManager(
+	buildAPI := buildocpbuild.NewManager(
 		client,
-		buildconfig.NewMaker(client, buildHelperAPI, scheme, kernelOsDtkMapping),
-		buildconfig.NewOpenShiftBuildsHelper(client),
+		buildocpbuild.NewMaker(client, buildHelperAPI, scheme, kernelOsDtkMapping),
+		buildutils.NewOpenShiftBuildsHelper(client, buildocpbuild.BuildType),
 		authFactory,
 		registryAPI,
 	)
 
-	caHelper := ca.NewHelper(client, scheme)
-
-	signAPI := signjob.NewSignJobManager(
-		signjob.NewSigner(client, scheme, jobHelperAPI, caHelper),
-		jobHelperAPI,
+	signAPI := signocpbuild.NewManager(
+		client,
+		signocpbuild.NewMaker(client, cmd.GetEnvOrFatalError("RELATED_IMAGES_SIGN", setupLogger), scheme),
+		buildutils.NewOpenShiftBuildsHelper(client, signocpbuild.BuildType),
 		authFactory,
 		registryAPI,
 	)

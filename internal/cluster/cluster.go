@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	buildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -20,7 +21,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 )
 
 //go:generate mockgen -source=cluster.go -package=cluster -destination=mock_cluster.go
@@ -219,7 +219,7 @@ func (c *clusterAPI) build(
 		return false, fmt.Errorf("could not synchronize the build: %w", err)
 	}
 
-	if buildStatus == utils.StatusCompleted {
+	if buildStatus == buildutils.StatusCompleted {
 		return true, nil
 	}
 	return false, nil
@@ -255,7 +255,7 @@ func (c *clusterAPI) sign(
 		return false, fmt.Errorf("could not synchronize the signing: %w", err)
 	}
 
-	if signStatus == utils.StatusCompleted {
+	if signStatus == buildutils.StatusCompleted {
 		return true, nil
 	}
 	return false, nil

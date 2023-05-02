@@ -23,18 +23,6 @@ import (
 
 	"github.com/mitchellh/hashstructure/v2"
 	buildv1 "github.com/openshift/api/build/v1"
-	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ca"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/daemonset"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
-
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
@@ -49,6 +37,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/daemonset"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
+	buildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
 )
 
 const ModuleReconcilerName = "Module"
@@ -60,7 +60,6 @@ type ModuleReconciler struct {
 	daemonAPI         daemonset.DaemonSetCreator
 	filter            *filter.Filter
 	statusUpdaterAPI  statusupdater.ModuleStatusUpdater
-	caHelper          ca.Helper
 	reconHelperAPI    moduleReconcilerHelperAPI
 	operatorNamespace string
 }
@@ -74,7 +73,6 @@ func NewModuleReconciler(
 	metricsAPI metrics.Metrics,
 	filter *filter.Filter,
 	statusUpdaterAPI statusupdater.ModuleStatusUpdater,
-	caHelper ca.Helper,
 	operatorNamespace string,
 ) *ModuleReconciler {
 	reconHelperAPI := newModuleReconcilerHelper(client, buildAPI, signAPI, daemonAPI, kernelAPI, metricsAPI, operatorNamespace)
@@ -83,7 +81,6 @@ func NewModuleReconciler(
 		reconHelperAPI:    reconHelperAPI,
 		filter:            filter,
 		statusUpdaterAPI:  statusUpdaterAPI,
-		caHelper:          caHelper,
 		operatorNamespace: operatorNamespace,
 	}
 }
@@ -115,12 +112,6 @@ func (r *ModuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}
 
 		return res, fmt.Errorf("failed to get the requested %s KMMO CR: %w", req.NamespacedName, err)
-	}
-
-	if req.Namespace != r.operatorNamespace {
-		if err = r.caHelper.Sync(ctx, req.Namespace, mod); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to synchronize CA ConfigMaps: %v", err)
-		}
 	}
 
 	r.reconHelperAPI.setKMMOMetrics(ctx)
@@ -318,9 +309,9 @@ func (mrh *moduleReconcilerHelper) handleBuild(ctx context.Context, mld *api.Mod
 
 	completedSuccessfully := false
 	switch buildStatus {
-	case utils.StatusCompleted:
+	case buildutils.StatusCompleted:
 		completedSuccessfully = true
-	case utils.StatusFailed:
+	case buildutils.StatusFailed:
 		logger.Info(utils.WarnString("Build job has failed. If the fix is not in Module CR, then delete job after the fix in order to restart the job"))
 	}
 
@@ -353,9 +344,9 @@ func (mrh *moduleReconcilerHelper) handleSigning(ctx context.Context, mld *api.M
 
 	completedSuccessfully := false
 	switch signStatus {
-	case utils.StatusCompleted:
+	case buildutils.StatusCompleted:
 		completedSuccessfully = true
-	case utils.StatusFailed:
+	case buildutils.StatusFailed:
 		logger.Info(utils.WarnString("Sign job has failed. If the fix is not in Module CR, then delete job after the fix in order to restart the job"))
 	}
 
