@@ -87,6 +87,51 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 		Expect(ds.Spec.Template.Spec.Volumes).To(HaveLen(1))
 	})
 
+	It("should add volume and volume mount if module ordering is set", func() {
+		mld := api.ModuleLoaderData{
+			Name:      moduleName,
+			Namespace: namespace,
+			Modprobe: kmmv1beta1.ModprobeSpec{
+				ModulesLoadingOrder: []string{"ModuleA", "ModuleB", "ModuleC"},
+			},
+			Owner:          &kmmv1beta1.Module{},
+			ContainerImage: "some image",
+			KernelVersion:  kernelVersion,
+			ModuleVersion:  "some version",
+		}
+
+		orderedVol := v1.Volume{
+			Name: "modules-order",
+			VolumeSource: v1.VolumeSource{
+				DownwardAPI: &v1.DownwardAPIVolumeSource{
+					Items: []v1.DownwardAPIVolumeFile{
+						{
+							Path:     "softdep.conf",
+							FieldRef: &v1.ObjectFieldSelector{FieldPath: "metadata.annotations['modules-order']"},
+						},
+					},
+				},
+			},
+		}
+		orderedVolMount := v1.VolumeMount{
+			Name:      "modules-order",
+			ReadOnly:  true,
+			MountPath: "/etc/modprobe.d",
+		}
+
+		annotations := map[string]string{"modules-order": "softdep ModuleA pre: ModuleB\nsoftdep ModuleB pre: ModuleC\n"}
+
+		ds := appsv1.DaemonSet{}
+
+		err := dc.SetDriverContainerAsDesired(context.Background(), &ds, &mld, false)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ds.Spec.Template.Spec.Volumes).To(HaveLen(2))
+		Expect(ds.Spec.Template.Spec.Volumes[1]).To(Equal(orderedVol))
+		Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).To(HaveLen(2))
+		Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts[1]).To(Equal(orderedVolMount))
+		Expect(ds.Spec.Template.Annotations).To(Equal(annotations))
+	})
+
 	It("should add the volume and volume mount for firmware if FirmwarePath is set", func() {
 		hostPathDirectoryOrCreate := v1.HostPathDirectoryOrCreate
 		vol := v1.Volume{
@@ -243,12 +288,12 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 								Lifecycle: &v1.Lifecycle{
 									PostStart: &v1.LifecycleHandler{
 										Exec: &v1.ExecAction{
-											Command: MakeLoadCommand(mld.InTreeRemoval, mld.Modprobe, moduleName),
+											Command: makeLoadCommand(mld.InTreeRemoval, mld.Modprobe, moduleName),
 										},
 									},
 									PreStop: &v1.LifecycleHandler{
 										Exec: &v1.ExecAction{
-											Command: MakeUnloadCommand(mld.Modprobe, moduleName),
+											Command: makeUnloadCommand(mld.Modprobe, moduleName),
 										},
 									},
 								},
@@ -842,7 +887,7 @@ var _ = Describe("GetNodeLabelFromPod", func() {
 	})
 })
 
-var _ = Describe("MakeLoadCommand", func() {
+var _ = Describe("makeLoadCommand", func() {
 	const (
 		kernelModuleName = "some-kmod"
 		moduleName       = "module-name"
@@ -857,7 +902,7 @@ var _ = Describe("MakeLoadCommand", func() {
 		}
 
 		Expect(
-			MakeLoadCommand(false, spec, moduleName),
+			makeLoadCommand(false, spec, moduleName),
 		).To(
 			Equal([]string{
 				"/bin/sh",
@@ -881,7 +926,7 @@ var _ = Describe("MakeLoadCommand", func() {
 		}
 
 		Expect(
-			MakeLoadCommand(true, spec, moduleName),
+			makeLoadCommand(true, spec, moduleName),
 		).To(
 			Equal([]string{
 				"/bin/sh",
@@ -900,7 +945,7 @@ var _ = Describe("MakeLoadCommand", func() {
 		}
 
 		Expect(
-			MakeLoadCommand(false, spec, moduleName),
+			makeLoadCommand(false, spec, moduleName),
 		).To(
 			Equal([]string{
 				"/bin/sh",
@@ -917,7 +962,7 @@ var _ = Describe("MakeLoadCommand", func() {
 		}
 
 		Expect(
-			MakeLoadCommand(false, spec, moduleName),
+			makeLoadCommand(false, spec, moduleName),
 		).To(
 			Equal([]string{
 				"/bin/sh",
@@ -928,7 +973,7 @@ var _ = Describe("MakeLoadCommand", func() {
 	})
 })
 
-var _ = Describe("MakeUnloadCommand", func() {
+var _ = Describe("makeUnloadCommand", func() {
 	const (
 		kernelModuleName = "some-kmod"
 		moduleName       = "module-name"
@@ -943,7 +988,7 @@ var _ = Describe("MakeUnloadCommand", func() {
 		}
 
 		Expect(
-			MakeUnloadCommand(spec, moduleName),
+			makeUnloadCommand(spec, moduleName),
 		).To(
 			Equal([]string{
 				"/bin/sh",
@@ -962,7 +1007,7 @@ var _ = Describe("MakeUnloadCommand", func() {
 		}
 
 		Expect(
-			MakeUnloadCommand(spec, moduleName),
+			makeUnloadCommand(spec, moduleName),
 		).To(
 			Equal([]string{
 				"/bin/sh",
@@ -981,7 +1026,7 @@ var _ = Describe("MakeUnloadCommand", func() {
 		}
 
 		Expect(
-			MakeUnloadCommand(spec, moduleName),
+			makeUnloadCommand(spec, moduleName),
 		).To(
 			Equal([]string{
 				"/bin/sh",
@@ -998,7 +1043,7 @@ var _ = Describe("MakeUnloadCommand", func() {
 		}
 
 		Expect(
-			MakeUnloadCommand(spec, moduleName),
+			makeUnloadCommand(spec, moduleName),
 		).To(
 			Equal([]string{
 				"/bin/sh",
