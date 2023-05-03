@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	buildv1 "github.com/openshift/api/build/v1"
+	buildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -23,7 +24,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
-	buildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
 )
 
 var _ = Describe("Maker_MakeBuildTemplate", func() {
@@ -60,7 +60,10 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 	dockerfileConfigMap := v1.LocalObjectReference{Name: "configMapName"}
 	dockerfileCMData := map[string]string{constants.DockerfileCMKey: dockerFile}
 
-	It("should work as expected", func() {
+	DescribeTable("should set fields correctly", func(
+		buildSecrets []v1.LocalObjectReference,
+		imagePullSecret *v1.LocalObjectReference,
+		useBuildSelector bool) {
 		nodeSelector := map[string]string{"label-key": "label-value"}
 
 		buildArgs := []kmmv1beta1.BuildArg{
@@ -72,11 +75,6 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 				Name:  "arg-2",
 				Value: "value-2",
 			},
-		}
-
-		buildSecrets := []v1.LocalObjectReference{
-			{Name: "secret-1"},
-			{Name: "secret-2"},
 		}
 
 		irs := v1.LocalObjectReference{Name: "push-secret"}
@@ -99,6 +97,11 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 					Namespace: namespace,
 				},
 			},
+		}
+
+		if useBuildSelector {
+			mld.Selector = nil
+			mld.Build.Selector = nodeSelector
 		}
 
 		overrides := []kmmv1beta1.BuildArg{
@@ -158,6 +161,19 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 			},
 		}
 
+		if imagePullSecret != nil {
+			mld.ImageRepoSecret = imagePullSecret
+
+			expected.Spec.CommonSpec.Output.PushSecret = imagePullSecret
+		}
+
+		if len(buildSecrets) > 0 {
+
+			mld.Build.Secrets = buildSecrets
+
+			expected.Spec.CommonSpec.Strategy.DockerStrategy.Volumes = buildVolumesFromBuildSecrets(buildSecrets)
+		}
+
 		hash, err := hashstructure.Hash(expected.Spec.CommonSpec.Source, hashstructure.FormatV2, nil)
 		Expect(err).NotTo(HaveOccurred())
 		annotations := map[string]string{buildutils.HashAnnotation: fmt.Sprintf("%d", hash)}
@@ -186,7 +202,38 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 		).To(
 			BeEmpty(),
 		)
-	})
+	},
+		Entry(
+			"no secrets at all",
+			[]v1.LocalObjectReference{},
+			nil,
+			false,
+		),
+		Entry(
+			"no secrets at all with build.Selector property",
+			[]v1.LocalObjectReference{},
+			nil,
+			true,
+		),
+		Entry(
+			"only buildSecrets",
+			[]v1.LocalObjectReference{{Name: "s1"}},
+			nil,
+			false,
+		),
+		Entry(
+			"only imagePullSecrets",
+			[]v1.LocalObjectReference{},
+			&v1.LocalObjectReference{Name: "pull-push-secret"},
+			false,
+		),
+		Entry(
+			"buildSecrets and imagePullSecrets",
+			[]v1.LocalObjectReference{{Name: "s1"}},
+			&v1.LocalObjectReference{Name: "pull-push-secret"},
+			false,
+		),
+	)
 
 	Context(fmt.Sprintf("using %s", dtkBuildArg), func() {
 		It("should fail if we couldn't get the DTK image", func() {
