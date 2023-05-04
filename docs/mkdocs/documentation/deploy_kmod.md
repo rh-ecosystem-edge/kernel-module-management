@@ -57,11 +57,13 @@ Once loaded, kernel modules have all possible permissions to do any kind of oper
 
 ### `ServiceAccounts` and `SecurityContextConstraints`
 
-KMM creates privileged workload to load the kernel modules on nodes.
-That workload needs `ServiceAccounts` able to use the `privileged` `SecurityContextConstraint` (SCC).
-
-The authorization model for that workload depends on the `Module`'s namespace, as well as its spec:
-
+[Pod Security admission](https://docs.openshift.com/container-platform/4.12/authentication/understanding-and-managing-pod-security-admission.html) and `SecurityContextConstraints` (SCCs) restrict privileged workload in most namespaces by default;
+namespaces that are part of the [cluster payload](https://docs.openshift.com/container-platform/4.12/authentication/understanding-and-managing-pod-security-admission.html#security-context-constraints-psa-opting_understanding-and-managing-pod-security-admission)
+are an exception to that rule.
+In namespaces where Pod Security admission and SCC synchronization are enabled, the KMM workload needs to be manually
+allowed through RBAC.
+This is done by configuring a ServiceAccount that is allowed to use the `privileged` SCC in the `Module`.
+The authorization model depends on the `Module`'s namespace, as well as its spec:
 - if the `.spec.moduleLoader.serviceAccountName` or `.spec.devicePlugin.serviceAccountName` fields are set, they are
   always used;
 - if those fields are not set, then:
@@ -70,7 +72,7 @@ The authorization model for that workload depends on the `Module`'s namespace, a
     - if the `Module` is created in any other namespace, then KMM will run the DaemonSets as the namespace's `default`
       `ServiceAccount`, which cannot run privileged workload unless you manually allow it to use the `privileged` SCC.
 
-!!! warning "`openshift-kmm` is a trusted namespace"
+!!! warning "`openshift-kmm` and some other namespaces that are part of the [cluster payload](https://docs.openshift.com/container-platform/4.12/authentication/understanding-and-managing-pod-security-admission.html#security-context-constraints-psa-opting_understanding-and-managing-pod-security-admission) are considered trusted namespaces"
 
     When setting up RBAC permissions, keep in mind that any user or ServiceAccount creating a `Module` resource in the
     `openshift-kmm` namespace will result in KMM automatically running privileged workload on potentially all nodes in
