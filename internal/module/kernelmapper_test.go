@@ -2,6 +2,7 @@ package module
 
 import (
 	"fmt"
+
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -12,7 +13,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 )
 
-var _ = Describe("GetMergedMappingForKernel", func() {
+var _ = Describe("GetModuleLoaderDataForKernel", func() {
 	const (
 		kernelVersion = "1.2.3"
 	)
