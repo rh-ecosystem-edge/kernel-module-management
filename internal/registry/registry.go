@@ -46,6 +46,7 @@ type Registry interface {
 	GetLayerByDigest(digest string, pullConfig *RepoPullConfig) (v1.Layer, error)
 	LastLayer(ctx context.Context, image string, po *kmmv1beta1.TLSOptions, registryAuthGetter auth.RegistryAuthGetter) (v1.Layer, error)
 	GetHeaderDataFromLayer(layer v1.Layer, headerName string) ([]byte, error)
+	GetDigest(ctx context.Context, image string, tlsOptions *kmmv1beta1.TLSOptions, registryAuthGetter auth.RegistryAuthGetter) (string, error)
 }
 
 type registry struct {
@@ -105,6 +106,19 @@ func (r *registry) VerifyModuleExists(layer v1.Layer, pathPrefix, kernelVersion,
 	}
 	readerCloser.Close()
 	return true
+}
+
+func (r *registry) GetDigest(ctx context.Context, image string, tlsOptions *kmmv1beta1.TLSOptions, registryAuthGetter auth.RegistryAuthGetter) (string, error) {
+	pullConfig, err := r.getPullOptions(ctx, image, tlsOptions, registryAuthGetter)
+	if err != nil {
+		return "", fmt.Errorf("failed to get pull options for image %s: %v", image, err)
+	}
+
+	digest, err := crane.Digest(image, pullConfig.authOptions...)
+	if err != nil {
+		return "", fmt.Errorf("failed to get digest for image %s: %v", image, err)
+	}
+	return digest, err
 }
 
 func (r *registry) getPullOptions(ctx context.Context, image string, tlsOptions *kmmv1beta1.TLSOptions, registryAuthGetter auth.RegistryAuthGetter) (*RepoPullConfig, error) {
