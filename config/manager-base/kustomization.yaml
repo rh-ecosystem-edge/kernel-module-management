@@ -6,10 +6,10 @@ resources:
 - configmap-cluster-ca.yaml
 - configmap-service-ca.yaml
 
-patchesStrategicMerge:
-- manager_auth_proxy_patch.yaml
-- manager_config_patch.yaml
-- ocp.patch.yaml
+patches:
+- path: manager_auth_proxy_patch.yaml
+- path: manager_config_patch.yaml
+- path: ocp.patch.yaml
 
 images:
 - name: gcr.io/kubebuilder/kube-rbac-proxy
