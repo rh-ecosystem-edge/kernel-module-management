@@ -1,6 +1,6 @@
 module github.com/rh-ecosystem-edge/kernel-module-management
 
-go 1.18
+go 1.19
 
 require (
 	github.com/a8m/envsubst v1.4.2
