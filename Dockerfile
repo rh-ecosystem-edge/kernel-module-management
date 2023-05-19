@@ -27,7 +27,7 @@ ARG TARGET
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 make ${TARGET}
 
-FROM registry.access.redhat.com/ubi8/ubi-micro:8.7
+FROM registry.access.redhat.com/ubi8/ubi-micro:8.8
 
 ARG TARGET
 
