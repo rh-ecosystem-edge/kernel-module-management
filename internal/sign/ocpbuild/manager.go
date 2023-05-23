@@ -77,7 +77,7 @@ func (m *manager) Sync(
 		return "", fmt.Errorf("could not make Build template: %v", err)
 	}
 
-	build, err := m.ocpBuildsHelper.GetBuild(ctx, mld)
+	build, err := m.ocpBuildsHelper.GetModuleBuildByKernel(ctx, mld)
 	if err != nil {
 		if !errors.Is(err, buildutils.ErrNoMatchingBuild) {
 			return "", fmt.Errorf("error getting the build: %v", err)

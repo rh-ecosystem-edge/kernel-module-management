@@ -177,7 +177,7 @@ var _ = Describe("Manager", func() {
 
 			gomock.InOrder(
 				mockMaker.EXPECT().MakeBuildTemplate(ctx, &mld, unsignedImage, true, mld.Owner).Return(&b, nil),
-				mockOpenShiftBuildsHelper.EXPECT().GetBuild(ctx, &mld).Return(nil, build.ErrNoMatchingBuild),
+				mockOpenShiftBuildsHelper.EXPECT().GetModuleBuildByKernel(ctx, &mld).Return(nil, build.ErrNoMatchingBuild),
 				mockKubeClient.EXPECT().Create(ctx, &b),
 			)
 
@@ -213,7 +213,7 @@ var _ = Describe("Manager", func() {
 
 				gomock.InOrder(
 					mockMaker.EXPECT().MakeBuildTemplate(ctx, &mld, unsignedImage, true, mld.Owner).Return(&build, nil),
-					mockOpenShiftBuildsHelper.EXPECT().GetBuild(ctx, &mld).Return(&build, nil),
+					mockOpenShiftBuildsHelper.EXPECT().GetModuleBuildByKernel(ctx, &mld).Return(&build, nil),
 				)
 
 				status, err := m.Sync(ctx, &mld, unsignedImage, true, mld.Owner)
