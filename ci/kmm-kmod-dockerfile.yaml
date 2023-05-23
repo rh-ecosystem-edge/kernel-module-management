@@ -21,7 +21,7 @@ data:
 
     RUN KERNEL_SRC_DIR=/lib/modules/${KERNEL_VERSION}/build make all
 
-    FROM registry.redhat.io/ubi8/ubi-minimal
+    FROM registry.redhat.io/ubi9/ubi-minimal
 
     ARG KERNEL_VERSION
 
