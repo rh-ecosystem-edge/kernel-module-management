@@ -33,14 +33,14 @@ This will entail a reboot of all worker nodes.
 In addition to building the kernel module itself, include the binary firmware in the builder image.
 
 ```dockerfile
-FROM registry.redhat.io/ubi8/ubi-minimal as builder
+FROM registry.redhat.io/ubi9/ubi-minimal as builder
 
 # Build the kmod
 
 RUN ["mkdir", "/firmware"]
 RUN ["curl", "-o", "/firmware/firmware.bin", "https://artifacts.example.com/firmware.bin"]
 
-FROM registry.redhat.io/ubi8/ubi-minimal
+FROM registry.redhat.io/ubi9/ubi-minimal
 
 # Copy the kmod, install modprobe, run depmod
 
