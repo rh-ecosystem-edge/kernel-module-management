@@ -21,7 +21,7 @@ If you are building your image on OpenShift, consider [using Driver Toolkit](#us
 entitled build](https://cloud.redhat.com/blog/how-to-use-entitled-image-builds-to-build-drivercontainers-with-ubi-on-openshift).
 
 ```dockerfile
-FROM registry.redhat.io/ubi8/ubi as builder
+FROM registry.redhat.io/ubi9/ubi as builder
 
 ARG KERNEL_VERSION
 
@@ -39,11 +39,11 @@ WORKDIR /usr/src/kernel-module-management/ci/kmm-kmod
 
 RUN KERNEL_SRC_DIR=/lib/modules/${KERNEL_VERSION}/build make all
 
-FROM registry.redhat.io/ubi8/ubi-minimal
+FROM registry.redhat.io/ubi9/ubi-minimal
 
 ARG KERNEL_VERSION
 
-RUN microdnf install kmod
+RUN ["microdnf", "install", "-y", "kmod"]
 
 COPY --from=builder /usr/src/kernel-module-management/ci/kmm-kmod/kmm_ci_a.ko /opt/lib/modules/${KERNEL_VERSION}/
 COPY --from=builder /usr/src/kernel-module-management/ci/kmm-kmod/kmm_ci_b.ko /opt/lib/modules/${KERNEL_VERSION}/
@@ -98,7 +98,7 @@ Once the image is built, KMM proceeds with the `Module` reconciliation.
 convenient base image that contains most tools and libraries required to build ModuleLoader images for the OpenShift
 version that is currently running in the cluster.
 It is recommended to use DTK as the first stage of a multi-stage `Dockerfile` to build the kernel modules, and to copy
-the `.ko` files into a smaller end-user image such as [`ubi-minimal`](https://catalog.redhat.com/software/containers/ubi8/ubi-minimal).
+the `.ko` files into a smaller end-user image such as [`ubi-minimal`](https://catalog.redhat.com/software/containers/ubi9/ubi-minimal).
 
 To leverage DTK in your in-cluster build, use the `DTK_AUTO` build argument.
 The value is automatically set by KMM when creating the `Build` object.
@@ -118,11 +118,11 @@ WORKDIR /usr/src/kernel-module-management/ci/kmm-kmod
 
 RUN KERNEL_SRC_DIR=/lib/modules/${KERNEL_VERSION}/build make all
 
-FROM registry.redhat.io/ubi8/ubi-minimal
+FROM registry.redhat.io/ubi9/ubi-minimal
 
 ARG KERNEL_VERSION
 
-RUN microdnf install kmod
+RUN ["microdnf", "install", "-y", "kmod"]
 
 COPY --from=builder /usr/src/kernel-module-management/ci/kmm-kmod/kmm_ci_a.ko /opt/lib/modules/${KERNEL_VERSION}/
 COPY --from=builder /usr/src/kernel-module-management/ci/kmm-kmod/kmm_ci_b.ko /opt/lib/modules/${KERNEL_VERSION}/

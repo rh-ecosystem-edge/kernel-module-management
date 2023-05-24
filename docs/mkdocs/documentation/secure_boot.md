@@ -182,8 +182,8 @@ data:
     WORKDIR /build/
     RUN git clone -b main --single-branch https://github.com/rh-ecosystem-edge/kernel-module-management.git
     WORKDIR kernel-module-management/ci/kmm-kmod/
-    RUN make 
-    FROM docker.io/redhat/ubi8:latest
+    RUN make
+    FROM registry.access.redhat.com/ubi9/ubi
     ARG KERNEL_VERSION
     RUN yum -y install kmod && yum clean all
     RUN mkdir -p /opt/lib/modules/${KERNEL_VERSION}
