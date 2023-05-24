@@ -43,9 +43,22 @@ func NewManager(
 }
 
 func (m *manager) GarbageCollect(ctx context.Context, modName, namespace string, owner metav1.Object) ([]string, error) {
+	moduleBuilds, err := m.ocpBuildsHelper.GetModuleBuilds(ctx, modName, namespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get OCP buils for module %s: %v", modName, err)
+	}
 
-	//Garbage Collection noti (yet) implemented for Build
-	return nil, nil
+	deleteNames := make([]string, 0, len(moduleBuilds))
+	for _, moduleBuild := range moduleBuilds {
+		if moduleBuild.Status.Phase == buildv1.BuildPhaseComplete {
+			err = m.ocpBuildsHelper.DeleteBuild(ctx, &moduleBuild)
+			if err != nil {
+				return nil, fmt.Errorf("failed to delete OCP build %s: %v", moduleBuild.Name, err)
+			}
+			deleteNames = append(deleteNames, moduleBuild.Name)
+		}
+	}
+	return deleteNames, nil
 }
 
 func (m *manager) ShouldSync(ctx context.Context, mld *api.ModuleLoaderData) (bool, error) {
@@ -87,7 +100,7 @@ func (m *manager) Sync(
 		return "", fmt.Errorf("could not make Build template: %v", err)
 	}
 
-	build, err := m.ocpBuildsHelper.GetBuild(ctx, mld)
+	build, err := m.ocpBuildsHelper.GetModuleBuildByKernel(ctx, mld)
 	if err != nil {
 		if !errors.Is(err, buildutils.ErrNoMatchingBuild) {
 			return "", fmt.Errorf("error getting the build: %v", err)
@@ -109,10 +122,7 @@ func (m *manager) Sync(
 
 	if changed {
 		logger.Info("The module's build spec has been changed, deleting the current Build so a new one can be created", "name", build.Name)
-		opts := []client.DeleteOption{
-			client.PropagationPolicy(metav1.DeletePropagationBackground),
-		}
-		err = m.client.Delete(ctx, build, opts...)
+		err = m.ocpBuildsHelper.DeleteBuild(ctx, build)
 		if err != nil {
 			logger.Info(utils.WarnString(fmt.Sprintf("failed to delete Build %s: %v", build.Name, err)))
 		}

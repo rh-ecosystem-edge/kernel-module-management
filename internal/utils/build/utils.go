@@ -10,8 +10,6 @@ import (
 
 const (
 	HashAnnotation = "kmm.node.kubernetes.io/last-hash"
-
-	buildTypeLabel = "kmm.openshift.io/build.type"
 )
 
 func GetBuildAnnotations(hash uint64) map[string]string {
@@ -19,10 +17,19 @@ func GetBuildAnnotations(hash uint64) map[string]string {
 }
 
 func GetBuildLabels(mld *api.ModuleLoaderData, buildType string) map[string]string {
+	return moduleKernelLabels(mld.Name, mld.KernelVersion, buildType)
+}
+
+func moduleKernelLabels(moduleName, kernelVersion, buildType string) map[string]string {
+	labels := moduleLabels(moduleName, buildType)
+	labels[constants.TargetKernelTarget] = kernelVersion
+	return labels
+}
+
+func moduleLabels(moduleName, buildType string) map[string]string {
 	return map[string]string{
-		constants.ModuleNameLabel:    mld.Name,
-		constants.TargetKernelTarget: mld.KernelVersion,
-		buildTypeLabel:               buildType,
+		constants.ModuleNameLabel: moduleName,
+		constants.BuildTypeLabel:  buildType,
 	}
 }
 

@@ -40,7 +40,7 @@ var _ = Describe("OpenShiftBuildsHelper_GetBuild", func() {
 			KernelVersion: targetKernel,
 		}
 
-		_, err := osbh.GetBuild(ctx, &mld)
+		_, err := osbh.GetModuleBuildByKernel(ctx, &mld)
 
 		Expect(err).To(HaveOccurred())
 	})
@@ -58,7 +58,7 @@ var _ = Describe("OpenShiftBuildsHelper_GetBuild", func() {
 			KernelVersion: targetKernel,
 		}
 
-		_, err := osbh.GetBuild(ctx, &mld)
+		_, err := osbh.GetModuleBuildByKernel(ctx, &mld)
 
 		Expect(err).To(HaveOccurred())
 	})
@@ -80,7 +80,7 @@ var _ = Describe("OpenShiftBuildsHelper_GetBuild", func() {
 			KernelVersion: targetKernel,
 		}
 
-		res, err := osbh.GetBuild(ctx, &mld)
+		res, err := osbh.GetModuleBuildByKernel(ctx, &mld)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(Equal(bc))

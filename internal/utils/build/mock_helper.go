@@ -36,17 +36,46 @@ func (m *MockOpenShiftBuildsHelper) EXPECT() *MockOpenShiftBuildsHelperMockRecor
 	return m.recorder
 }
 
-// GetBuild mocks base method.
-func (m *MockOpenShiftBuildsHelper) GetBuild(ctx context.Context, mld *api.ModuleLoaderData) (*v1.Build, error) {
+// DeleteBuild mocks base method.
+func (m *MockOpenShiftBuildsHelper) DeleteBuild(ctx context.Context, build *v1.Build) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBuild", ctx, mld)
+	ret := m.ctrl.Call(m, "DeleteBuild", ctx, build)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteBuild indicates an expected call of DeleteBuild.
+func (mr *MockOpenShiftBuildsHelperMockRecorder) DeleteBuild(ctx, build interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteBuild", reflect.TypeOf((*MockOpenShiftBuildsHelper)(nil).DeleteBuild), ctx, build)
+}
+
+// GetModuleBuildByKernel mocks base method.
+func (m *MockOpenShiftBuildsHelper) GetModuleBuildByKernel(ctx context.Context, mld *api.ModuleLoaderData) (*v1.Build, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetModuleBuildByKernel", ctx, mld)
 	ret0, _ := ret[0].(*v1.Build)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetBuild indicates an expected call of GetBuild.
-func (mr *MockOpenShiftBuildsHelperMockRecorder) GetBuild(ctx, mld interface{}) *gomock.Call {
+// GetModuleBuildByKernel indicates an expected call of GetModuleBuildByKernel.
+func (mr *MockOpenShiftBuildsHelperMockRecorder) GetModuleBuildByKernel(ctx, mld interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBuild", reflect.TypeOf((*MockOpenShiftBuildsHelper)(nil).GetBuild), ctx, mld)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetModuleBuildByKernel", reflect.TypeOf((*MockOpenShiftBuildsHelper)(nil).GetModuleBuildByKernel), ctx, mld)
+}
+
+// GetModuleBuilds mocks base method.
+func (m *MockOpenShiftBuildsHelper) GetModuleBuilds(ctx context.Context, moduleName, moduleNamespace string) ([]v1.Build, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetModuleBuilds", ctx, moduleName, moduleNamespace)
+	ret0, _ := ret[0].([]v1.Build)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetModuleBuilds indicates an expected call of GetModuleBuilds.
+func (mr *MockOpenShiftBuildsHelperMockRecorder) GetModuleBuilds(ctx, moduleName, moduleNamespace interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetModuleBuilds", reflect.TypeOf((*MockOpenShiftBuildsHelper)(nil).GetModuleBuilds), ctx, moduleName, moduleNamespace)
 }
