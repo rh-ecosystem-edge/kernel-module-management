@@ -1,7 +1,7 @@
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.2 as ksource
 
 # install the package that will contain the sign utilities
-RUN ["microdnf", "install", "kernel-devel"]
+RUN ["microdnf", "install", "-y", "kernel-devel"]
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.2
 
