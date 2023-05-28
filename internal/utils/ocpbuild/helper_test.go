@@ -1,4 +1,4 @@
-package build
+package ocpbuild
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var _ = Describe("OpenShiftBuildsHelper_GetBuild", func() {
+var _ = Describe("OCPBuildsHelper_GetBuild", func() {
 	const (
 		buildType    = "build-type"
 		targetKernel = "target-kernels"
@@ -35,12 +35,12 @@ var _ = Describe("OpenShiftBuildsHelper_GetBuild", func() {
 			List(ctx, &buildv1.BuildList{}, gomock.Any(), gomock.Any()).
 			Return(errors.New("random error"))
 
-		osbh := NewOpenShiftBuildsHelper(mockKubeClient, buildType)
+		osbh := NewOCPBuildsHelper(mockKubeClient, buildType)
 		mld := api.ModuleLoaderData{
 			KernelVersion: targetKernel,
 		}
 
-		_, err := osbh.GetModuleBuildByKernel(ctx, &mld)
+		_, err := osbh.GetModuleOCPBuildByKernel(ctx, &mld)
 
 		Expect(err).To(HaveOccurred())
 	})
@@ -53,12 +53,12 @@ var _ = Describe("OpenShiftBuildsHelper_GetBuild", func() {
 				bcs.Items = make([]buildv1.Build, 2)
 			})
 
-		osbh := NewOpenShiftBuildsHelper(mockKubeClient, buildType)
+		osbh := NewOCPBuildsHelper(mockKubeClient, buildType)
 		mld := api.ModuleLoaderData{
 			KernelVersion: targetKernel,
 		}
 
-		_, err := osbh.GetModuleBuildByKernel(ctx, &mld)
+		_, err := osbh.GetModuleOCPBuildByKernel(ctx, &mld)
 
 		Expect(err).To(HaveOccurred())
 	})
@@ -75,12 +75,12 @@ var _ = Describe("OpenShiftBuildsHelper_GetBuild", func() {
 				bcs.Items = []buildv1.Build{*bc}
 			})
 
-		osbh := NewOpenShiftBuildsHelper(mockKubeClient, buildType)
+		osbh := NewOCPBuildsHelper(mockKubeClient, buildType)
 		mld := api.ModuleLoaderData{
 			KernelVersion: targetKernel,
 		}
 
-		res, err := osbh.GetModuleBuildByKernel(ctx, &mld)
+		res, err := osbh.GetModuleOCPBuildByKernel(ctx, &mld)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(Equal(bc))

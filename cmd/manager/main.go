@@ -22,7 +22,7 @@ import (
 	"os"
 	"strconv"
 
-	buildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
+	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -133,7 +133,7 @@ func main() {
 	buildAPI := buildocpbuild.NewManager(
 		client,
 		buildocpbuild.NewMaker(client, buildHelperAPI, scheme, kernelOsDtkMapping),
-		buildutils.NewOpenShiftBuildsHelper(client, buildocpbuild.BuildType),
+		ocpbuildutils.NewOCPBuildsHelper(client, buildocpbuild.BuildType),
 		authFactory,
 		registryAPI,
 	)
@@ -141,7 +141,7 @@ func main() {
 	signAPI := signocpbuild.NewManager(
 		client,
 		signocpbuild.NewMaker(client, cmd.GetEnvOrFatalError("RELATED_IMAGES_SIGN", setupLogger), scheme),
-		buildutils.NewOpenShiftBuildsHelper(client, signocpbuild.BuildType),
+		ocpbuildutils.NewOCPBuildsHelper(client, signocpbuild.BuildType),
 		authFactory,
 		registryAPI,
 	)

@@ -9,7 +9,7 @@ import (
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	buildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
+	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -305,7 +305,7 @@ var _ = Describe("BuildAndSign", func() {
 		gomock.InOrder(
 			mockKM.EXPECT().GetModuleLoaderDataForKernel(&mod, kernelVersion).Return(&mld, nil),
 			mockBM.EXPECT().ShouldSync(gomock.Any(), &mld).Return(true, nil),
-			mockBM.EXPECT().Sync(gomock.Any(), &mld, true, mcm).Return(buildutils.Status(buildutils.StatusCompleted), nil),
+			mockBM.EXPECT().Sync(gomock.Any(), &mld, true, mcm).Return(ocpbuildutils.Status(ocpbuildutils.StatusCompleted), nil),
 			mockSM.EXPECT().ShouldSync(gomock.Any(), &mld).Return(false, nil),
 		)
 
@@ -319,7 +319,7 @@ var _ = Describe("BuildAndSign", func() {
 		gomock.InOrder(
 			mockKM.EXPECT().GetModuleLoaderDataForKernel(&mod, kernelVersion).Return(&mld, nil),
 			mockBM.EXPECT().ShouldSync(gomock.Any(), &mld).Return(true, nil),
-			mockBM.EXPECT().Sync(gomock.Any(), &mld, true, mcm).Return(buildutils.Status(""), errors.New("test-error")),
+			mockBM.EXPECT().Sync(gomock.Any(), &mld, true, mcm).Return(ocpbuildutils.Status(""), errors.New("test-error")),
 		)
 
 		completed, err := c.BuildAndSign(ctx, *mcm, clusterList.Items[0])
@@ -333,7 +333,7 @@ var _ = Describe("BuildAndSign", func() {
 			mockKM.EXPECT().GetModuleLoaderDataForKernel(&mod, kernelVersion).Return(&mld, nil),
 			mockBM.EXPECT().ShouldSync(gomock.Any(), &mld).Return(false, nil),
 			mockSM.EXPECT().ShouldSync(gomock.Any(), &mld).Return(true, nil),
-			mockSM.EXPECT().Sync(gomock.Any(), &mld, "", true, mcm).Return(buildutils.Status(buildutils.StatusInProgress), nil),
+			mockSM.EXPECT().Sync(gomock.Any(), &mld, "", true, mcm).Return(ocpbuildutils.Status(ocpbuildutils.StatusInProgress), nil),
 		)
 
 		completed, err := c.BuildAndSign(ctx, *mcm, clusterList.Items[0])
@@ -347,7 +347,7 @@ var _ = Describe("BuildAndSign", func() {
 			mockKM.EXPECT().GetModuleLoaderDataForKernel(&mod, kernelVersion).Return(&mld, nil),
 			mockBM.EXPECT().ShouldSync(gomock.Any(), &mld).Return(false, nil),
 			mockSM.EXPECT().ShouldSync(gomock.Any(), &mld).Return(true, nil),
-			mockSM.EXPECT().Sync(gomock.Any(), &mld, "", true, mcm).Return(buildutils.Status(""), errors.New("test-error")),
+			mockSM.EXPECT().Sync(gomock.Any(), &mld, "", true, mcm).Return(ocpbuildutils.Status(""), errors.New("test-error")),
 		)
 
 		completed, err := c.BuildAndSign(ctx, *mcm, clusterList.Items[0])
@@ -360,7 +360,7 @@ var _ = Describe("BuildAndSign", func() {
 		gomock.InOrder(
 			mockKM.EXPECT().GetModuleLoaderDataForKernel(&mod, kernelVersion).Return(&mld, nil),
 			mockBM.EXPECT().ShouldSync(gomock.Any(), &mld).Return(true, nil),
-			mockBM.EXPECT().Sync(gomock.Any(), &mld, true, mcm).Return(buildutils.Status(buildutils.StatusInProgress), nil),
+			mockBM.EXPECT().Sync(gomock.Any(), &mld, true, mcm).Return(ocpbuildutils.Status(ocpbuildutils.StatusInProgress), nil),
 		)
 
 		completed, err := c.BuildAndSign(ctx, *mcm, clusterList.Items[0])
@@ -373,9 +373,9 @@ var _ = Describe("BuildAndSign", func() {
 		gomock.InOrder(
 			mockKM.EXPECT().GetModuleLoaderDataForKernel(&mod, kernelVersion).Return(&mld, nil),
 			mockBM.EXPECT().ShouldSync(gomock.Any(), &mld).Return(true, nil),
-			mockBM.EXPECT().Sync(gomock.Any(), &mld, true, mcm).Return(buildutils.Status(buildutils.StatusCompleted), nil),
+			mockBM.EXPECT().Sync(gomock.Any(), &mld, true, mcm).Return(ocpbuildutils.Status(ocpbuildutils.StatusCompleted), nil),
 			mockSM.EXPECT().ShouldSync(gomock.Any(), &mld).Return(true, nil),
-			mockSM.EXPECT().Sync(gomock.Any(), &mld, "", true, mcm).Return(buildutils.Status(buildutils.StatusCompleted), nil),
+			mockSM.EXPECT().Sync(gomock.Any(), &mld, "", true, mcm).Return(ocpbuildutils.Status(ocpbuildutils.StatusCompleted), nil),
 		)
 
 		completed, err := c.BuildAndSign(ctx, *mcm, clusterList.Items[0])

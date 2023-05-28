@@ -11,7 +11,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	buildv1 "github.com/openshift/api/build/v1"
-	buildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
+	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -176,7 +176,7 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 
 		hash, err := hashstructure.Hash(expected.Spec.CommonSpec.Source, hashstructure.FormatV2, nil)
 		Expect(err).NotTo(HaveOccurred())
-		annotations := map[string]string{buildutils.HashAnnotation: fmt.Sprintf("%d", hash)}
+		annotations := map[string]string{ocpbuildutils.HashAnnotation: fmt.Sprintf("%d", hash)}
 		expected.SetAnnotations(annotations)
 
 		gomock.InOrder(

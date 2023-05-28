@@ -1,4 +1,4 @@
-package build
+package ocpbuild
 
 type Status string
 

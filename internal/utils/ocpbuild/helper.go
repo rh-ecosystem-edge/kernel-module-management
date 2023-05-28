@@ -1,4 +1,4 @@
-package build
+package ocpbuild
 
 import (
 	"context"
@@ -13,31 +13,31 @@ import (
 
 var ErrNoMatchingBuild = errors.New("no matching Build")
 
-//go:generate mockgen -source=helper.go -package=build -destination=mock_helper.go
+//go:generate mockgen -source=helper.go -package=ocpbuild -destination=mock_helper.go
 
-type OpenShiftBuildsHelper interface {
-	GetModuleBuildByKernel(ctx context.Context, mld *api.ModuleLoaderData) (*buildv1.Build, error)
-	GetModuleBuilds(ctx context.Context, moduleName, moduleNamespace string) ([]buildv1.Build, error)
-	DeleteBuild(ctx context.Context, build *buildv1.Build) error
+type OCPBuildsHelper interface {
+	GetModuleOCPBuildByKernel(ctx context.Context, mld *api.ModuleLoaderData) (*buildv1.Build, error)
+	GetModuleOCPBuilds(ctx context.Context, moduleName, moduleNamespace string) ([]buildv1.Build, error)
+	DeleteOCPBuild(ctx context.Context, build *buildv1.Build) error
 }
 
-type openShiftBuildsHelper struct {
+type ocpBuildsHelper struct {
 	client    client.Client
 	buildType string
 }
 
-func NewOpenShiftBuildsHelper(client client.Client, buildType string) OpenShiftBuildsHelper {
-	return &openShiftBuildsHelper{
+func NewOCPBuildsHelper(client client.Client, buildType string) OCPBuildsHelper {
+	return &ocpBuildsHelper{
 		buildType: buildType,
 		client:    client,
 	}
 }
 
-func (o *openShiftBuildsHelper) GetModuleBuildByKernel(ctx context.Context, mld *api.ModuleLoaderData) (*buildv1.Build, error) {
+func (o *ocpBuildsHelper) GetModuleOCPBuildByKernel(ctx context.Context, mld *api.ModuleLoaderData) (*buildv1.Build, error) {
 	buildList := buildv1.BuildList{}
 
 	opts := []client.ListOption{
-		client.MatchingLabels(GetBuildLabels(mld, o.buildType)),
+		client.MatchingLabels(GetOCPBuildLabels(mld, o.buildType)),
 		client.InNamespace(mld.Namespace),
 	}
 
@@ -54,7 +54,7 @@ func (o *openShiftBuildsHelper) GetModuleBuildByKernel(ctx context.Context, mld 
 	return &buildList.Items[0], nil
 }
 
-func (o *openShiftBuildsHelper) GetModuleBuilds(ctx context.Context, moduleName, moduleNamespace string) ([]buildv1.Build, error) {
+func (o *ocpBuildsHelper) GetModuleOCPBuilds(ctx context.Context, moduleName, moduleNamespace string) ([]buildv1.Build, error) {
 	buildList := buildv1.BuildList{}
 
 	opts := []client.ListOption{
@@ -69,7 +69,7 @@ func (o *openShiftBuildsHelper) GetModuleBuilds(ctx context.Context, moduleName,
 	return buildList.Items, nil
 }
 
-func (o *openShiftBuildsHelper) DeleteBuild(ctx context.Context, build *buildv1.Build) error {
+func (o *ocpBuildsHelper) DeleteOCPBuild(ctx context.Context, build *buildv1.Build) error {
 	opts := []client.DeleteOption{
 		client.PropagationPolicy(metav1.DeletePropagationBackground),
 	}

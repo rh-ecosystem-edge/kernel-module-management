@@ -3,7 +3,7 @@ package sign
 import (
 	"context"
 
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
@@ -21,5 +21,5 @@ type SignManager interface {
 		mld *api.ModuleLoaderData,
 		imageToSign string,
 		pushImage bool,
-		owner metav1.Object) (build.Status, error)
+		owner metav1.Object) (ocpbuild.Status, error)
 }
