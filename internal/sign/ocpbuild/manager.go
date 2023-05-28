@@ -43,9 +43,22 @@ func NewManager(
 }
 
 func (m *manager) GarbageCollect(ctx context.Context, modName, namespace string, owner metav1.Object) ([]string, error) {
+	moduleSigns, err := m.ocpBuildsHelper.GetModuleOCPBuilds(ctx, modName, namespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get OCP builds for module's signs %s: %v", modName, err)
+	}
 
-	//Garbage Collection noti (yet) implemented for Build
-	return nil, nil
+	deleteNames := make([]string, 0, len(moduleSigns))
+	for _, moduleSign := range moduleSigns {
+		if moduleSign.Status.Phase == buildv1.BuildPhaseComplete {
+			err = m.ocpBuildsHelper.DeleteOCPBuild(ctx, &moduleSign)
+			if err != nil {
+				return nil, fmt.Errorf("failed to delete OCP build %s: %v", moduleSign.Name, err)
+			}
+			deleteNames = append(deleteNames, moduleSign.Name)
+		}
+	}
+	return deleteNames, nil
 }
 
 func (m *manager) ShouldSync(ctx context.Context, mld *api.ModuleLoaderData) (bool, error) {
