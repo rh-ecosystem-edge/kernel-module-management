@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	buildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
+	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -234,7 +234,7 @@ func (c *clusterAPI) build(
 		return false, fmt.Errorf("could not synchronize the build: %w", err)
 	}
 
-	if buildStatus == buildutils.StatusCompleted {
+	if buildStatus == ocpbuildutils.StatusCompleted {
 		return true, nil
 	}
 	return false, nil
@@ -270,7 +270,7 @@ func (c *clusterAPI) sign(
 		return false, fmt.Errorf("could not synchronize the signing: %w", err)
 	}
 
-	if signStatus == buildutils.StatusCompleted {
+	if signStatus == ocpbuildutils.StatusCompleted {
 		return true, nil
 	}
 	return false, nil

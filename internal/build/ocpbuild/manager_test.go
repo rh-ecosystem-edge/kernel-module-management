@@ -18,7 +18,7 @@ import (
 	buildmanager "github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 )
 
 var _ = Describe("ShouldSync", func() {
@@ -139,16 +139,16 @@ var _ = Describe("Sync", func() {
 	)
 
 	var (
-		mockKubeClient            *client.MockClient
-		mockMaker                 *MockMaker
-		mockOpenShiftBuildsHelper *build.MockOpenShiftBuildsHelper
+		mockKubeClient      *client.MockClient
+		mockMaker           *MockMaker
+		mockOCPBuildsHelper *ocpbuild.MockOCPBuildsHelper
 	)
 
 	BeforeEach(func() {
 		ctrl := gomock.NewController(GinkgoT())
 		mockKubeClient = client.NewMockClient(ctrl)
 		mockMaker = NewMockMaker(ctrl)
-		mockOpenShiftBuildsHelper = build.NewMockOpenShiftBuildsHelper(ctrl)
+		mockOCPBuildsHelper = ocpbuild.NewMockOCPBuildsHelper(ctrl)
 	})
 
 	ctx := context.Background()
@@ -176,7 +176,7 @@ var _ = Describe("Sync", func() {
 			KernelVersion:   targetKernel,
 		}
 
-		m := NewManager(mockKubeClient, mockMaker, mockOpenShiftBuildsHelper, nil, nil)
+		m := NewManager(mockKubeClient, mockMaker, mockOCPBuildsHelper, nil, nil)
 
 		b := buildv1.Build{
 			ObjectMeta: metav1.ObjectMeta{Name: buildName},
@@ -184,18 +184,18 @@ var _ = Describe("Sync", func() {
 
 		gomock.InOrder(
 			mockMaker.EXPECT().MakeBuildTemplate(ctx, &mld, true, mld.Owner).Return(&b, nil),
-			mockOpenShiftBuildsHelper.EXPECT().GetModuleBuildByKernel(ctx, &mld).Return(nil, build.ErrNoMatchingBuild),
+			mockOCPBuildsHelper.EXPECT().GetModuleOCPBuildByKernel(ctx, &mld).Return(nil, ocpbuild.ErrNoMatchingBuild),
 			mockKubeClient.EXPECT().Create(ctx, &b),
 		)
 
 		status, err := m.Sync(ctx, &mld, true, mld.Owner)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(status).To(Equal(build.StatusCreated))
+		Expect(status).To(Equal(ocpbuild.StatusCreated))
 	})
 
 	DescribeTable(
 		"should return the Build status when a Build is present",
-		func(phase buildv1.BuildPhase, expectedStatus build.Status, expectError bool) {
+		func(phase buildv1.BuildPhase, expectedStatus ocpbuild.Status, expectError bool) {
 			const buildName = "some-build"
 
 			By("Authenticating with the ServiceAccount's pull secret")
@@ -214,19 +214,19 @@ var _ = Describe("Sync", func() {
 				KernelVersion:  targetKernel,
 			}
 
-			m := NewManager(mockKubeClient, mockMaker, mockOpenShiftBuildsHelper, nil, nil)
+			m := NewManager(mockKubeClient, mockMaker, mockOCPBuildsHelper, nil, nil)
 
 			build := buildv1.Build{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        buildName,
-					Annotations: map[string]string{build.HashAnnotation: "some hash"},
+					Annotations: map[string]string{ocpbuild.HashAnnotation: "some hash"},
 				},
 				Status: buildv1.BuildStatus{Phase: phase},
 			}
 
 			gomock.InOrder(
 				mockMaker.EXPECT().MakeBuildTemplate(ctx, &mld, true, mld.Owner).Return(&build, nil),
-				mockOpenShiftBuildsHelper.EXPECT().GetModuleBuildByKernel(ctx, &mld).Return(&build, nil),
+				mockOCPBuildsHelper.EXPECT().GetModuleOCPBuildByKernel(ctx, &mld).Return(&build, nil),
 			)
 
 			status, err := m.Sync(ctx, &mld, true, mld.Owner)
@@ -238,21 +238,21 @@ var _ = Describe("Sync", func() {
 				Expect(status).To(Equal(expectedStatus))
 			}
 		},
-		Entry(nil, buildv1.BuildPhaseComplete, build.StatusCompleted, false),
-		Entry(nil, buildv1.BuildPhaseNew, build.StatusInProgress, false),
-		Entry(nil, buildv1.BuildPhasePending, build.StatusInProgress, false),
-		Entry(nil, buildv1.BuildPhaseRunning, build.StatusInProgress, false),
-		Entry(nil, buildv1.BuildPhaseFailed, build.Status(""), true),
-		Entry(nil, buildv1.BuildPhaseCancelled, build.Status(""), true),
+		Entry(nil, buildv1.BuildPhaseComplete, ocpbuild.StatusCompleted, false),
+		Entry(nil, buildv1.BuildPhaseNew, ocpbuild.StatusInProgress, false),
+		Entry(nil, buildv1.BuildPhasePending, ocpbuild.StatusInProgress, false),
+		Entry(nil, buildv1.BuildPhaseRunning, ocpbuild.StatusInProgress, false),
+		Entry(nil, buildv1.BuildPhaseFailed, ocpbuild.Status(""), true),
+		Entry(nil, buildv1.BuildPhaseCancelled, ocpbuild.Status(""), true),
 	)
 })
 
 var _ = Describe("GarbageCollect", func() {
 	var (
-		ctrl                      *gomock.Controller
-		clnt                      *client.MockClient
-		mockOpenShiftBuildsHelper *build.MockOpenShiftBuildsHelper
-		m                         buildmanager.Manager
+		ctrl                *gomock.Controller
+		clnt                *client.MockClient
+		mockOCPBuildsHelper *ocpbuild.MockOCPBuildsHelper
+		m                   buildmanager.Manager
 	)
 	const (
 		moduleName = "module-name"
@@ -262,14 +262,14 @@ var _ = Describe("GarbageCollect", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mockOpenShiftBuildsHelper = build.NewMockOpenShiftBuildsHelper(ctrl)
-		m = NewManager(clnt, nil, mockOpenShiftBuildsHelper, nil, nil)
+		mockOCPBuildsHelper = ocpbuild.NewMockOCPBuildsHelper(ctrl)
+		m = NewManager(clnt, nil, mockOCPBuildsHelper, nil, nil)
 	})
 
 	ctx := context.Background()
 
 	It("GetModuleBuilds failed", func() {
-		mockOpenShiftBuildsHelper.EXPECT().GetModuleBuilds(ctx, moduleName, namespace).Return(nil, fmt.Errorf("some error"))
+		mockOCPBuildsHelper.EXPECT().GetModuleOCPBuilds(ctx, moduleName, namespace).Return(nil, fmt.Errorf("some error"))
 
 		deleted, err := m.GarbageCollect(ctx, moduleName, namespace, nil)
 
@@ -284,8 +284,8 @@ var _ = Describe("GarbageCollect", func() {
 			},
 		}
 		gomock.InOrder(
-			mockOpenShiftBuildsHelper.EXPECT().GetModuleBuilds(ctx, moduleName, namespace).Return([]buildv1.Build{ocpBuild}, nil),
-			mockOpenShiftBuildsHelper.EXPECT().DeleteBuild(ctx, &ocpBuild).Return(fmt.Errorf("some error")),
+			mockOCPBuildsHelper.EXPECT().GetModuleOCPBuilds(ctx, moduleName, namespace).Return([]buildv1.Build{ocpBuild}, nil),
+			mockOCPBuildsHelper.EXPECT().DeleteOCPBuild(ctx, &ocpBuild).Return(fmt.Errorf("some error")),
 		)
 		deleted, err := m.GarbageCollect(ctx, moduleName, namespace, nil)
 
@@ -305,12 +305,12 @@ var _ = Describe("GarbageCollect", func() {
 					Phase: buildPhase2,
 				},
 			}
-			mockOpenShiftBuildsHelper.EXPECT().GetModuleBuilds(ctx, moduleName, namespace).Return([]buildv1.Build{ocpBuild1, ocpBuild2}, nil)
+			mockOCPBuildsHelper.EXPECT().GetModuleOCPBuilds(ctx, moduleName, namespace).Return([]buildv1.Build{ocpBuild1, ocpBuild2}, nil)
 			if buildPhase1 == buildv1.BuildPhaseComplete {
-				mockOpenShiftBuildsHelper.EXPECT().DeleteBuild(ctx, &ocpBuild1).Return(nil)
+				mockOCPBuildsHelper.EXPECT().DeleteOCPBuild(ctx, &ocpBuild1).Return(nil)
 			}
 			if buildPhase2 == buildv1.BuildPhaseComplete {
-				mockOpenShiftBuildsHelper.EXPECT().DeleteBuild(ctx, &ocpBuild2).Return(nil)
+				mockOCPBuildsHelper.EXPECT().DeleteOCPBuild(ctx, &ocpBuild2).Return(nil)
 			}
 
 			deleted, err := m.GarbageCollect(ctx, moduleName, namespace, nil)

@@ -1,4 +1,4 @@
-package build
+package ocpbuild
 
 import (
 	. "github.com/onsi/ginkgo/v2"
@@ -22,7 +22,7 @@ var _ = Describe("IsBuildChanged", func() {
 
 	DescribeTable("should work as expected",
 		func(b0, b1 *buildv1.Build, exp, errorExpected bool) {
-			res, err := IsBuildChanged(b0, b1)
+			res, err := IsOCPBuildChanged(b0, b1)
 
 			if errorExpected {
 				Expect(err).To(HaveOccurred())

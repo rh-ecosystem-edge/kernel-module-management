@@ -7,7 +7,7 @@ import (
 
 	buildv1 "github.com/openshift/api/build/v1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
-	buildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
+	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -22,7 +22,7 @@ import (
 type manager struct {
 	client          client.Client
 	maker           Maker
-	ocpBuildsHelper buildutils.OpenShiftBuildsHelper
+	ocpBuildsHelper ocpbuildutils.OCPBuildsHelper
 	authFactory     auth.RegistryAuthGetterFactory
 	registry        registry.Registry
 }
@@ -30,7 +30,7 @@ type manager struct {
 func NewManager(
 	client client.Client,
 	maker Maker,
-	ocpBuildsHelper buildutils.OpenShiftBuildsHelper,
+	ocpBuildsHelper ocpbuildutils.OCPBuildsHelper,
 	authFactory auth.RegistryAuthGetterFactory,
 	registry registry.Registry) sign.SignManager {
 	return &manager{
@@ -68,7 +68,7 @@ func (m *manager) Sync(
 	imageToSign string,
 	pushImage bool,
 	owner metav1.Object,
-) (buildutils.Status, error) {
+) (ocpbuildutils.Status, error) {
 
 	logger := log.FromContext(ctx)
 
@@ -77,9 +77,9 @@ func (m *manager) Sync(
 		return "", fmt.Errorf("could not make Build template: %v", err)
 	}
 
-	build, err := m.ocpBuildsHelper.GetModuleBuildByKernel(ctx, mld)
+	build, err := m.ocpBuildsHelper.GetModuleOCPBuildByKernel(ctx, mld)
 	if err != nil {
-		if !errors.Is(err, buildutils.ErrNoMatchingBuild) {
+		if !errors.Is(err, ocpbuildutils.ErrNoMatchingBuild) {
 			return "", fmt.Errorf("error getting the build: %v", err)
 		}
 
@@ -89,10 +89,10 @@ func (m *manager) Sync(
 			return "", fmt.Errorf("could not create Build: %v", err)
 		}
 
-		return buildutils.StatusCreated, nil
+		return ocpbuildutils.StatusCreated, nil
 	}
 
-	changed, err := buildutils.IsBuildChanged(build, buildTemplate)
+	changed, err := ocpbuildutils.IsOCPBuildChanged(build, buildTemplate)
 	if err != nil {
 		return "", fmt.Errorf("could not determine if Build has changed: %v", err)
 	}
@@ -106,16 +106,16 @@ func (m *manager) Sync(
 		if err != nil {
 			logger.Info(utils.WarnString(fmt.Sprintf("failed to delete Build %s: %v", build.Name, err)))
 		}
-		return buildutils.StatusInProgress, nil
+		return ocpbuildutils.StatusInProgress, nil
 	}
 
 	switch build.Status.Phase {
 	case buildv1.BuildPhaseComplete:
-		return buildutils.StatusCompleted, nil
+		return ocpbuildutils.StatusCompleted, nil
 	case buildv1.BuildPhaseNew, buildv1.BuildPhasePending, buildv1.BuildPhaseRunning:
-		return buildutils.StatusInProgress, nil
+		return ocpbuildutils.StatusInProgress, nil
 	case buildv1.BuildPhaseFailed:
-		return buildutils.StatusFailed, fmt.Errorf("build failed: %v", build.Status.LogSnippet)
+		return ocpbuildutils.StatusFailed, fmt.Errorf("build failed: %v", build.Status.LogSnippet)
 	default:
 		return "", fmt.Errorf("unknown status: %v", build.Status)
 	}
