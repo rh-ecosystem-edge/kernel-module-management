@@ -45,7 +45,7 @@ func NewManager(
 func (m *manager) GarbageCollect(ctx context.Context, modName, namespace string, owner metav1.Object) ([]string, error) {
 	moduleBuilds, err := m.ocpBuildsHelper.GetModuleOCPBuilds(ctx, modName, namespace)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get OCP buils for module %s: %v", modName, err)
+		return nil, fmt.Errorf("failed to get OCP builds for module's builds %s: %v", modName, err)
 	}
 
 	deleteNames := make([]string, 0, len(moduleBuilds))
