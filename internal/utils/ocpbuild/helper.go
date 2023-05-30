@@ -16,8 +16,8 @@ var ErrNoMatchingBuild = errors.New("no matching Build")
 //go:generate mockgen -source=helper.go -package=ocpbuild -destination=mock_helper.go
 
 type OCPBuildsHelper interface {
-	GetModuleOCPBuildByKernel(ctx context.Context, mld *api.ModuleLoaderData) (*buildv1.Build, error)
-	GetModuleOCPBuilds(ctx context.Context, moduleName, moduleNamespace string) ([]buildv1.Build, error)
+	GetModuleOCPBuildByKernel(ctx context.Context, mld *api.ModuleLoaderData, owner metav1.Object) (*buildv1.Build, error)
+	GetModuleOCPBuilds(ctx context.Context, moduleName, moduleNamespace string, owner metav1.Object) ([]buildv1.Build, error)
 	DeleteOCPBuild(ctx context.Context, build *buildv1.Build) error
 }
 
@@ -33,7 +33,7 @@ func NewOCPBuildsHelper(client client.Client, buildType string) OCPBuildsHelper 
 	}
 }
 
-func (o *ocpBuildsHelper) GetModuleOCPBuildByKernel(ctx context.Context, mld *api.ModuleLoaderData) (*buildv1.Build, error) {
+func (o *ocpBuildsHelper) GetModuleOCPBuildByKernel(ctx context.Context, mld *api.ModuleLoaderData, owner metav1.Object) (*buildv1.Build, error) {
 	buildList := buildv1.BuildList{}
 
 	opts := []client.ListOption{
@@ -45,16 +45,20 @@ func (o *ocpBuildsHelper) GetModuleOCPBuildByKernel(ctx context.Context, mld *ap
 		return nil, fmt.Errorf("could not list Build: %v", err)
 	}
 
-	if n := len(buildList.Items); n == 0 {
+	// filter OCP builds by owner, since they could have been created by the preflight
+	// when checking that specific module
+	moduleOwnedOCPBuilds := filterOCPBuildsByOwner(buildList.Items, owner)
+
+	if n := len(moduleOwnedOCPBuilds); n == 0 {
 		return nil, ErrNoMatchingBuild
 	} else if n > 1 {
 		return nil, fmt.Errorf("expected 0 or 1 Builds, got %d", n)
 	}
 
-	return &buildList.Items[0], nil
+	return &moduleOwnedOCPBuilds[0], nil
 }
 
-func (o *ocpBuildsHelper) GetModuleOCPBuilds(ctx context.Context, moduleName, moduleNamespace string) ([]buildv1.Build, error) {
+func (o *ocpBuildsHelper) GetModuleOCPBuilds(ctx context.Context, moduleName, moduleNamespace string, owner metav1.Object) ([]buildv1.Build, error) {
 	buildList := buildv1.BuildList{}
 
 	opts := []client.ListOption{
@@ -66,7 +70,11 @@ func (o *ocpBuildsHelper) GetModuleOCPBuilds(ctx context.Context, moduleName, mo
 		return nil, fmt.Errorf("could not list Build: %v", err)
 	}
 
-	return buildList.Items, nil
+	// filter OCP builds by owner, since they could have been created by the preflight
+	// when checking that specific module
+	moduleOwnedBuilds := filterOCPBuildsByOwner(buildList.Items, owner)
+
+	return moduleOwnedBuilds, nil
 }
 
 func (o *ocpBuildsHelper) DeleteOCPBuild(ctx context.Context, build *buildv1.Build) error {
@@ -74,4 +82,14 @@ func (o *ocpBuildsHelper) DeleteOCPBuild(ctx context.Context, build *buildv1.Bui
 		client.PropagationPolicy(metav1.DeletePropagationBackground),
 	}
 	return o.client.Delete(ctx, build, opts...)
+}
+
+func filterOCPBuildsByOwner(builds []buildv1.Build, owner metav1.Object) []buildv1.Build {
+	ownedBuilds := []buildv1.Build{}
+	for _, build := range builds {
+		if metav1.IsControlledBy(&build, owner) {
+			ownedBuilds = append(ownedBuilds, build)
+		}
+	}
+	return ownedBuilds
 }
