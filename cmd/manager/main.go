@@ -22,6 +22,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/config"
 	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -102,21 +103,22 @@ func main() {
 
 	setupLogger.Info("Creating manager", "git commit", commit)
 
-	options := ctrl.Options{Scheme: scheme}
-
-	options, err = options.AndFrom(ctrl.ConfigFile().AtPath(configFile))
+	cfg, err := config.ParseFile(configFile)
 	if err != nil {
-		cmd.FatalError(setupLogger, err, "unable to load the config file")
+		cmd.FatalError(setupLogger, err, "could not parse the configuration file", "path", configFile)
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), options)
+	options := cfg.ManagerOptions()
+	options.Scheme = scheme
+
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), *options)
 	if err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create manager")
 	}
 
 	client := mgr.GetClient()
 
-	filterAPI := filter.New(client, mgr.GetLogger())
+	filterAPI := filter.New(client)
 	kernelOsDtkMapping := syncronizedmap.NewKernelOsDtkMapping()
 
 	metricsAPI := metrics.New()

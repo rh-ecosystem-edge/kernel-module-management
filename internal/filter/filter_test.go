@@ -3,10 +3,10 @@ package filter
 import (
 	"context"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/go-logr/logr"
 	"github.com/golang/mock/gomock"
 	imagev1 "github.com/openshift/api/image/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -26,8 +26,8 @@ import (
 )
 
 var (
-	ctrl *gomock.Controller
-	clnt *mockClient.MockClient
+	mockCtrl *gomock.Controller
+	clnt     *mockClient.MockClient
 )
 
 var _ = Describe("HasLabel", func() {
@@ -115,7 +115,7 @@ var _ = Describe("ModuleReconcilerNodePredicate", func() {
 	var p predicate.Predicate
 
 	BeforeEach(func() {
-		p = New(nil, logr.Discard()).ModuleReconcilerNodePredicate(kernelLabel)
+		p = New(nil).ModuleReconcilerNodePredicate(kernelLabel)
 	})
 
 	It("should return true for creations", func() {
@@ -197,8 +197,8 @@ var _ = Describe("NodeKernelReconcilerPredicate", func() {
 	var p predicate.Predicate
 
 	BeforeEach(func() {
-		ctrl = gomock.NewController(GinkgoT())
-		p = New(nil, logr.Discard()).NodeKernelReconcilerPredicate(labelName)
+		mockCtrl = gomock.NewController(GinkgoT())
+		p = New(nil).NodeKernelReconcilerPredicate(labelName)
 	})
 
 	It("should return true on CREATE events", func() {
@@ -350,16 +350,18 @@ var _ = Describe("NodeUpdateKernelChangedPredicate", func() {
 
 var _ = Describe("FindModulesForNode", func() {
 	BeforeEach(func() {
-		ctrl = gomock.NewController(GinkgoT())
-		clnt = mockClient.NewMockClient(ctrl)
+		mockCtrl = gomock.NewController(GinkgoT())
+		clnt = mockClient.NewMockClient(mockCtrl)
 	})
+
+	ctx := context.Background()
 
 	It("should return nothing if there are no modules", func() {
 		clnt.EXPECT().List(context.Background(), gomock.Any(), gomock.Any())
 
-		p := New(clnt, logr.Discard())
+		p := New(clnt)
 		Expect(
-			p.FindModulesForNode(&v1.Node{}),
+			p.FindModulesForNode(ctx, &v1.Node{}),
 		).To(
 			BeEmpty(),
 		)
@@ -379,10 +381,10 @@ var _ = Describe("FindModulesForNode", func() {
 			},
 		)
 
-		p := New(clnt, logr.Discard())
+		p := New(clnt)
 
 		Expect(
-			p.FindModulesForNode(&v1.Node{}),
+			p.FindModulesForNode(ctx, &v1.Node{}),
 		).To(
 			BeEmpty(),
 		)
@@ -415,29 +417,31 @@ var _ = Describe("FindModulesForNode", func() {
 			},
 		)
 
-		p := New(clnt, logr.Discard())
+		p := New(clnt)
 
 		expectedReq := reconcile.Request{
 			NamespacedName: types.NamespacedName{Name: mod1Name},
 		}
 
-		reqs := p.FindModulesForNode(&node)
+		reqs := p.FindModulesForNode(ctx, &node)
 		Expect(reqs).To(Equal([]reconcile.Request{expectedReq}))
 	})
 })
 
 var _ = Describe("FindManagedClusterModulesForCluster", func() {
 	BeforeEach(func() {
-		ctrl = gomock.NewController(GinkgoT())
-		clnt = mockClient.NewMockClient(ctrl)
+		mockCtrl = gomock.NewController(GinkgoT())
+		clnt = mockClient.NewMockClient(mockCtrl)
 	})
+
+	ctx := context.Background()
 
 	It("should return nothing if there are no ManagedClusterModules", func() {
 		clnt.EXPECT().List(context.Background(), gomock.Any(), gomock.Any())
 
-		p := New(clnt, logr.Discard())
+		p := New(clnt)
 		Expect(
-			p.FindManagedClusterModulesForCluster(&clusterv1.ManagedCluster{}),
+			p.FindManagedClusterModulesForCluster(ctx, &clusterv1.ManagedCluster{}),
 		).To(
 			BeEmpty(),
 		)
@@ -457,10 +461,10 @@ var _ = Describe("FindManagedClusterModulesForCluster", func() {
 			},
 		)
 
-		p := New(clnt, logr.Discard())
+		p := New(clnt)
 
 		Expect(
-			p.FindManagedClusterModulesForCluster(&clusterv1.ManagedCluster{}),
+			p.FindManagedClusterModulesForCluster(ctx, &clusterv1.ManagedCluster{}),
 		).To(
 			BeEmpty(),
 		)
@@ -496,13 +500,13 @@ var _ = Describe("FindManagedClusterModulesForCluster", func() {
 			},
 		)
 
-		p := New(clnt, logr.Discard())
+		p := New(clnt)
 
 		expectedReq := reconcile.Request{
 			NamespacedName: types.NamespacedName{Name: matchingMod.Name},
 		}
 
-		reqs := p.FindManagedClusterModulesForCluster(&cluster)
+		reqs := p.FindManagedClusterModulesForCluster(ctx, &cluster)
 		Expect(reqs).To(Equal([]reconcile.Request{expectedReq}))
 	})
 })
@@ -511,7 +515,7 @@ var _ = Describe("ManagedClusterModuleReconcilerManagedClusterPredicate", func()
 	var p predicate.Predicate
 
 	BeforeEach(func() {
-		p = New(nil, logr.Discard()).ManagedClusterModuleReconcilerManagedClusterPredicate()
+		p = New(nil).ManagedClusterModuleReconcilerManagedClusterPredicate()
 	})
 
 	It("should return true for creations", func() {
@@ -688,16 +692,18 @@ var _ = Describe("PodReadinessChangedPredicate", func() {
 var _ = Describe("FindPreflightsForModule", func() {
 
 	BeforeEach(func() {
-		ctrl = gomock.NewController(GinkgoT())
-		clnt = mockClient.NewMockClient(ctrl)
+		mockCtrl = gomock.NewController(GinkgoT())
+		clnt = mockClient.NewMockClient(mockCtrl)
 	})
+
+	ctx := context.Background()
 
 	It("no preflight exists", func() {
 		clnt.EXPECT().List(context.Background(), gomock.Any(), gomock.Any())
 
-		p := New(clnt, logr.Discard())
+		p := New(clnt)
 
-		res := p.EnqueueAllPreflightValidations(&kmmv1beta1.Module{})
+		res := p.EnqueueAllPreflightValidations(ctx, &kmmv1beta1.Module{})
 		Expect(res).To(BeEmpty())
 	})
 
@@ -722,8 +728,8 @@ var _ = Describe("FindPreflightsForModule", func() {
 			},
 		}
 
-		p := New(clnt, logr.Discard())
-		res := p.EnqueueAllPreflightValidations(&kmmv1beta1.Module{})
+		p := New(clnt)
+		res := p.EnqueueAllPreflightValidations(ctx, &kmmv1beta1.Module{})
 		Expect(res).To(Equal(expectedRes))
 	})
 
@@ -731,7 +737,7 @@ var _ = Describe("FindPreflightsForModule", func() {
 
 var _ = Describe("ImageStreamReconcilerPredicate", func() {
 
-	var p predicate.Predicate = New(nil, logr.Discard()).ImageStreamReconcilerPredicate()
+	var p predicate.Predicate = New(nil).ImageStreamReconcilerPredicate()
 
 	It("should return true on CREATE events", func() {
 		ev := event.CreateEvent{

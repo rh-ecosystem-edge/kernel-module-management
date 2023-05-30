@@ -36,7 +36,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
@@ -500,7 +499,7 @@ func (r *ModuleReconciler) SetupWithManager(mgr ctrl.Manager, kernelLabel string
 		Owns(&buildv1.Build{}).
 		Owns(&batchv1.Job{}).
 		Watches(
-			&source.Kind{Type: &v1.Node{}},
+			&v1.Node{},
 			handler.EnqueueRequestsFromMapFunc(r.filter.FindModulesForNode),
 			builder.WithPredicates(
 				r.filter.ModuleReconcilerNodePredicate(kernelLabel),

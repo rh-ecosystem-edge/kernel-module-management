@@ -17,7 +17,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
@@ -101,10 +100,8 @@ func (r *NodeKernelClusterClaimReconciler) SetupWithManager(mgr ctrl.Manager) er
 		// Each time our ClusterClaim is updated, enqueue an empty reconciliation request.
 		// We list all nodes during reconciliation, so sending an empty request is OK.
 		Watches(
-			&source.Kind{
-				Type: &v1alpha1.ClusterClaim{},
-			},
-			handler.EnqueueRequestsFromMapFunc(func(_ client.Object) []reconcile.Request {
+			&v1alpha1.ClusterClaim{},
+			handler.EnqueueRequestsFromMapFunc(func(_ context.Context, _ client.Object) []reconcile.Request {
 				return []reconcile.Request{{}}
 			}),
 			builder.WithPredicates(
