@@ -11,6 +11,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	v1 "github.com/openshift/api/build/v1"
 	api "github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
+	v10 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // MockOCPBuildsHelper is a mock of OCPBuildsHelper interface.
@@ -51,31 +52,31 @@ func (mr *MockOCPBuildsHelperMockRecorder) DeleteOCPBuild(ctx, build interface{}
 }
 
 // GetModuleOCPBuildByKernel mocks base method.
-func (m *MockOCPBuildsHelper) GetModuleOCPBuildByKernel(ctx context.Context, mld *api.ModuleLoaderData) (*v1.Build, error) {
+func (m *MockOCPBuildsHelper) GetModuleOCPBuildByKernel(ctx context.Context, mld *api.ModuleLoaderData, owner v10.Object) (*v1.Build, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetModuleOCPBuildByKernel", ctx, mld)
+	ret := m.ctrl.Call(m, "GetModuleOCPBuildByKernel", ctx, mld, owner)
 	ret0, _ := ret[0].(*v1.Build)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetModuleOCPBuildByKernel indicates an expected call of GetModuleOCPBuildByKernel.
-func (mr *MockOCPBuildsHelperMockRecorder) GetModuleOCPBuildByKernel(ctx, mld interface{}) *gomock.Call {
+func (mr *MockOCPBuildsHelperMockRecorder) GetModuleOCPBuildByKernel(ctx, mld, owner interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetModuleOCPBuildByKernel", reflect.TypeOf((*MockOCPBuildsHelper)(nil).GetModuleOCPBuildByKernel), ctx, mld)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetModuleOCPBuildByKernel", reflect.TypeOf((*MockOCPBuildsHelper)(nil).GetModuleOCPBuildByKernel), ctx, mld, owner)
 }
 
 // GetModuleOCPBuilds mocks base method.
-func (m *MockOCPBuildsHelper) GetModuleOCPBuilds(ctx context.Context, moduleName, moduleNamespace string) ([]v1.Build, error) {
+func (m *MockOCPBuildsHelper) GetModuleOCPBuilds(ctx context.Context, moduleName, moduleNamespace string, owner v10.Object) ([]v1.Build, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetModuleOCPBuilds", ctx, moduleName, moduleNamespace)
+	ret := m.ctrl.Call(m, "GetModuleOCPBuilds", ctx, moduleName, moduleNamespace, owner)
 	ret0, _ := ret[0].([]v1.Build)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetModuleOCPBuilds indicates an expected call of GetModuleOCPBuilds.
-func (mr *MockOCPBuildsHelperMockRecorder) GetModuleOCPBuilds(ctx, moduleName, moduleNamespace interface{}) *gomock.Call {
+func (mr *MockOCPBuildsHelperMockRecorder) GetModuleOCPBuilds(ctx, moduleName, moduleNamespace, owner interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetModuleOCPBuilds", reflect.TypeOf((*MockOCPBuildsHelper)(nil).GetModuleOCPBuilds), ctx, moduleName, moduleNamespace)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetModuleOCPBuilds", reflect.TypeOf((*MockOCPBuildsHelper)(nil).GetModuleOCPBuilds), ctx, moduleName, moduleNamespace, owner)
 }

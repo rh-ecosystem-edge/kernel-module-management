@@ -43,7 +43,7 @@ func NewManager(
 }
 
 func (m *manager) GarbageCollect(ctx context.Context, modName, namespace string, owner metav1.Object) ([]string, error) {
-	moduleSigns, err := m.ocpBuildsHelper.GetModuleOCPBuilds(ctx, modName, namespace)
+	moduleSigns, err := m.ocpBuildsHelper.GetModuleOCPBuilds(ctx, modName, namespace, owner)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get OCP builds for module's signs %s: %v", modName, err)
 	}
@@ -90,7 +90,7 @@ func (m *manager) Sync(
 		return "", fmt.Errorf("could not make Build template: %v", err)
 	}
 
-	build, err := m.ocpBuildsHelper.GetModuleOCPBuildByKernel(ctx, mld)
+	build, err := m.ocpBuildsHelper.GetModuleOCPBuildByKernel(ctx, mld, owner)
 	if err != nil {
 		if !errors.Is(err, ocpbuildutils.ErrNoMatchingBuild) {
 			return "", fmt.Errorf("error getting the build: %v", err)

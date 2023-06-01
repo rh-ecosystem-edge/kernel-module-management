@@ -184,7 +184,7 @@ var _ = Describe("Sync", func() {
 
 		gomock.InOrder(
 			mockMaker.EXPECT().MakeBuildTemplate(ctx, &mld, true, mld.Owner).Return(&b, nil),
-			mockOCPBuildsHelper.EXPECT().GetModuleOCPBuildByKernel(ctx, &mld).Return(nil, ocpbuild.ErrNoMatchingBuild),
+			mockOCPBuildsHelper.EXPECT().GetModuleOCPBuildByKernel(ctx, &mld, nil).Return(nil, ocpbuild.ErrNoMatchingBuild),
 			mockKubeClient.EXPECT().Create(ctx, &b),
 		)
 
@@ -226,7 +226,7 @@ var _ = Describe("Sync", func() {
 
 			gomock.InOrder(
 				mockMaker.EXPECT().MakeBuildTemplate(ctx, &mld, true, mld.Owner).Return(&build, nil),
-				mockOCPBuildsHelper.EXPECT().GetModuleOCPBuildByKernel(ctx, &mld).Return(&build, nil),
+				mockOCPBuildsHelper.EXPECT().GetModuleOCPBuildByKernel(ctx, &mld, mld.Owner).Return(&build, nil),
 			)
 
 			status, err := m.Sync(ctx, &mld, true, mld.Owner)
@@ -269,7 +269,7 @@ var _ = Describe("GarbageCollect", func() {
 	ctx := context.Background()
 
 	It("GetModuleBuilds failed", func() {
-		mockOCPBuildsHelper.EXPECT().GetModuleOCPBuilds(ctx, moduleName, namespace).Return(nil, fmt.Errorf("some error"))
+		mockOCPBuildsHelper.EXPECT().GetModuleOCPBuilds(ctx, moduleName, namespace, nil).Return(nil, fmt.Errorf("some error"))
 
 		deleted, err := m.GarbageCollect(ctx, moduleName, namespace, nil)
 
@@ -284,7 +284,7 @@ var _ = Describe("GarbageCollect", func() {
 			},
 		}
 		gomock.InOrder(
-			mockOCPBuildsHelper.EXPECT().GetModuleOCPBuilds(ctx, moduleName, namespace).Return([]buildv1.Build{ocpBuild}, nil),
+			mockOCPBuildsHelper.EXPECT().GetModuleOCPBuilds(ctx, moduleName, namespace, nil).Return([]buildv1.Build{ocpBuild}, nil),
 			mockOCPBuildsHelper.EXPECT().DeleteOCPBuild(ctx, &ocpBuild).Return(fmt.Errorf("some error")),
 		)
 		deleted, err := m.GarbageCollect(ctx, moduleName, namespace, nil)
@@ -305,7 +305,7 @@ var _ = Describe("GarbageCollect", func() {
 					Phase: buildPhase2,
 				},
 			}
-			mockOCPBuildsHelper.EXPECT().GetModuleOCPBuilds(ctx, moduleName, namespace).Return([]buildv1.Build{ocpBuild1, ocpBuild2}, nil)
+			mockOCPBuildsHelper.EXPECT().GetModuleOCPBuilds(ctx, moduleName, namespace, nil).Return([]buildv1.Build{ocpBuild1, ocpBuild2}, nil)
 			if buildPhase1 == buildv1.BuildPhaseComplete {
 				mockOCPBuildsHelper.EXPECT().DeleteOCPBuild(ctx, &ocpBuild1).Return(nil)
 			}
