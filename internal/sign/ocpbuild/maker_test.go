@@ -9,7 +9,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	buildv1 "github.com/openshift/api/build/v1"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -97,8 +97,8 @@ COPY --from=signimage /signroot/modules/simple-kmod.ko:/modules/simple-procfs-km
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace:    namespace,
 				GenerateName: moduleName + "-sign-",
-				Labels:       build.GetBuildLabels(&mld, BuildType),
-				Annotations:  map[string]string{build.HashAnnotation: "1404066013727235306"},
+				Labels:       ocpbuild.GetOCPBuildLabels(&mld, BuildType),
+				Annotations:  map[string]string{ocpbuild.HashAnnotation: "1404066013727235306"},
 				OwnerReferences: []metav1.OwnerReference{
 					{
 						APIVersion:         "kmm.sigs.x-k8s.io/v1beta1",

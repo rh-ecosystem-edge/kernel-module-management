@@ -13,7 +13,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
-	buildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
+	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	ctrlruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -163,7 +163,7 @@ func (p *preflightHelper) verifyBuild(ctx context.Context, pv *kmmv1beta1.Prefli
 		return false, fmt.Sprintf("Failed to verify build for module %s, kernel version %s, error %s", mld.Name, pv.Spec.KernelVersion, err)
 	}
 
-	if buildStatus == buildutils.StatusCompleted {
+	if buildStatus == ocpbuildutils.StatusCompleted {
 		msg := "build compiles"
 		if pv.Spec.PushBuiltImage {
 			msg += " and image pushed"
@@ -188,7 +188,7 @@ func (p *preflightHelper) verifySign(ctx context.Context, pv *kmmv1beta1.Preflig
 		return false, fmt.Sprintf("Failed to verify signing for module %s, kernel version %s, error %s", mld.Name, pv.Spec.KernelVersion, err)
 	}
 
-	if signStatus == buildutils.StatusCompleted {
+	if signStatus == ocpbuildutils.StatusCompleted {
 		msg := "sign completes"
 		if pv.Spec.PushBuiltImage {
 			msg += " and image pushed"

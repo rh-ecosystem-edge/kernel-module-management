@@ -3,7 +3,7 @@ package build
 import (
 	"context"
 
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
@@ -20,5 +20,5 @@ type Manager interface {
 		ctx context.Context,
 		mld *api.ModuleLoaderData,
 		pushImage bool,
-		owner metav1.Object) (build.Status, error)
+		owner metav1.Object) (ocpbuild.Status, error)
 }

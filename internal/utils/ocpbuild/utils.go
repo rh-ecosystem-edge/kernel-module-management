@@ -1,4 +1,4 @@
-package build
+package ocpbuild
 
 import (
 	"fmt"
@@ -10,23 +10,30 @@ import (
 
 const (
 	HashAnnotation = "kmm.node.kubernetes.io/last-hash"
-
-	buildTypeLabel = "kmm.openshift.io/build.type"
 )
 
-func GetBuildAnnotations(hash uint64) map[string]string {
+func GetOCPBuildAnnotations(hash uint64) map[string]string {
 	return map[string]string{HashAnnotation: fmt.Sprintf("%d", hash)}
 }
 
-func GetBuildLabels(mld *api.ModuleLoaderData, buildType string) map[string]string {
+func GetOCPBuildLabels(mld *api.ModuleLoaderData, buildType string) map[string]string {
+	return moduleKernelLabels(mld.Name, mld.KernelVersion, buildType)
+}
+
+func moduleKernelLabels(moduleName, kernelVersion, buildType string) map[string]string {
+	labels := moduleLabels(moduleName, buildType)
+	labels[constants.TargetKernelTarget] = kernelVersion
+	return labels
+}
+
+func moduleLabels(moduleName, buildType string) map[string]string {
 	return map[string]string{
-		constants.ModuleNameLabel:    mld.Name,
-		constants.TargetKernelTarget: mld.KernelVersion,
-		buildTypeLabel:               buildType,
+		constants.ModuleNameLabel: moduleName,
+		constants.BuildTypeLabel:  buildType,
 	}
 }
 
-func IsBuildChanged(existingBuild *buildv1.Build, newBuild *buildv1.Build) (bool, error) {
+func IsOCPBuildChanged(existingBuild *buildv1.Build, newBuild *buildv1.Build) (bool, error) {
 	existingAnnotations := existingBuild.GetAnnotations()
 	newAnnotations := newBuild.GetAnnotations()
 	if existingAnnotations == nil {

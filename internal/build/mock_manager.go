@@ -10,7 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	api "github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
-	build "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
+	ocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -68,10 +68,10 @@ func (mr *MockManagerMockRecorder) ShouldSync(ctx, mld interface{}) *gomock.Call
 }
 
 // Sync mocks base method.
-func (m *MockManager) Sync(ctx context.Context, mld *api.ModuleLoaderData, pushImage bool, owner v1.Object) (build.Status, error) {
+func (m *MockManager) Sync(ctx context.Context, mld *api.ModuleLoaderData, pushImage bool, owner v1.Object) (ocpbuild.Status, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Sync", ctx, mld, pushImage, owner)
-	ret0, _ := ret[0].(build.Status)
+	ret0, _ := ret[0].(ocpbuild.Status)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

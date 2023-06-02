@@ -18,7 +18,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
-	buildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
+	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -339,7 +339,7 @@ var _ = Describe("preflightHelper_verifyBuild", func() {
 		}
 
 		mockBuildAPI.EXPECT().Sync(context.Background(), &mld, pv.Spec.PushBuiltImage, pv).
-			Return(buildutils.Status(""), fmt.Errorf("some error"))
+			Return(ocpbuildutils.Status(""), fmt.Errorf("some error"))
 
 		res, msg := ph.verifyBuild(context.Background(), pv, &mld)
 		Expect(res).To(BeFalse())
@@ -355,7 +355,7 @@ var _ = Describe("preflightHelper_verifyBuild", func() {
 		}
 
 		mockBuildAPI.EXPECT().Sync(context.Background(), &mld, pv.Spec.PushBuiltImage, pv).
-			Return(buildutils.Status(buildutils.StatusCompleted), nil)
+			Return(ocpbuildutils.Status(ocpbuildutils.StatusCompleted), nil)
 
 		res, msg := ph.verifyBuild(context.Background(), pv, &mld)
 		Expect(res).To(BeTrue())
@@ -371,7 +371,7 @@ var _ = Describe("preflightHelper_verifyBuild", func() {
 		}
 
 		mockBuildAPI.EXPECT().Sync(context.Background(), &mld, pv.Spec.PushBuiltImage, pv).
-			Return(buildutils.Status(buildutils.StatusInProgress), nil)
+			Return(ocpbuildutils.Status(ocpbuildutils.StatusInProgress), nil)
 
 		res, msg := ph.verifyBuild(context.Background(), pv, &mld)
 		Expect(res).To(BeFalse())
@@ -413,7 +413,7 @@ var _ = Describe("preflightHelper_verifySign", func() {
 		previousImage := ""
 
 		mockSignAPI.EXPECT().Sync(context.Background(), &mld, previousImage, pv.Spec.PushBuiltImage, pv).
-			Return(buildutils.Status(""), fmt.Errorf("some error"))
+			Return(ocpbuildutils.Status(""), fmt.Errorf("some error"))
 
 		res, msg := ph.verifySign(context.Background(), pv, &mld)
 		Expect(res).To(BeFalse())
@@ -431,7 +431,7 @@ var _ = Describe("preflightHelper_verifySign", func() {
 		previousImage := ""
 
 		mockSignAPI.EXPECT().Sync(context.Background(), &mld, previousImage, pv.Spec.PushBuiltImage, pv).
-			Return(buildutils.Status(buildutils.StatusCompleted), nil)
+			Return(ocpbuildutils.Status(ocpbuildutils.StatusCompleted), nil)
 
 		res, msg := ph.verifySign(context.Background(), pv, &mld)
 		Expect(res).To(BeTrue())
@@ -449,7 +449,7 @@ var _ = Describe("preflightHelper_verifySign", func() {
 		previousImage := ""
 
 		mockSignAPI.EXPECT().Sync(context.Background(), &mld, previousImage, pv.Spec.PushBuiltImage, pv).
-			Return(buildutils.Status(buildutils.StatusInProgress), nil)
+			Return(ocpbuildutils.Status(ocpbuildutils.StatusInProgress), nil)
 
 		res, msg := ph.verifySign(context.Background(), pv, &mld)
 		Expect(res).To(BeFalse())

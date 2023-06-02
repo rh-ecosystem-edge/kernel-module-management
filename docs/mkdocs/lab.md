@@ -46,12 +46,10 @@ data:
     WORKDIR /build/kernel-module-management/ci/kmm-kmod
     RUN make
 
-    FROM registry.redhat.io/ubi8/ubi-minimal
+    FROM registry.redhat.io/ubi9/ubi-minimal
     ARG KERNEL_VERSION
-    RUN microdnf -y install kmod
-    COPY --from=builder /usr/bin/kmod /usr/bin/
-    RUN for link in /usr/bin/modprobe /usr/bin/rmmod; do \
-        ln -s /usr/bin/kmod "$link"; done
+
+    RUN ["microdnf", "-y", "install", "kmod"]
 
     COPY --from=builder /build/kernel-module-management/ci/kmm-kmod/*.ko /opt/lib/modules/${KERNEL_VERSION}/
     RUN depmod -b /opt

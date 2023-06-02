@@ -18,7 +18,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
-	buildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
+	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -403,7 +403,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 
 		gomock.InOrder(
 			mockBM.EXPECT().ShouldSync(gomock.Any(), &mld).Return(true, nil),
-			mockBM.EXPECT().Sync(gomock.Any(), &mld, true, mld.Owner).Return(buildutils.Status(buildutils.StatusCreated), nil),
+			mockBM.EXPECT().Sync(gomock.Any(), &mld, true, mld.Owner).Return(ocpbuildutils.Status(ocpbuildutils.StatusCreated), nil),
 		)
 
 		completed, err := mhr.handleBuild(context.Background(), &mld)
@@ -423,7 +423,7 @@ var _ = Describe("ModuleReconciler_handleBuild", func() {
 		}
 		gomock.InOrder(
 			mockBM.EXPECT().ShouldSync(gomock.Any(), mld).Return(true, nil),
-			mockBM.EXPECT().Sync(gomock.Any(), mld, true, mld.Owner).Return(buildutils.Status(buildutils.StatusCompleted), nil),
+			mockBM.EXPECT().Sync(gomock.Any(), mld, true, mld.Owner).Return(ocpbuildutils.Status(ocpbuildutils.StatusCompleted), nil),
 		)
 
 		completed, err := mhr.handleBuild(context.Background(), mld)
@@ -481,7 +481,7 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 
 		gomock.InOrder(
 			mockSM.EXPECT().ShouldSync(gomock.Any(), &mld).Return(true, nil),
-			mockSM.EXPECT().Sync(gomock.Any(), &mld, "", true, mld.Owner).Return(buildutils.Status(buildutils.StatusCreated), nil),
+			mockSM.EXPECT().Sync(gomock.Any(), &mld, "", true, mld.Owner).Return(ocpbuildutils.Status(ocpbuildutils.StatusCreated), nil),
 		)
 
 		completed, err := mhr.handleSigning(context.Background(), &mld)
@@ -501,7 +501,7 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 
 		gomock.InOrder(
 			mockSM.EXPECT().ShouldSync(gomock.Any(), &mld).Return(true, nil),
-			mockSM.EXPECT().Sync(gomock.Any(), &mld, "", true, mld.Owner).Return(buildutils.Status(buildutils.StatusCompleted), nil),
+			mockSM.EXPECT().Sync(gomock.Any(), &mld, "", true, mld.Owner).Return(ocpbuildutils.Status(ocpbuildutils.StatusCompleted), nil),
 		)
 
 		completed, err := mhr.handleSigning(context.Background(), &mld)
@@ -524,7 +524,7 @@ var _ = Describe("ModuleReconciler_handleSigning", func() {
 		gomock.InOrder(
 			mockSM.EXPECT().ShouldSync(gomock.Any(), mld).Return(true, nil),
 			mockSM.EXPECT().Sync(gomock.Any(), mld, imageName+":"+namespace+"_"+moduleName+"_kmm_unsigned", true, mld.Owner).
-				Return(buildutils.Status(buildutils.StatusCompleted), nil),
+				Return(ocpbuildutils.Status(ocpbuildutils.StatusCompleted), nil),
 		)
 
 		completed, err := mhr.handleSigning(context.Background(), mld)

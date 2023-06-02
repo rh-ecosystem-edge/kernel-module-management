@@ -11,7 +11,7 @@ import (
 	buildv1 "github.com/openshift/api/build/v1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
-	buildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
+	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -162,8 +162,8 @@ func (m *maker) MakeBuildTemplate(
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: mld.Name + "-sign-",
 			Namespace:    mld.Namespace,
-			Labels:       buildutils.GetBuildLabels(mld, BuildType),
-			Annotations:  buildutils.GetBuildAnnotations(hash),
+			Labels:       ocpbuildutils.GetOCPBuildLabels(mld, BuildType),
+			Annotations:  ocpbuildutils.GetOCPBuildAnnotations(hash),
 		},
 		Spec: spec,
 	}

@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM registry.access.redhat.com/ubi8/go-toolset:1.18 as builder
+FROM registry.access.redhat.com/ubi9/go-toolset:1.19 as builder
 
 # Copy the Go Modules manifests
 COPY go.mod go.mod
@@ -25,9 +25,10 @@ COPY .git .git
 ARG TARGET
 
 # Build
+RUN git config --global --add safe.directory ${PWD}
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 make ${TARGET}
 
-FROM registry.access.redhat.com/ubi8/ubi-micro:8.7
+FROM registry.access.redhat.com/ubi9/ubi-micro:9.2
 
 ARG TARGET
 

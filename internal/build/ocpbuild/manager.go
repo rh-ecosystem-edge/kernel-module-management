@@ -7,7 +7,7 @@ import (
 
 	buildv1 "github.com/openshift/api/build/v1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
-	buildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
+	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -22,7 +22,7 @@ import (
 type manager struct {
 	client          client.Client
 	maker           Maker
-	ocpBuildsHelper buildutils.OpenShiftBuildsHelper
+	ocpBuildsHelper ocpbuildutils.OCPBuildsHelper
 	authFactory     auth.RegistryAuthGetterFactory
 	registry        registry.Registry
 }
@@ -30,7 +30,7 @@ type manager struct {
 func NewManager(
 	client client.Client,
 	maker Maker,
-	ocpBuildsHelper buildutils.OpenShiftBuildsHelper,
+	ocpBuildsHelper ocpbuildutils.OCPBuildsHelper,
 	authFactory auth.RegistryAuthGetterFactory,
 	registry registry.Registry) build.Manager {
 	return &manager{
@@ -43,9 +43,22 @@ func NewManager(
 }
 
 func (m *manager) GarbageCollect(ctx context.Context, modName, namespace string, owner metav1.Object) ([]string, error) {
+	moduleBuilds, err := m.ocpBuildsHelper.GetModuleOCPBuilds(ctx, modName, namespace, owner)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get OCP builds for module's builds %s: %v", modName, err)
+	}
 
-	//Garbage Collection noti (yet) implemented for Build
-	return nil, nil
+	deleteNames := make([]string, 0, len(moduleBuilds))
+	for _, moduleBuild := range moduleBuilds {
+		if moduleBuild.Status.Phase == buildv1.BuildPhaseComplete {
+			err = m.ocpBuildsHelper.DeleteOCPBuild(ctx, &moduleBuild)
+			if err != nil {
+				return nil, fmt.Errorf("failed to delete OCP build %s: %v", moduleBuild.Name, err)
+			}
+			deleteNames = append(deleteNames, moduleBuild.Name)
+		}
+	}
+	return deleteNames, nil
 }
 
 func (m *manager) ShouldSync(ctx context.Context, mld *api.ModuleLoaderData) (bool, error) {
@@ -78,7 +91,7 @@ func (m *manager) Sync(
 	mld *api.ModuleLoaderData,
 	pushImage bool,
 	owner metav1.Object,
-) (buildutils.Status, error) {
+) (ocpbuildutils.Status, error) {
 
 	logger := log.FromContext(ctx)
 
@@ -87,9 +100,9 @@ func (m *manager) Sync(
 		return "", fmt.Errorf("could not make Build template: %v", err)
 	}
 
-	build, err := m.ocpBuildsHelper.GetBuild(ctx, mld)
+	build, err := m.ocpBuildsHelper.GetModuleOCPBuildByKernel(ctx, mld, owner)
 	if err != nil {
-		if !errors.Is(err, buildutils.ErrNoMatchingBuild) {
+		if !errors.Is(err, ocpbuildutils.ErrNoMatchingBuild) {
 			return "", fmt.Errorf("error getting the build: %v", err)
 		}
 
@@ -99,33 +112,30 @@ func (m *manager) Sync(
 			return "", fmt.Errorf("could not create Build: %v", err)
 		}
 
-		return buildutils.StatusCreated, nil
+		return ocpbuildutils.StatusCreated, nil
 	}
 
-	changed, err := buildutils.IsBuildChanged(build, buildTemplate)
+	changed, err := ocpbuildutils.IsOCPBuildChanged(build, buildTemplate)
 	if err != nil {
 		return "", fmt.Errorf("could not determine if Build has changed: %v", err)
 	}
 
 	if changed {
 		logger.Info("The module's build spec has been changed, deleting the current Build so a new one can be created", "name", build.Name)
-		opts := []client.DeleteOption{
-			client.PropagationPolicy(metav1.DeletePropagationBackground),
-		}
-		err = m.client.Delete(ctx, build, opts...)
+		err = m.ocpBuildsHelper.DeleteOCPBuild(ctx, build)
 		if err != nil {
 			logger.Info(utils.WarnString(fmt.Sprintf("failed to delete Build %s: %v", build.Name, err)))
 		}
-		return buildutils.StatusInProgress, nil
+		return ocpbuildutils.StatusInProgress, nil
 	}
 
 	switch build.Status.Phase {
 	case buildv1.BuildPhaseComplete:
-		return buildutils.StatusCompleted, nil
+		return ocpbuildutils.StatusCompleted, nil
 	case buildv1.BuildPhaseNew, buildv1.BuildPhasePending, buildv1.BuildPhaseRunning:
-		return buildutils.StatusInProgress, nil
+		return ocpbuildutils.StatusInProgress, nil
 	case buildv1.BuildPhaseFailed:
-		return buildutils.StatusFailed, fmt.Errorf("build failed: %v", build.Status.LogSnippet)
+		return ocpbuildutils.StatusFailed, fmt.Errorf("build failed: %v", build.Status.LogSnippet)
 	default:
 		return "", fmt.Errorf("unknown status: %v", build.Status)
 	}

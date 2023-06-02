@@ -19,12 +19,10 @@ package main
 import (
 	"flag"
 	"os"
+	"time"
 
 	buildv1 "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
-	buildocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build/ocpbuild"
-	signocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/sign/ocpbuild"
-	buildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -47,6 +45,8 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/controllers/hub"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
+	buildocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build/ocpbuild"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cache"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cluster"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cmd"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
@@ -56,8 +56,10 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
+	signocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/sign/ocpbuild"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
+	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -131,7 +133,7 @@ func main() {
 	buildAPI := buildocpbuild.NewManager(
 		client,
 		buildocpbuild.NewMaker(client, buildHelperAPI, scheme, kernelOsDtkMapping),
-		buildutils.NewOpenShiftBuildsHelper(client, buildocpbuild.BuildType),
+		ocpbuildutils.NewOCPBuildsHelper(client, buildocpbuild.BuildType),
 		authFactory,
 		registryAPI,
 	)
@@ -139,17 +141,23 @@ func main() {
 	signAPI := signocpbuild.NewManager(
 		client,
 		signocpbuild.NewMaker(client, cmd.GetEnvOrFatalError("RELATED_IMAGES_SIGN", setupLogger), scheme),
-		buildutils.NewOpenShiftBuildsHelper(client, signocpbuild.BuildType),
+		ocpbuildutils.NewOCPBuildsHelper(client, signocpbuild.BuildType),
 		authFactory,
 		registryAPI,
 	)
 
+	kernelAPI := module.NewKernelMapper(buildHelperAPI, sign.NewSignerHelper())
+
 	ctrlLogger := setupLogger.WithValues("name", hub.ManagedClusterModuleReconcilerName)
 	ctrlLogger.Info("Adding controller")
 
+	cache := cache.New[string](10 * time.Minute)
+	ctx := ctrl.SetupSignalHandler()
+	cache.StartCollecting(ctx, 10*time.Minute)
+
 	mcmr := hub.NewManagedClusterModuleReconciler(
 		client,
-		manifestwork.NewCreator(client, scheme),
+		manifestwork.NewCreator(client, scheme, kernelAPI, registryAPI, authFactory, cache, operatorNamespace),
 		cluster.NewClusterAPI(client, module.NewKernelMapper(buildHelperAPI, sign.NewSignerHelper()), buildAPI, signAPI, operatorNamespace),
 		statusupdater.NewManagedClusterModuleStatusUpdater(client),
 		filterAPI,
@@ -186,7 +194,9 @@ func main() {
 	}
 
 	setupLogger.Info("starting manager")
-	if err = mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err = mgr.Start(ctx); err != nil {
 		cmd.FatalError(setupLogger, err, "problem running manager")
 	}
+
+	cache.WaitForTermination()
 }

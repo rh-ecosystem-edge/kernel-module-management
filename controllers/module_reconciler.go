@@ -48,7 +48,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
-	buildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/build"
+	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 )
 
 const ModuleReconcilerName = "Module"
@@ -310,9 +310,9 @@ func (mrh *moduleReconcilerHelper) handleBuild(ctx context.Context, mld *api.Mod
 
 	completedSuccessfully := false
 	switch buildStatus {
-	case buildutils.StatusCompleted:
+	case ocpbuildutils.StatusCompleted:
 		completedSuccessfully = true
-	case buildutils.StatusFailed:
+	case ocpbuildutils.StatusFailed:
 		logger.Info(utils.WarnString("Build job has failed. If the fix is not in Module CR, then delete job after the fix in order to restart the job"))
 	}
 
@@ -345,9 +345,9 @@ func (mrh *moduleReconcilerHelper) handleSigning(ctx context.Context, mld *api.M
 
 	completedSuccessfully := false
 	switch signStatus {
-	case buildutils.StatusCompleted:
+	case ocpbuildutils.StatusCompleted:
 		completedSuccessfully = true
-	case buildutils.StatusFailed:
+	case ocpbuildutils.StatusFailed:
 		logger.Info(utils.WarnString("Sign job has failed. If the fix is not in Module CR, then delete job after the fix in order to restart the job"))
 	}
 

@@ -8,6 +8,7 @@ const (
 	TargetKernelTarget           = "kmm.node.kubernetes.io/target-kernel"
 	DaemonSetRole                = "kmm.node.kubernetes.io/role"
 	KernelLabel                  = "kmm.node.kubernetes.io/kernel-version.full"
+	BuildTypeLabel               = "kmm.openshift.io/build.type"
 
 	ModuleLoaderVersionLabelPrefix = "beta.kmm.node.kubernetes.io/version-module-loader"
 	DevicePluginVersionLabelPrefix = "beta.kmm.node.kubernetes.io/version-device-plugin"
