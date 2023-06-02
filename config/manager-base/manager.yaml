@@ -49,9 +49,9 @@ spec:
               fieldRef:
                 fieldPath: metadata.namespace
           - name: RELATED_IMAGES_MUST_GATHER
-            value: quay.io/edge-infrastructure/kernel-module-management-must-gather:latest
+            value: must-gather
           - name: RELATED_IMAGES_SIGN
-            value: quay.io/edge-infrastructure/kernel-module-management-signimage:latest
+            value: signer
         imagePullPolicy: Always
         securityContext:
           allowPrivilegeEscalation: false
