@@ -6,20 +6,21 @@ resources:
 - configmap-cluster-ca.yaml
 - configmap-service-ca.yaml
 
-
 patchesStrategicMerge:
-  # Protect the /metrics endpoint by putting it behind auth.
-  # If you want your controller-manager to expose the /metrics
-  # endpoint w/o any authn/z, please comment the following line.
-  - manager_auth_proxy_patch.yaml
-
-  # Mount the controller config file for loading manager configurations
-  # through a ComponentConfig type
-  - manager_config_patch.yaml
-
-  - ocp.patch.yaml
+- manager_auth_proxy_patch.yaml
+- manager_config_patch.yaml
+- ocp.patch.yaml
 
 images:
-  - name: gcr.io/kubebuilder/kube-rbac-proxy
-    newName: registry.redhat.io/openshift4/ose-kube-rbac-proxy
-    newTag: v4.12
+- name: gcr.io/kubebuilder/kube-rbac-proxy
+  newName: registry.redhat.io/openshift4/ose-kube-rbac-proxy
+  newTag: v4.12
+- name: must-gather
+  newName: quay.io/edge-infrastructure/kernel-module-management-must-gather
+  newTag: latest
+- name: signer
+  newName: quay.io/edge-infrastructure/kernel-module-management-signimage
+  newTag: latest
+
+configurations:
+- kustomizeconfig.yaml

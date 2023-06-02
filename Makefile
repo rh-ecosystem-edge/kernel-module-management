@@ -31,19 +31,18 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 # quay.io/edge-infrastructure/kernel-module-management-bundle:$VERSION and quay.io/edge-infrastructure/kernel-module-management-catalog:$VERSION.
 IMAGE_TAG_BASE ?= quay.io/edge-infrastructure/kernel-module-management-operator
 
-# SIGNER_IMAGE_TAG_BASE and SIGNER_IMAGE_TAG together define SIGNER_IMG
-# SIGNER_IMG is the name given to the signer job image that is used to sign kernel modules
-# to implement the escureboot signing functionality
+# This is the default tag of all images made by this Makefile.
+IMAGE_TAG ?= latest
+
 SIGNER_IMAGE_TAG_BASE ?= quay.io/edge-infrastructure/kernel-module-management-signimage
-SIGNER_IMAGE_TAG ?= $(shell  git log --format="%H" -n 1)
-SIGNER_IMG ?= $(SIGNER_IMAGE_TAG_BASE):$(SIGNER_IMAGE_TAG)
+SIGNER_IMG ?= $(SIGNER_IMAGE_TAG_BASE):$(IMAGE_TAG)
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
 BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
 
 # GATHER_IMG define the must-gather image used to get all the information for debugging purpose.
-GATHER_IMG ?= quay.io/edge-infrastructure/kernel-module-management-must-gather
+GATHER_IMG ?= quay.io/edge-infrastructure/kernel-module-management-must-gather:$(IMAGE_TAG)
 
 # BUNDLE_GEN_FLAGS are the flags passed to the operator-sdk generate bundle command
 BUNDLE_GEN_FLAGS ?= -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
@@ -57,8 +56,8 @@ ifeq ($(USE_IMAGE_DIGESTS), true)
 endif
 
 # Image URL to use all building/pushing image targets
-IMG ?= $(IMAGE_TAG_BASE):latest
-HUB_IMG ?= $(IMAGE_TAG_BASE)-hub:latest
+IMG ?= $(IMAGE_TAG_BASE):$(IMAGE_TAG)
+HUB_IMG ?= $(IMAGE_TAG_BASE)-hub:$(IMAGE_TAG)
 
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.23
@@ -199,11 +198,13 @@ KUSTOMIZE_CONFIG_HUB_DEFAULT ?= config/default-hub
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
+	cd config/manager-base && $(KUSTOMIZE) edit set image must-gather=$(GATHER_IMG) signer=$(SIGNER_IMG)
 	oc apply -k $(KUSTOMIZE_CONFIG_DEFAULT)
 
 .PHONY: deploy-hub
 deploy-hub: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager-hub && $(KUSTOMIZE) edit set image controller=$(HUB_IMG)
+	cd config/manager-base && $(KUSTOMIZE) edit set image must-gather=$(GATHER_IMG) signer=$(SIGNER_IMG)
 	oc apply -k $(KUSTOMIZE_CONFIG_HUB_DEFAULT)
 
 .PHONY: undeploy
@@ -259,6 +260,7 @@ bundle: operator-sdk manifests kustomize ## Generate bundle manifests and metada
 	rm -fr ./bundle
 	${OPERATOR_SDK} generate kustomize manifests --apis-dir api
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
+	cd config/manager-base && $(KUSTOMIZE) edit set image must-gather=$(GATHER_IMG) signer=$(SIGNER_IMG)
 
 	OPERATOR_SDK="${OPERATOR_SDK}" \
 	BUNDLE_GEN_FLAGS="${BUNDLE_GEN_FLAGS} --extra-service-accounts kmm-operator-module-loader,kmm-operator-device-plugin" \
@@ -278,6 +280,7 @@ bundle-hub: operator-sdk manifests kustomize ## Generate bundle manifests and me
 		--package kernel-module-management-hub \
 		--input-dir config/manifests-hub
 	cd config/manager-hub && $(KUSTOMIZE) edit set image controller=$(HUB_IMG)
+	cd config/manager-base && $(KUSTOMIZE) edit set image must-gather=$(GATHER_IMG) signer=$(SIGNER_IMG)
 
 	OPERATOR_SDK="${OPERATOR_SDK}" \
 	BUNDLE_GEN_FLAGS="${BUNDLE_GEN_FLAGS}" \
