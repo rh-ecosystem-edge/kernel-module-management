@@ -3,6 +3,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.12.0
+    service.beta.openshift.io/inject-cabundle: "true"
   creationTimestamp: null
   name: managedclustermodules.hub.kmm.sigs.x-k8s.io
 spec:
