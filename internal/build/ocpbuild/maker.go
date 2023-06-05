@@ -80,6 +80,10 @@ func (m *maker) MakeBuildTemplate(
 			Value: kernelVersion,
 		},
 		{
+			Name:  "KERNEL_FULL_VERSION",
+			Value: kernelVersion,
+		},
+		{
 			Name:  "MOD_NAME",
 			Value: mld.Name,
 		},
