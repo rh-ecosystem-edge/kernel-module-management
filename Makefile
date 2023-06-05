@@ -232,7 +232,10 @@ mockgen: ## Install mockgen locally.
 KUSTOMIZE = $(shell pwd)/bin/kustomize
 .PHONY: kustomize
 kustomize: ## Download kustomize locally if necessary.
-	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v4@v4.5.7)
+	@if [ ! -f ${KUSTOMIZE} ]; then \
+		BINDIR=$(shell pwd)/bin ./hack/download-kustomize; \
+	fi
+
 
 # go-get-tool will 'go install' any package $2 and install it to $1.
 PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
