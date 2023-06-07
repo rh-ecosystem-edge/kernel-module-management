@@ -23,6 +23,7 @@ import (
 
 	buildv1 "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/config"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -35,7 +36,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -98,14 +98,15 @@ func main() {
 
 	setupLogger.Info("Creating manager", "git commit", commit)
 
-	options := ctrl.Options{Scheme: scheme}
-
-	options, err = options.AndFrom(ctrl.ConfigFile().AtPath(configFile))
+	cfg, err := config.ParseFile(configFile)
 	if err != nil {
-		cmd.FatalError(setupLogger, err, "unable to load the config file")
+		cmd.FatalError(setupLogger, err, "could not parse the configuration file", "path", configFile)
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), options)
+	options := cfg.ManagerOptions()
+	options.Scheme = scheme
+
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), *options)
 	if err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create manager")
 	}
@@ -114,7 +115,7 @@ func main() {
 
 	client := mgr.GetClient()
 
-	filterAPI := filter.New(client, mgr.GetLogger())
+	filterAPI := filter.New(client)
 	kernelOsDtkMapping := syncronizedmap.NewKernelOsDtkMapping()
 
 	metricsAPI := metrics.New()

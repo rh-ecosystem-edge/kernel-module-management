@@ -32,7 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	hubv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api-hub/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cluster"
@@ -176,7 +175,7 @@ func (r *ManagedClusterModuleReconciler) SetupWithManager(mgr ctrl.Manager) erro
 		Owns(&buildv1.Build{}).
 		Owns(&batchv1.Job{}).
 		Watches(
-			&source.Kind{Type: &clusterv1.ManagedCluster{}},
+			&clusterv1.ManagedCluster{},
 			handler.EnqueueRequestsFromMapFunc(r.filter.FindManagedClusterModulesForCluster),
 			builder.WithPredicates(
 				r.filter.ManagedClusterModuleReconcilerManagedClusterPredicate(),

@@ -31,7 +31,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	buildv1 "github.com/openshift/api/build/v1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
@@ -77,7 +76,7 @@ func (r *PreflightValidationReconciler) SetupWithManager(mgr ctrl.Manager) error
 		Owns(&buildv1.Build{}).
 		Owns(&batchv1.Job{}).
 		Watches(
-			&source.Kind{Type: &v1beta12.Module{}},
+			&v1beta12.Module{},
 			handler.EnqueueRequestsFromMapFunc(r.filter.EnqueueAllPreflightValidations),
 			builder.WithPredicates(filter.PreflightReconcilerUpdatePredicate()),
 		).
