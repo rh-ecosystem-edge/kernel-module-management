@@ -82,12 +82,13 @@ func NewCreator(
 	cache cache.Cache[string],
 	operatorNamespace string) ManifestWorkCreator {
 	return &manifestWorkGenerator{
-		client:      client,
-		scheme:      scheme,
-		kernelAPI:   kernelAPI,
-		registryAPI: registryAPI,
-		authFactory: authFactory,
-		cache:       cache,
+		client:            client,
+		scheme:            scheme,
+		kernelAPI:         kernelAPI,
+		registryAPI:       registryAPI,
+		authFactory:       authFactory,
+		cache:             cache,
+		operatorNamespace: operatorNamespace,
 	}
 }
 
@@ -230,6 +231,9 @@ func (mwg *manifestWorkGenerator) managedClusterKernelMappings(
 			kernelVersionLogger.Info("no suitable container image found; skipping kernel version")
 			continue
 		}
+		// set the ModuleLoaderData namespace to the operator's namespace, in order
+		// to be able to use the correct pull secret when fetching the image digest
+		mld.Namespace = mwg.operatorNamespace
 
 		kernelVersionLogger.V(1).Info("Found a valid mapping",
 			"image", mld.ContainerImage,
@@ -292,7 +296,7 @@ func (mwg *manifestWorkGenerator) imageDigestForModuleLoaderData(ctx context.Con
 		return value.(string), nil
 	}
 
-	digest, err := module.ImageDigest(ctx, mwg.authFactory, mwg.registryAPI, mld, mwg.operatorNamespace, ref.Name())
+	digest, err := module.ImageDigest(ctx, mwg.authFactory, mwg.registryAPI, mld, ref.Name())
 	if err != nil {
 		return "", fmt.Errorf("could not get image digest: %v", err)
 	}
