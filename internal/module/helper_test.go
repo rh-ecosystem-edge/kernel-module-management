@@ -52,7 +52,6 @@ var _ = Describe("IntermediateImageName", func() {
 var _ = Describe("ImageDigest", func() {
 	const (
 		imageName = "image-name"
-		namespace = "test"
 	)
 
 	var (
@@ -83,7 +82,7 @@ var _ = Describe("ImageDigest", func() {
 			mockRegistry.EXPECT().GetDigest(ctx, imageName, gomock.Any(), nil).Return(expectedDigest, nil),
 		)
 
-		digest, err := ImageDigest(ctx, mockAuthFactory, mockRegistry, &mld, namespace, imageName)
+		digest, err := ImageDigest(ctx, mockAuthFactory, mockRegistry, &mld, imageName)
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(digest).To(Equal(expectedDigest))
@@ -95,7 +94,7 @@ var _ = Describe("ImageDigest", func() {
 			mockRegistry.EXPECT().GetDigest(ctx, imageName, gomock.Any(), nil).Return("", errors.New("some-error")),
 		)
 
-		digest, err := ImageDigest(ctx, mockAuthFactory, mockRegistry, &mld, namespace, imageName)
+		digest, err := ImageDigest(ctx, mockAuthFactory, mockRegistry, &mld, imageName)
 
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("some-error"))
@@ -115,7 +114,7 @@ var _ = Describe("ImageDigest", func() {
 			mockRegistry.EXPECT().GetDigest(ctx, imageName, gomock.Any(), authGetter).Return(expectedDigest, nil),
 		)
 
-		digest, err := ImageDigest(ctx, mockAuthFactory, mockRegistry, &mld, namespace, imageName)
+		digest, err := ImageDigest(ctx, mockAuthFactory, mockRegistry, &mld, imageName)
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(digest).To(Equal(expectedDigest))
