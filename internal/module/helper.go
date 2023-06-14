@@ -42,7 +42,6 @@ func ImageDigest(
 	authFactory auth.RegistryAuthGetterFactory,
 	reg registry.Registry,
 	mld *api.ModuleLoaderData,
-	namespace string,
 	imageName string) (string, error) {
 
 	registryAuthGetter := authFactory.NewRegistryAuthGetterFrom(mld)
