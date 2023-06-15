@@ -62,6 +62,16 @@ KMM will first check if the image name specified in the `containerImage` field e
 If it does, the build will be skipped.
 Otherwise, KMM creates a [`Build`](https://docs.openshift.com/container-platform/4.12/cicd/builds/build-configuration.html)
 object to build your image.
+
+The following build arguments are automatically set by KMM:
+
+| Name                          | Description                            | Example                 |
+|-------------------------------|----------------------------------------|-------------------------|
+| `KERNEL_FULL_VERSION`         | The kernel version we are building for | `6.3.5-200.fc38.x86_64` |
+| `KERNEL_VERSION` (deprecated) | The kernel version we are building for | `6.3.5-200.fc38.x86_64` |
+| `MOD_NAME`                    | The `Module`'s name                    | `my-mod`                |
+| `MOD_NAMESPACE`               | The `Module`'s namespace               | `my-namespace`          |
+
 Once the image is built, KMM proceeds with the `Module` reconciliation.
 
 ```yaml
