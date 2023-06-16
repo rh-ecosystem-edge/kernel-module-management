@@ -278,12 +278,18 @@ spec:
         serviceAccountName: kmm-operator-controller-manager
       deployments:
       - label:
+          app.kubernetes.io/component: kmm
+          app.kubernetes.io/name: kmm
+          app.kubernetes.io/part-of: kmm
           control-plane: controller-manager
         name: kmm-operator-controller-manager
         spec:
           replicas: 1
           selector:
             matchLabels:
+              app.kubernetes.io/component: kmm
+              app.kubernetes.io/name: kmm
+              app.kubernetes.io/part-of: kmm
               control-plane: controller-manager
           strategy: {}
           template:
@@ -291,6 +297,9 @@ spec:
               annotations:
                 kubectl.kubernetes.io/default-container: manager
               labels:
+                app.kubernetes.io/component: kmm
+                app.kubernetes.io/name: kmm
+                app.kubernetes.io/part-of: kmm
                 control-plane: controller-manager
             spec:
               containers:
