@@ -28,6 +28,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
+// maxCombinedLength is the maximum combined length of Module name and namespace when the version field is set.
+const maxCombinedLength = 40
+
 // log is for logging in this package.
 var modulelog = logf.Log.WithName("module-resource")
 
@@ -47,27 +50,37 @@ var _ webhook.Validator = &Module{}
 func (m *Module) ValidateCreate() error {
 	modulelog.Info("Validating Module creation", "name", m.Name, "namespace", m.Namespace)
 
-	if err := m.validateKernelMapping(); err != nil {
-		return fmt.Errorf("failed to validate kernel mappings: %v", err)
-	}
-
-	return m.validateModprobe()
+	return m.validate()
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (m *Module) ValidateUpdate(_ runtime.Object) error {
 	modulelog.Info("Validating Module update", "name", m.Name, "namespace", m.Namespace)
 
-	if err := m.validateKernelMapping(); err != nil {
-		return fmt.Errorf("failed to validate kernel mappings: %v", err)
-	}
-
-	return m.validateModprobe()
+	return m.validate()
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (m *Module) ValidateDelete() error {
 	return nil
+}
+
+func (m *Module) validate() error {
+	nameLength := len(m.Name + m.Namespace)
+
+	if m.Spec.ModuleLoader.Container.Version != "" && nameLength > maxCombinedLength {
+		return fmt.Errorf(
+			"module name and namespace have a combined length of %d characters, which exceeds the maximum of %d when version is set",
+			nameLength,
+			maxCombinedLength,
+		)
+	}
+
+	if err := m.validateKernelMapping(); err != nil {
+		return fmt.Errorf("failed to validate kernel mappings: %v", err)
+	}
+
+	return m.validateModprobe()
 }
 
 func (m *Module) validateKernelMapping() error {
