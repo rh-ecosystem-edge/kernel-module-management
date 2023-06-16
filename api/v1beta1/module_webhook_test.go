@@ -17,16 +17,63 @@ limitations under the License.
 package v1beta1
 
 import (
+	"strings"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 )
 
 func TestV1beta1(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "V1beta1 Suite")
 }
+
+func getLengthAfterSlash(s string) int {
+	before, after, found := strings.Cut(s, "/")
+
+	if found {
+		return len(after)
+	}
+
+	return len(before)
+}
+
+var validModule = Module{
+	Spec: ModuleSpec{
+		ModuleLoader: ModuleLoaderSpec{
+			Container: ModuleLoaderContainerSpec{
+				Modprobe: ModprobeSpec{
+					ModuleName: "mod-name",
+				},
+				KernelMappings: []KernelMapping{
+					{Regexp: "valid-regexp", ContainerImage: "image-url"},
+				},
+			},
+		},
+	},
+}
+
+var _ = Describe("maxCombinedLength", func() {
+	It("should be the accurate maximum length", func() {
+		const maxLabelLength = 63
+
+		baseLength := getLengthAfterSlash(
+			utils.GetModuleVersionLabelName("", ""),
+		)
+
+		if l := getLengthAfterSlash(utils.GetModuleLoaderVersionLabelName("", "")); l > baseLength {
+			baseLength = l
+		}
+
+		if l := getLengthAfterSlash(utils.GetDevicePluginVersionLabelName("", "")); l > baseLength {
+			baseLength = l
+		}
+
+		Expect(maxCombinedLength).To(Equal(maxLabelLength - baseLength))
+	})
+})
 
 var _ = Describe("validateKernelMapping", func() {
 	It("should pass when there are not kernel mappings", func() {
@@ -356,22 +403,36 @@ var _ = Describe("validateModprobe", func() {
 	})
 })
 
+var _ = Describe("validate", func() {
+	chars21 := strings.Repeat("a", 21)
+
+	DescribeTable(
+		"should work as expected",
+		func(name, ns, version string, errExpected bool) {
+			mod := validModule
+			mod.Name = name
+			mod.Namespace = ns
+			mod.Spec.ModuleLoader.Container.Version = version
+
+			err := mod.validate()
+			exp := Expect(err)
+
+			if errExpected {
+				exp.To(HaveOccurred())
+			} else {
+				exp.NotTo(HaveOccurred())
+			}
+		},
+		Entry(nil, "name", "ns", "", false),
+		Entry(nil, "name", "ns", "test", false),
+		Entry(nil, chars21, chars21, "", false),
+		Entry(nil, chars21, chars21, "test", true),
+	)
+})
+
 var _ = Describe("ValidateCreate", func() {
 	It("should pass when all conditions are met", func() {
-		mod := &Module{
-			Spec: ModuleSpec{
-				ModuleLoader: ModuleLoaderSpec{
-					Container: ModuleLoaderContainerSpec{
-						Modprobe: ModprobeSpec{
-							ModuleName: "mod-name",
-						},
-						KernelMappings: []KernelMapping{
-							{Regexp: "valid-regexp", ContainerImage: "image-url"},
-						},
-					},
-				},
-			},
-		}
+		mod := validModule
 
 		e := mod.ValidateCreate()
 		Expect(e).ToNot(HaveOccurred())
