@@ -281,15 +281,6 @@ func MatchesNamespacedNamePredicate(nsn types.NamespacedName) predicate.Predicat
 	})
 }
 
-// PodHasSpecNodeName returns a predicate that returns true if the object is a *v1.Pod and its .spec.nodeName
-// property is set.
-func PodHasSpecNodeName() predicate.Predicate {
-	return predicate.NewPredicateFuncs(func(o client.Object) bool {
-		pod, ok := o.(*v1.Pod)
-		return ok && pod.Spec.NodeName != ""
-	})
-}
-
 // PodReadinessChangedPredicate returns a predicate for Update events that only returns true if the Ready condition
 // changed.
 func PodReadinessChangedPredicate(logger logr.Logger) predicate.Predicate {
