@@ -9,4 +9,8 @@ data:
       resourceID: kmm-hub.sigs.x-k8s.io
 kind: ConfigMap
 metadata:
+  labels:
+    app.kubernetes.io/component: kmm-hub
+    app.kubernetes.io/name: kmm-hub
+    app.kubernetes.io/part-of: kmm
   name: kmm-operator-hub-manager-config
