@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 #
 set -eu
-#set -eoxu pipefail
 # Clean old data files
 rm -rf data/* || true
 
 # Copy set KUBECONFIG from vars/ocp.yaml
-read k8s_config=$(grep local_kubeconfig vars/ocp.yaml | awk {'print $2'})
+k8s_config="$(grep local_kubeconfig vars/ocp.yaml | awk {'print $2'})"
 sed -i "s#.*K8S_AUTH_KUBECONFIG.*#    K8S_AUTH_KUBECONFIG: \"$k8s_config\"#g" main.yaml
 
 # Checks if dialog exists
@@ -33,9 +32,9 @@ fi
 eval set -- "$options"
 
 # Set defaults
-setdmenu=0
+setdmenu="0"
 verbose=""
-
+delete_sr="0"
 # Process options
 while true; do
     case "$1" in
@@ -120,10 +119,7 @@ if [[ $setdmenu == "1" ]]; then
 if (dialog --title "Delete SpecialResource $sr" --yesno "Want to delete the whole SR $sr when migration has finished?" 22 50)
   then
     delete_sr="1"
-  else
-    delete_sr="0"
-  fi    
-
+fi
 rm -f vars/dsettings.yaml || true
 touch vars/dsettings.yaml
 
@@ -151,4 +147,6 @@ sed 's/postStart/preStop/g' data/commands/patch_poststart.sh > data/commands/pat
 
 # You may want to uncomment next line if you want inventory_hosts file to be created based on groups masters and workers. You can also modify inventory file manually to fit your needs.
 #./cluster_inventory.sh 
+
 time ansible-playbook -e "sr=$sr delete_sr=$delete_sr" -i inventory_hosts main.yaml $verbose
+
