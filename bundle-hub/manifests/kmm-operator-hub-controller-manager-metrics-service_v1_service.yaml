@@ -3,9 +3,6 @@ kind: Service
 metadata:
   creationTimestamp: null
   labels:
-    app.kubernetes.io/component: kmm-hub
-    app.kubernetes.io/name: kmm-hub
-    app.kubernetes.io/part-of: kmm
     control-plane: controller-manager
   name: kmm-operator-hub-controller-manager-metrics-service
 spec:
@@ -15,9 +12,6 @@ spec:
     protocol: TCP
     targetPort: https
   selector:
-    app.kubernetes.io/component: kmm-hub
-    app.kubernetes.io/name: kmm-hub
-    app.kubernetes.io/part-of: kmm
     control-plane: controller-manager
 status:
   loadBalancer: {}
