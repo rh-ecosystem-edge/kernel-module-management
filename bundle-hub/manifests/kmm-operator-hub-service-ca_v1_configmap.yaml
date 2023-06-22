@@ -4,8 +4,4 @@ kind: ConfigMap
 metadata:
   annotations:
     service.beta.openshift.io/inject-cabundle: "true"
-  labels:
-    app.kubernetes.io/component: kmm-hub
-    app.kubernetes.io/name: kmm-hub
-    app.kubernetes.io/part-of: kmm
   name: kmm-operator-hub-service-ca

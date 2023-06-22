@@ -2,9 +2,6 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   labels:
-    app.kubernetes.io/component: kmm
-    app.kubernetes.io/name: kmm
-    app.kubernetes.io/part-of: kmm
     control-plane: controller-manager
   name: kmm-operator-controller-manager-metrics-monitor
 spec:

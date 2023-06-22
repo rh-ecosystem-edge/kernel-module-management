@@ -14,8 +14,4 @@ data:
       resourceName: kmm.sigs.x-k8s.io
 kind: ConfigMap
 metadata:
-  labels:
-    app.kubernetes.io/component: kmm
-    app.kubernetes.io/name: kmm
-    app.kubernetes.io/part-of: kmm
   name: kmm-operator-manager-config

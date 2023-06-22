@@ -3,8 +3,5 @@ data: {}
 kind: ConfigMap
 metadata:
   labels:
-    app.kubernetes.io/component: kmm-hub
-    app.kubernetes.io/name: kmm-hub
-    app.kubernetes.io/part-of: kmm
     config.openshift.io/inject-trusted-cabundle: "true"
   name: kmm-operator-hub-cluster-ca

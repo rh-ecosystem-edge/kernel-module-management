@@ -9,10 +9,8 @@ namespace: openshift-kmm
 namePrefix: kmm-operator-
 
 # Labels to add to all resources and selectors.
-commonLabels:
-  app.kubernetes.io/name: kmm
-  app.kubernetes.io/component: kmm
-  app.kubernetes.io/part-of: kmm
+#commonLabels:
+#  someName: someValue
 
 bases:
 - ../crd

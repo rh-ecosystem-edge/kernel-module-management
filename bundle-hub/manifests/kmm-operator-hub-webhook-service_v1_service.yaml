@@ -5,12 +5,12 @@ metadata:
     service.beta.openshift.io/serving-cert-secret-name: kmm-operator-hub-webhook-server-cert
   creationTimestamp: null
   labels:
-    app.kubernetes.io/component: kmm-hub
+    app.kubernetes.io/component: webhook
     app.kubernetes.io/created-by: kernel-module-management
     app.kubernetes.io/instance: webhook-service
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: kmm-hub
-    app.kubernetes.io/part-of: kmm
+    app.kubernetes.io/name: service
+    app.kubernetes.io/part-of: kernel-module-management
   name: kmm-operator-hub-webhook-service
 spec:
   ports:
@@ -18,9 +18,6 @@ spec:
     protocol: TCP
     targetPort: 9443
   selector:
-    app.kubernetes.io/component: kmm-hub
-    app.kubernetes.io/name: kmm-hub
-    app.kubernetes.io/part-of: kmm
     control-plane: controller-manager
 status:
   loadBalancer: {}
