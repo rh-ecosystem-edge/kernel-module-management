@@ -19,17 +19,22 @@ A computer with:
   (Change to your python version accordingly)
 - Ansible installed: `dnf install ansible-core` or `dnf install ansible` depending on your workstation OS version.
   **Note** : `ansible-core` does not include kubernetes.core collection as `ansible` does. In case of using
-  `ansible-core` you should install `community.okd` collection manually to get mandatory `k8s_auth` module:
+  `ansible-core` as your installation package you should install `community.okd` and `community.general` collections manually to get mandatory `k8s_auth` and `json_query` modules:
 ```console
-ansible-galaxy collection install community.okd
+ansible-galaxy collection install community.okd community.general
 ```
 
 Further info at [Ansible Documentation](https://docs.ansible.com/ansible/latest/installation_guide/index.html).
 
+## Warnings
+
+- This script reboots the specified nodes at `inventory_hosts` file so even if it does a sequentally reboot you are responsible for checking in advance that no production service could be interrupted by the action of the script.
+- If you set the option to delete the `SpecialResource` created by SRO, notice that all imagestreams created beforehand by SRO will be deleted once the script ends so you should have a different source for the images you want to use with KMM.
+
 ## Configuration
 
 The only configuration you should really change is the auth file `tools/sro2kmm/vars/ocp.yaml`
-which includes administrator credentials for your cluster.
+which includes administrator credentials for your cluster and the `inventory_hosts` file which sets the nodes on which SRO2KMM will run.
 
 ## Usage
 
