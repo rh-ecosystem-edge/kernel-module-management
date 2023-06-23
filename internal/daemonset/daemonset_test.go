@@ -898,7 +898,7 @@ var _ = Describe("makeLoadCommand", func() {
 			Equal([]string{
 				"/bin/sh",
 				"-c",
-				`modprobe "load" "arguments"`,
+				"modprobe load arguments",
 			}),
 		)
 	})
@@ -922,7 +922,7 @@ var _ = Describe("makeLoadCommand", func() {
 			Equal([]string{
 				"/bin/sh",
 				"-c",
-				fmt.Sprintf(`modprobe -r %q && modprobe -v -d %q %q %q %q`, "in-tree-module", dir, kernelModuleName, arg1, arg2),
+				fmt.Sprintf("modprobe -r -d %s %s && modprobe -v -d %s %s %s %s", dir, "in-tree-module", dir, kernelModuleName, arg1, arg2),
 			}),
 		)
 	})
@@ -941,7 +941,7 @@ var _ = Describe("makeLoadCommand", func() {
 			Equal([]string{
 				"/bin/sh",
 				"-c",
-				fmt.Sprintf(`modprobe "-z" "-k" %q`, kernelModuleName),
+				fmt.Sprintf("modprobe -z -k %s", kernelModuleName),
 			}),
 		)
 	})
@@ -958,7 +958,7 @@ var _ = Describe("makeLoadCommand", func() {
 			Equal([]string{
 				"/bin/sh",
 				"-c",
-				fmt.Sprintf(`cp -r "/kmm/firmware/mymodule/*" /var/lib/firmware && modprobe -v %q`, kernelModuleName),
+				fmt.Sprintf("cp -r /kmm/firmware/mymodule/* /var/lib/firmware && modprobe -v %s", kernelModuleName),
 			}),
 		)
 	})
@@ -984,7 +984,7 @@ var _ = Describe("makeUnloadCommand", func() {
 			Equal([]string{
 				"/bin/sh",
 				"-c",
-				`modprobe "unload" "arguments"`,
+				"modprobe unload arguments",
 			}),
 		)
 	})
@@ -1003,7 +1003,7 @@ var _ = Describe("makeUnloadCommand", func() {
 			Equal([]string{
 				"/bin/sh",
 				"-c",
-				fmt.Sprintf(`modprobe -rv -d %q %q`, dir, kernelModuleName),
+				fmt.Sprintf("modprobe -rv -d %s %s", dir, kernelModuleName),
 			}),
 		)
 	})
@@ -1022,7 +1022,7 @@ var _ = Describe("makeUnloadCommand", func() {
 			Equal([]string{
 				"/bin/sh",
 				"-c",
-				fmt.Sprintf(`modprobe "-z" "-k" %q`, kernelModuleName),
+				fmt.Sprintf("modprobe -z -k %s", kernelModuleName),
 			}),
 		)
 	})
@@ -1039,7 +1039,7 @@ var _ = Describe("makeUnloadCommand", func() {
 			Equal([]string{
 				"/bin/sh",
 				"-c",
-				fmt.Sprintf(`modprobe -rv %q && cd "/kmm/firmware/mymodule" && find |sort -r |xargs -I{} rm -d "/var/lib/firmware/{}"`, kernelModuleName),
+				fmt.Sprintf("modprobe -rv %s && cd /kmm/firmware/mymodule && find |sort -r |xargs -I{} rm -d /var/lib/firmware/{}", kernelModuleName),
 			}),
 		)
 	})
