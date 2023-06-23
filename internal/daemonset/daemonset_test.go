@@ -25,7 +25,6 @@ const (
 	kernelVersion     = "1.2.3"
 	moduleName        = "module-name"
 	namespace         = "namespace"
-	kernelLabel       = "kernel-label"
 	devicePluginImage = "device-plugin-image"
 )
 
@@ -38,7 +37,7 @@ var (
 var _ = Describe("SetDriverContainerAsDesired", func() {
 
 	BeforeEach(func() {
-		dc = NewCreator(nil, kernelLabel, scheme)
+		dc = NewCreator(nil, scheme)
 	})
 
 	BeforeEach(func() {
@@ -250,8 +249,7 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 
 		podLabels := map[string]string{
 			constants.ModuleNameLabel: moduleName,
-			kernelLabel:               kernelVersion,
-			constants.DaemonSetRole:   "module-loader",
+			constants.KernelLabel:     kernelVersion,
 		}
 
 		directory := v1.HostPathDirectory
@@ -277,7 +275,10 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 				Template: v1.PodTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{
 						Finalizers: []string{constants.NodeLabelerFinalizer},
-						Labels:     podLabels,
+						Labels: map[string]string{
+							constants.ModuleNameLabel: moduleName,
+							constants.KernelLabel:     kernelVersion,
+						},
 					},
 					Spec: v1.PodSpec{
 						Containers: []v1.Container{
@@ -320,8 +321,8 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 							{Name: imageRepoSecretName},
 						},
 						NodeSelector: map[string]string{
-							"has-feature-x": "true",
-							kernelLabel:     kernelVersion,
+							"has-feature-x":       "true",
+							constants.KernelLabel: kernelVersion,
 						},
 						PriorityClassName:  "system-node-critical",
 						ServiceAccountName: serviceAccountName,
@@ -352,7 +353,7 @@ var _ = Describe("SetDriverContainerAsDesired", func() {
 var _ = Describe("SetDevicePluginAsDesired", func() {
 
 	BeforeEach(func() {
-		dc = NewCreator(nil, kernelLabel, scheme)
+		dc = NewCreator(nil, scheme)
 	})
 
 	It("should return an error if the DaemonSet is nil", func() {
@@ -526,10 +527,7 @@ var _ = Describe("SetDevicePluginAsDesired", func() {
 
 		Expect(err).NotTo(HaveOccurred())
 
-		podLabels := map[string]string{
-			constants.ModuleNameLabel: moduleName,
-			constants.DaemonSetRole:   "device-plugin",
-		}
+		podLabels := map[string]string{constants.ModuleNameLabel: moduleName}
 
 		directory := v1.HostPathDirectory
 
@@ -618,7 +616,7 @@ var _ = Describe("GarbageCollect", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		dc = NewCreator(clnt, kernelLabel, scheme)
+		dc = NewCreator(clnt, scheme)
 	})
 
 	mod := &kmmv1beta1.Module{
@@ -644,8 +642,7 @@ var _ = Describe("GarbageCollect", func() {
 				Name:      "moduleLoader",
 				Namespace: "namespace",
 				Labels: map[string]string{
-					kernelLabel:               legitKernelVersion,
-					constants.DaemonSetRole:   constants.ModuleLoaderRoleLabelValue,
+					constants.KernelLabel:     legitKernelVersion,
 					moduleLoaderVersionLabel:  currentModuleVersion,
 					constants.ModuleNameLabel: mod.Name,
 				},
@@ -656,7 +653,6 @@ var _ = Describe("GarbageCollect", func() {
 				Name:      "devicePlugin",
 				Namespace: "namespace",
 				Labels: map[string]string{
-					constants.DaemonSetRole:   constants.DevicePluginRoleLabelValue,
 					devicePluginVersionLabel:  currentModuleVersion,
 					constants.ModuleNameLabel: mod.Name,
 				},
@@ -685,7 +681,7 @@ var _ = Describe("GarbageCollect", func() {
 		if moduleLoaderInvalidKernel {
 			moduleLoaderIllegalKernelVersionDS = moduleLoaderDS.DeepCopy()
 			moduleLoaderIllegalKernelVersionDS.SetName("moduleLoaderInvalidKernel")
-			moduleLoaderIllegalKernelVersionDS.Labels[kernelLabel] = notLegitKernelVersion
+			moduleLoaderIllegalKernelVersionDS.Labels[constants.KernelLabel] = notLegitKernelVersion
 			existingDS = append(existingDS, *moduleLoaderIllegalKernelVersionDS)
 		}
 
@@ -721,7 +717,7 @@ var _ = Describe("GarbageCollect", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "moduleLoader",
 				Namespace: "namespace",
-				Labels:    map[string]string{kernelLabel: notLegitKernelVersion, constants.DaemonSetRole: constants.ModuleLoaderRoleLabelValue, moduleLoaderVersionLabel: currentModuleVersion},
+				Labels:    map[string]string{constants.KernelLabel: notLegitKernelVersion, moduleLoaderVersionLabel: currentModuleVersion},
 			},
 		}
 		clnt.EXPECT().Delete(context.Background(), &deleteDS).Return(fmt.Errorf("some error"))
@@ -749,7 +745,7 @@ var _ = Describe("GetModuleDaemonSets", func() {
 	It("should return an empty map if no DaemonSets are present", func() {
 		clnt.EXPECT().List(context.Background(), gomock.Any(), gomock.Any())
 
-		dc := NewCreator(clnt, kernelLabel, scheme)
+		dc := NewCreator(clnt, scheme)
 
 		s, err := dc.GetModuleDaemonSets(context.Background(), moduleName, namespace)
 		Expect(err).NotTo(HaveOccurred())
@@ -765,7 +761,7 @@ var _ = Describe("GetModuleDaemonSets", func() {
 				Namespace: namespace,
 				Labels: map[string]string{
 					"kmm.node.kubernetes.io/module.name": moduleName,
-					kernelLabel:                          kernelVersion,
+					constants.KernelLabel:                kernelVersion,
 				},
 			},
 		}
@@ -776,7 +772,7 @@ var _ = Describe("GetModuleDaemonSets", func() {
 				Namespace: namespace,
 				Labels: map[string]string{
 					"kmm.node.kubernetes.io/module.name": moduleName,
-					kernelLabel:                          otherKernelVersion,
+					constants.KernelLabel:                otherKernelVersion,
 				},
 			},
 		}
@@ -790,7 +786,7 @@ var _ = Describe("GetModuleDaemonSets", func() {
 		)
 		expectSlice := []appsv1.DaemonSet{ds1, ds2}
 
-		dc := NewCreator(clnt, kernelLabel, scheme)
+		dc := NewCreator(clnt, scheme)
 
 		s, err := dc.GetModuleDaemonSets(context.Background(), moduleName, namespace)
 		Expect(err).NotTo(HaveOccurred())
@@ -849,7 +845,7 @@ var _ = Describe("GetNodeLabelFromPod", func() {
 	var dc DaemonSetCreator
 
 	BeforeEach(func() {
-		dc = NewCreator(clnt, kernelLabel, scheme)
+		dc = NewCreator(clnt, scheme)
 	})
 
 	It("should return a driver container label", func() {
@@ -857,7 +853,7 @@ var _ = Describe("GetNodeLabelFromPod", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: map[string]string{
 					constants.ModuleNameLabel: moduleName,
-					constants.DaemonSetRole:   "module-loader",
+					constants.KernelLabel:     "some-kernel-version",
 				},
 				Namespace: namespace,
 			},
@@ -871,10 +867,7 @@ var _ = Describe("GetNodeLabelFromPod", func() {
 	It("should return a device plugin label", func() {
 		pod := v1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Labels: map[string]string{
-					constants.ModuleNameLabel: moduleName,
-					constants.DaemonSetRole:   "device-plugin",
-				},
+				Labels:    map[string]string{constants.ModuleNameLabel: moduleName},
 				Namespace: namespace,
 			},
 		}
@@ -905,7 +898,7 @@ var _ = Describe("makeLoadCommand", func() {
 			Equal([]string{
 				"/bin/sh",
 				"-c",
-				`modprobe "load" "arguments"`,
+				"modprobe load arguments",
 			}),
 		)
 	})
@@ -929,7 +922,7 @@ var _ = Describe("makeLoadCommand", func() {
 			Equal([]string{
 				"/bin/sh",
 				"-c",
-				fmt.Sprintf(`modprobe -r %q && modprobe -v -d %q %q %q %q`, "in-tree-module", dir, kernelModuleName, arg1, arg2),
+				fmt.Sprintf("modprobe -r -d %s %s && modprobe -v -d %s %s %s %s", dir, "in-tree-module", dir, kernelModuleName, arg1, arg2),
 			}),
 		)
 	})
@@ -948,7 +941,7 @@ var _ = Describe("makeLoadCommand", func() {
 			Equal([]string{
 				"/bin/sh",
 				"-c",
-				fmt.Sprintf(`modprobe "-z" "-k" %q`, kernelModuleName),
+				fmt.Sprintf("modprobe -z -k %s", kernelModuleName),
 			}),
 		)
 	})
@@ -965,7 +958,7 @@ var _ = Describe("makeLoadCommand", func() {
 			Equal([]string{
 				"/bin/sh",
 				"-c",
-				fmt.Sprintf(`cp -r "/kmm/firmware/mymodule/*" /var/lib/firmware && modprobe -v %q`, kernelModuleName),
+				fmt.Sprintf("cp -r /kmm/firmware/mymodule/* /var/lib/firmware && modprobe -v %s", kernelModuleName),
 			}),
 		)
 	})
@@ -991,7 +984,7 @@ var _ = Describe("makeUnloadCommand", func() {
 			Equal([]string{
 				"/bin/sh",
 				"-c",
-				`modprobe "unload" "arguments"`,
+				"modprobe unload arguments",
 			}),
 		)
 	})
@@ -1010,7 +1003,7 @@ var _ = Describe("makeUnloadCommand", func() {
 			Equal([]string{
 				"/bin/sh",
 				"-c",
-				fmt.Sprintf(`modprobe -rv -d %q %q`, dir, kernelModuleName),
+				fmt.Sprintf("modprobe -rv -d %s %s", dir, kernelModuleName),
 			}),
 		)
 	})
@@ -1029,7 +1022,7 @@ var _ = Describe("makeUnloadCommand", func() {
 			Equal([]string{
 				"/bin/sh",
 				"-c",
-				fmt.Sprintf(`modprobe "-z" "-k" %q`, kernelModuleName),
+				fmt.Sprintf("modprobe -z -k %s", kernelModuleName),
 			}),
 		)
 	})
@@ -1046,7 +1039,7 @@ var _ = Describe("makeUnloadCommand", func() {
 			Equal([]string{
 				"/bin/sh",
 				"-c",
-				fmt.Sprintf(`modprobe -rv %q && cd "/kmm/firmware/mymodule" && find |sort -r |xargs -I{} rm -d "/var/lib/firmware/{}"`, kernelModuleName),
+				fmt.Sprintf("modprobe -rv %s && cd /kmm/firmware/mymodule && find |sort -r |xargs -I{} rm -d /var/lib/firmware/{}", kernelModuleName),
 			}),
 		)
 	})

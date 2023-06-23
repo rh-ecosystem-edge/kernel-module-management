@@ -40,16 +40,14 @@ type DaemonSetCreator interface {
 }
 
 type daemonSetGenerator struct {
-	client      client.Client
-	kernelLabel string
-	scheme      *runtime.Scheme
+	client client.Client
+	scheme *runtime.Scheme
 }
 
-func NewCreator(client client.Client, kernelLabel string, scheme *runtime.Scheme) DaemonSetCreator {
+func NewCreator(client client.Client, scheme *runtime.Scheme) DaemonSetCreator {
 	return &daemonSetGenerator{
-		client:      client,
-		kernelLabel: kernelLabel,
-		scheme:      scheme,
+		client: client,
+		scheme: scheme,
 	}
 }
 
@@ -58,7 +56,7 @@ func (dc *daemonSetGenerator) GarbageCollect(ctx context.Context, mod *kmmv1beta
 
 	for _, ds := range existingDS {
 		if isOlderVersionUnusedDaemonset(&ds, mod.Spec.ModuleLoader.Container.Version) ||
-			isModuleLoaderDaemonsetWithInvalidKernel(&ds, dc.kernelLabel, validKernels) {
+			isModuleLoaderDaemonsetWithInvalidKernel(&ds, validKernels) {
 			deleted = append(deleted, ds.Name)
 			if err := dc.client.Delete(ctx, &ds); err != nil {
 				return nil, fmt.Errorf("could not delete DaemonSet %s: %v", ds.Name, err)
@@ -90,11 +88,11 @@ func (dc *daemonSetGenerator) SetDriverContainerAsDesired(
 
 	standardLabels := map[string]string{
 		constants.ModuleNameLabel: mld.Name,
-		dc.kernelLabel:            kernelVersion,
-		constants.DaemonSetRole:   constants.ModuleLoaderRoleLabelValue,
+		constants.KernelLabel:     kernelVersion,
 	}
+
 	nodeSelector := CopyMapStringString(mld.Selector)
-	nodeSelector[dc.kernelLabel] = kernelVersion
+	nodeSelector[constants.KernelLabel] = kernelVersion
 
 	if mld.ModuleVersion != "" {
 		versionLabel := utils.GetModuleLoaderVersionLabelName(mld.Namespace, mld.Name)
@@ -271,10 +269,8 @@ func (dc *daemonSetGenerator) SetDevicePluginAsDesired(
 		},
 	}
 
-	standardLabels := map[string]string{
-		constants.ModuleNameLabel: mod.Name,
-		constants.DaemonSetRole:   constants.DevicePluginRoleLabelValue,
-	}
+	standardLabels := map[string]string{constants.ModuleNameLabel: mod.Name}
+
 	nodeSelector := map[string]string{getDriverContainerNodeLabel(mod.Namespace, mod.Name, true): ""}
 
 	if mod.Spec.ModuleLoader.Container.Version != "" {
@@ -330,8 +326,8 @@ func (dc *daemonSetGenerator) SetDevicePluginAsDesired(
 }
 
 func (dc *daemonSetGenerator) GetNodeLabelFromPod(pod *v1.Pod, moduleName string, useDeprecatedLabel bool) string {
-	podRole := pod.Labels[constants.DaemonSetRole]
-	if podRole == constants.DevicePluginRoleLabelValue {
+	// Device plugin pods have no kernel version label
+	if _, ok := pod.GetLabels()[constants.KernelLabel]; !ok {
 		return getDevicePluginNodeLabel(pod.Namespace, moduleName, useDeprecatedLabel)
 	}
 	return getDriverContainerNodeLabel(pod.Namespace, moduleName, useDeprecatedLabel)
@@ -386,13 +382,14 @@ func isOlderVersionUnusedDaemonset(ds *appsv1.DaemonSet, moduleVersion string) b
 	return ds.Labels[versionLabel] != moduleVersion && ds.Status.DesiredNumberScheduled == 0
 }
 
-func isModuleLoaderDaemonsetWithInvalidKernel(ds *appsv1.DaemonSet, kernelLabel string, validKernels sets.Set[string]) bool {
-	return !IsDevicePluginDS(ds) && !validKernels.Has(ds.Labels[kernelLabel])
+func isModuleLoaderDaemonsetWithInvalidKernel(ds *appsv1.DaemonSet, validKernels sets.Set[string]) bool {
+	return !IsDevicePluginDS(ds) && !validKernels.Has(ds.Labels[constants.KernelLabel])
 }
 
 func IsDevicePluginDS(ds *appsv1.DaemonSet) bool {
-	dsLabels := ds.GetLabels()
-	return dsLabels[constants.DaemonSetRole] == constants.DevicePluginRoleLabelValue
+	// Device Plugin Daemonsets do not have a kernel version
+	_, ok := ds.GetLabels()[constants.KernelLabel]
+	return !ok
 }
 
 func GetPodPullSecrets(secret *v1.LocalObjectReference) []v1.LocalObjectReference {
@@ -424,39 +421,46 @@ func makeLoadCommand(inTreeModuleToRemove string, spec kmmv1beta1.ModprobeSpec, 
 	var loadCommand strings.Builder
 
 	if inTreeModuleToRemove != "" {
-		fmt.Fprintf(&loadCommand, "modprobe -r %q && ", inTreeModuleToRemove)
+		loadCommand.WriteString("modprobe -r")
+		if spec.DirName != "" {
+			loadCommand.WriteString(" -d " + spec.DirName)
+		}
+		loadCommand.WriteString(" " + inTreeModuleToRemove + " && ")
 	}
 
 	if fw := spec.FirmwarePath; fw != "" {
-		fmt.Fprintf(&loadCommand, `cp -r "%s/*" %s && `, fw, nodeVarLibFirmwarePath)
+		fmt.Fprintf(&loadCommand, "cp -r %s/* %s && ", fw, nodeVarLibFirmwarePath)
 	}
 
 	loadCommand.WriteString("modprobe")
 
 	if rawArgs := spec.RawArgs; rawArgs != nil && len(rawArgs.Load) > 0 {
 		for _, arg := range rawArgs.Load {
-			fmt.Fprintf(&loadCommand, " %q", arg)
+			loadCommand.WriteRune(' ')
+			loadCommand.WriteString(arg)
 		}
 		return append(loadCommandShell, loadCommand.String())
 	}
 
 	if args := spec.Args; args != nil && len(args.Load) > 0 {
 		for _, arg := range args.Load {
-			fmt.Fprintf(&loadCommand, " %q", arg)
+			loadCommand.WriteRune(' ')
+			loadCommand.WriteString(arg)
 		}
 	} else {
 		loadCommand.WriteString(" -v")
 	}
 
 	if spec.DirName != "" {
-		fmt.Fprintf(&loadCommand, " -d %q", spec.DirName)
+		loadCommand.WriteString(" -d " + spec.DirName)
 	}
 
-	fmt.Fprintf(&loadCommand, " %q", spec.ModuleName)
+	loadCommand.WriteString(" " + spec.ModuleName)
 
 	if params := spec.Parameters; len(params) > 0 {
 		for _, param := range params {
-			fmt.Fprintf(&loadCommand, " %q", param)
+			loadCommand.WriteRune(' ')
+			loadCommand.WriteString(param)
 		}
 	}
 
@@ -474,32 +478,33 @@ func makeUnloadCommand(spec kmmv1beta1.ModprobeSpec, modName string) []string {
 
 	fwUnloadCommand := ""
 	if fw := spec.FirmwarePath; fw != "" {
-		fwUnloadCommand = fmt.Sprintf(` && cd %q && find |sort -r |xargs -I{} rm -d "%s/{}"`, fw, nodeVarLibFirmwarePath)
+		fwUnloadCommand = fmt.Sprintf(" && cd %s && find |sort -r |xargs -I{} rm -d %s/{}", fw, nodeVarLibFirmwarePath)
 	}
 
 	if rawArgs := spec.RawArgs; rawArgs != nil && len(rawArgs.Unload) > 0 {
 		for _, arg := range rawArgs.Unload {
-			fmt.Fprintf(&unloadCommand, " %q", arg)
+			unloadCommand.WriteRune(' ')
+			unloadCommand.WriteString(arg)
+			unloadCommand.WriteString(fwUnloadCommand)
 		}
-
-		unloadCommand.WriteString(fwUnloadCommand)
 
 		return append(unloadCommandShell, unloadCommand.String())
 	}
 
 	if args := spec.Args; args != nil && len(args.Unload) > 0 {
 		for _, arg := range args.Unload {
-			fmt.Fprintf(&unloadCommand, " %q", arg)
+			unloadCommand.WriteRune(' ')
+			unloadCommand.WriteString(arg)
 		}
 	} else {
 		unloadCommand.WriteString(" -rv")
 	}
 
 	if dirName := spec.DirName; dirName != "" {
-		fmt.Fprintf(&unloadCommand, " -d %q", dirName)
+		unloadCommand.WriteString(" -d " + dirName)
 	}
 
-	fmt.Fprintf(&unloadCommand, " %q", spec.ModuleName)
+	unloadCommand.WriteString(" " + spec.ModuleName)
 	unloadCommand.WriteString(fwUnloadCommand)
 
 	return append(unloadCommandShell, unloadCommand.String())
