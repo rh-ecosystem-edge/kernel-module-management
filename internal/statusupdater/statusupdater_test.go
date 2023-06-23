@@ -255,9 +255,9 @@ var _ = Describe("preflight status updates", func() {
 })
 
 func getDaemonSet(dsConfig daemonSetConfig) appsv1.DaemonSet {
-	roleLabel := map[string]string{constants.DaemonSetRole: "module-loader"}
-	if dsConfig.isDevicePlugin {
-		roleLabel[constants.DaemonSetRole] = "device-plugin"
+	labels := make(map[string]string)
+	if !dsConfig.isDevicePlugin {
+		labels[constants.KernelLabel] = "some value"
 	}
 	ds := appsv1.DaemonSet{
 		Status: appsv1.DaemonSetStatus{
@@ -265,7 +265,7 @@ func getDaemonSet(dsConfig daemonSetConfig) appsv1.DaemonSet {
 			DesiredNumberScheduled: int32(dsConfig.numberAvailable),
 		},
 	}
-	ds.SetLabels(roleLabel)
+	ds.SetLabels(labels)
 	return ds
 }
 

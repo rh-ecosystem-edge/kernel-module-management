@@ -168,7 +168,7 @@ var _ = Describe("getModuleLoaderAndDevicePluginPods", func() {
 
 	It("good flow", func() {
 		fieldSelector := client.MatchingFields{"spec.nodeName": nodeName}
-		labelSelector := client.HasLabels{constants.DaemonSetRole}
+		labelSelector := client.HasLabels{constants.ModuleNameLabel}
 		kubeClient.EXPECT().List(ctx, gomock.Any(), labelSelector, fieldSelector)
 
 		_, err := helper.getModuleLoaderAndDevicePluginPods(ctx, nodeName)
@@ -177,7 +177,7 @@ var _ = Describe("getModuleLoaderAndDevicePluginPods", func() {
 
 	It("error flow", func() {
 		fieldSelector := client.MatchingFields{"spec.nodeName": nodeName}
-		labelSelector := client.HasLabels{constants.DaemonSetRole}
+		labelSelector := client.HasLabels{constants.ModuleNameLabel}
 		kubeClient.EXPECT().List(ctx, gomock.Any(), labelSelector, fieldSelector).Return(fmt.Errorf("some error"))
 
 		res, err := helper.getModuleLoaderAndDevicePluginPods(ctx, nodeName)
@@ -256,7 +256,7 @@ var _ = Describe("reconcileLabels", func() {
 			moduleLoaderVersionLabel: "1",
 			devicePluginVersionLabel: "1",
 		}
-		pod.SetLabels(map[string]string{constants.ModuleNameLabel: "moduleName", constants.DaemonSetRole: constants.DevicePluginRoleLabelValue})
+		pod.SetLabels(map[string]string{constants.ModuleNameLabel: "moduleName"})
 
 		res := helper.reconcileLabels(map[string]*modulesVersionLabels{"key": moduleLabels}, []v1.Pod{pod})
 
@@ -289,7 +289,7 @@ var _ = Describe("reconcileLabels", func() {
 			moduleLoaderVersionLabel: "",
 			devicePluginVersionLabel: "",
 		}
-		pod.SetLabels(map[string]string{constants.ModuleNameLabel: "moduleName", constants.DaemonSetRole: constants.ModuleLoaderRoleLabelValue})
+		pod.SetLabels(map[string]string{constants.ModuleNameLabel: "moduleName", constants.KernelLabel: "kernel-version"})
 
 		res := helper.reconcileLabels(map[string]*modulesVersionLabels{"key": moduleLabels}, []v1.Pod{pod})
 

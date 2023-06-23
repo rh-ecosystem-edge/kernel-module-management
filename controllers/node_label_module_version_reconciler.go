@@ -123,7 +123,7 @@ func (nlmvha *nodeLabelModuleVersionHelper) getLabelsPerModules(ctx context.Cont
 func (nlmvha *nodeLabelModuleVersionHelper) getModuleLoaderAndDevicePluginPods(ctx context.Context, nodeName string) ([]v1.Pod, error) {
 	var modulePodsList v1.PodList
 	fieldSelector := client.MatchingFields{"spec.nodeName": nodeName}
-	labelSelector := client.HasLabels{constants.DaemonSetRole}
+	labelSelector := client.HasLabels{constants.ModuleNameLabel}
 	err := nlmvha.client.List(ctx, &modulePodsList, labelSelector, fieldSelector)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get list of all module loader pods for on node %s: %v", nodeName, err)
@@ -190,9 +190,18 @@ func (nlmvha *nodeLabelModuleVersionHelper) reconcileLabels(modulesLabels map[st
 func verifyLabelActionValidity(name, namespace, podRole string, modulesPods []v1.Pod) bool {
 	for _, pod := range modulesPods {
 		podLabels := pod.GetLabels()
+
+		var currentPodRole string
+
+		if _, ok := podLabels[constants.KernelLabel]; ok {
+			currentPodRole = constants.ModuleLoaderRoleLabelValue
+		} else {
+			currentPodRole = constants.DevicePluginRoleLabelValue
+		}
+
 		if pod.Namespace == namespace &&
 			podLabels[constants.ModuleNameLabel] == name &&
-			podLabels[constants.DaemonSetRole] == podRole {
+			currentPodRole == podRole {
 			return false
 		}
 	}

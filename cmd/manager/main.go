@@ -146,7 +146,7 @@ func main() {
 		registryAPI,
 	)
 
-	daemonAPI := daemonset.NewCreator(client, constants.KernelLabel, scheme)
+	daemonAPI := daemonset.NewCreator(client, scheme)
 	kernelAPI := module.NewKernelMapper(buildHelperAPI, sign.NewSignerHelper())
 
 	mc := controllers.NewModuleReconciler(
