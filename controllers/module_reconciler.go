@@ -383,7 +383,7 @@ func (mrh *moduleReconcilerHelper) handleDevicePlugin(ctx context.Context, mod *
 	if ds == nil {
 		logger.Info("creating new device plugin DS", "version", mod.Spec.ModuleLoader.Container.Version)
 		ds = &appsv1.DaemonSet{
-			ObjectMeta: metav1.ObjectMeta{Namespace: mod.Namespace, Name: mod.Name + "-device-plugin"},
+			ObjectMeta: metav1.ObjectMeta{Namespace: mod.Namespace, GenerateName: mod.Name + "-device-plugin-"},
 		}
 	}
 	opRes, err := controllerutil.CreateOrPatch(ctx, mrh.client, ds, func() error {

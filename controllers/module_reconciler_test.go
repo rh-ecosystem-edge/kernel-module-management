@@ -670,7 +670,7 @@ var _ = Describe("ModuleReconciler_handleDevicePlugin", func() {
 		}
 
 		newDS := &appsv1.DaemonSet{
-			ObjectMeta: metav1.ObjectMeta{Namespace: mod.Namespace, Name: mod.Name + "-device-plugin"},
+			ObjectMeta: metav1.ObjectMeta{Namespace: mod.Namespace, GenerateName: mod.Name + "-device-plugin-"},
 		}
 		gomock.InOrder(
 			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).Return(apierrors.NewNotFound(schema.GroupResource{}, "whatever")),
