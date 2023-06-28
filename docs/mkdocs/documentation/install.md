@@ -49,7 +49,6 @@ spec:
 ## Using `oc`
 
 The command below installs the bleeding edge version of KMM.
-To install from a release branch, replace `main` with the name of the release branch, e.g. `release-1.0`.
 
 ```shell
 oc apply -k https://github.com/rh-ecosystem-edge/kernel-module-management/config/default
