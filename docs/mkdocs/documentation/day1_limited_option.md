@@ -62,3 +62,49 @@ The API is located under `pkg/mcproducer` package of hte KMM source code.
 There is no need to KMM operator to be running to use the Day 1 functionality.
 Users only need to import the `pkg/mcproducer` package into their operator/utility code, call the API and to apply the produced
 MCO YAML to the cluster.
+
+### MachineConfigPool
+
+MachineConfigPool is used to identify a collection of nodes that will be affected by the applied MCO.
+
+```yaml
+kind: MachineConfigPool
+metadata:
+  name: sfc
+spec:
+  machineConfigSelector:
+    matchExpressions:
+      - {key: machineconfiguration.openshift.io/role, operator: In, values: [worker, sfc]}
+  nodeSelector:
+    matchLabels:
+      node-role.kubernetes.io/sfc: ""
+  paused: false
+  maxUnavailable: 1
+```
+
+`machineConfigSelector` will match the labels in the MachineConfig, while `nodeSelector` will match the labels
+on the node.
+
+There are already predefined MachineConfigPools in the OCP cluster:
+
+- `worker`: targets all worker nodes in the cluster
+- `master`: targets all master nodes in the cluster
+
+Defining a MachineConfig that has:
+```yaml
+metadata:
+  labels:
+    machineconfiguration.opensfhit.io/role: master
+```
+will target the master MachineConfigPool, while defining MachineConfig:
+```yaml
+metadata:
+  labels:
+    machineconfiguration.opensfhit.io/role: worker
+```
+will target the worker MachineConfigPool
+
+A detailed description of MachineConfig and MachineConfigPool can be found in [MachineConfigPool explanation](https://www.redhat.com/en/blog/openshift-container-platform-4-how-does-machine-config-pool-work) for more information.
+
+
+
