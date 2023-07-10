@@ -26,9 +26,9 @@ ARG TARGET
 
 # Build
 RUN git config --global --add safe.directory ${PWD}
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 make ${TARGET}
+RUN make ${TARGET}
 
-FROM registry.access.redhat.com/ubi9/ubi-micro:9.2
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.2
 
 ARG TARGET
 
