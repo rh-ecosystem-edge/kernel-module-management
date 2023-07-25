@@ -9,6 +9,7 @@ require (
 	github.com/google/go-cmp v0.5.9
 	github.com/google/go-containerregistry v0.15.2
 	github.com/google/go-containerregistry/pkg/authn/kubernetes v0.0.0-20230523181351-c3f8a49229d3
+	github.com/kubernetes-sigs/kernel-module-management v1.1.0
 	github.com/mitchellh/hashstructure/v2 v2.0.2
 	github.com/onsi/ginkgo/v2 v2.11.0
 	github.com/onsi/gomega v1.27.10

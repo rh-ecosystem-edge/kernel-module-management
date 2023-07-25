@@ -153,6 +153,12 @@ github.com/klauspost/compress/internal/cpuinfo
 github.com/klauspost/compress/internal/snapref
 github.com/klauspost/compress/zstd
 github.com/klauspost/compress/zstd/internal/xxhash
+# github.com/kubernetes-sigs/kernel-module-management v1.1.0
+## explicit; go 1.19
+github.com/kubernetes-sigs/kernel-module-management/api-hub/v1beta1
+github.com/kubernetes-sigs/kernel-module-management/api/v1beta1
+github.com/kubernetes-sigs/kernel-module-management/internal/client
+github.com/kubernetes-sigs/kernel-module-management/internal/test
 # github.com/mailru/easyjson v0.7.7
 ## explicit; go 1.12
 github.com/mailru/easyjson/buffer
