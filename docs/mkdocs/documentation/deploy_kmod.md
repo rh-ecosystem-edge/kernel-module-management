@@ -107,6 +107,7 @@ In namespaces where Pod Security admission and SCC synchronization are enabled, 
 allowed through RBAC.
 This is done by configuring a ServiceAccount that is allowed to use the `privileged` SCC in the `Module`.
 The authorization model depends on the `Module`'s namespace, as well as its spec:
+
 - if the `.spec.moduleLoader.serviceAccountName` or `.spec.devicePlugin.serviceAccountName` fields are set, they are
   always used;
 - if those fields are not set, then:
@@ -169,13 +170,13 @@ spec:
       inTreeModuleToRemove: my-kmod-intree  # optional
 
       kernelMappings:  # At least one item is required
-        - literal: 6.0.15-300.fc37.x86_64
-          containerImage: some.registry/org/my-kmod:6.0.15-300.fc37.x86_64
+        - literal: 5.14.0-70.58.1.el9_0.x86_64
+          containerImage: some.registry/org/my-kmod:5.14.0-70.58.1.el9_0.x86_64
 
         # For each node running a kernel matching the regexp below,
         # KMM will create a DaemonSet running the image specified in containerImage
         # with ${KERNEL_FULL_VERSION} replaced with the kernel version.
-        - regexp: '^.+\fc37\.x86_64$'
+        - regexp: '^.+\el9\.x86_64$'
           containerImage: "some.other.registry/org/my-kmod:${KERNEL_FULL_VERSION}"
 
         # For any other kernel, build the image using the Dockerfile in the my-kmod ConfigMap.
@@ -251,9 +252,9 @@ The following `Module` fields support shell-like variable substitution:
 
 The following variables will be substituted:
 
-| Name                          | Description                            | Example                 |
-|-------------------------------|----------------------------------------|-------------------------|
-| `KERNEL_FULL_VERSION`         | The kernel version we are building for | `6.3.5-200.fc38.x86_64` |
-| `KERNEL_VERSION` (deprecated) | The kernel version we are building for | `6.3.5-200.fc38.x86_64` |
-| `MOD_NAME`                    | The `Module`'s name                    | `my-mod`                |
-| `MOD_NAMESPACE`               | The `Module`'s namespace               | `my-namespace`          |
+| Name                          | Description                            | Example                       |
+|-------------------------------|----------------------------------------|-------------------------------|
+| `KERNEL_FULL_VERSION`         | The kernel version we are building for | `5.14.0-70.58.1.el9_0.x86_64` |
+| `KERNEL_VERSION` (deprecated) | The kernel version we are building for | `5.14.0-70.58.1.el9_0.x86_64` |
+| `MOD_NAME`                    | The `Module`'s name                    | `my-mod`                      |
+| `MOD_NAMESPACE`               | The `Module`'s namespace               | `my-namespace`                |
