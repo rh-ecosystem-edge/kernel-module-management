@@ -65,12 +65,12 @@ object to build your image.
 
 The following build arguments are automatically set by KMM:
 
-| Name                          | Description                            | Example                 |
-|-------------------------------|----------------------------------------|-------------------------|
-| `KERNEL_FULL_VERSION`         | The kernel version we are building for | `6.3.5-200.fc38.x86_64` |
-| `KERNEL_VERSION` (deprecated) | The kernel version we are building for | `6.3.5-200.fc38.x86_64` |
-| `MOD_NAME`                    | The `Module`'s name                    | `my-mod`                |
-| `MOD_NAMESPACE`               | The `Module`'s namespace               | `my-namespace`          |
+| Name                          | Description                            | Example                       |
+|-------------------------------|----------------------------------------|-------------------------------|
+| `KERNEL_FULL_VERSION`         | The kernel version we are building for | `5.14.0-70.58.1.el9_0.x86_64` |
+| `KERNEL_VERSION` (deprecated) | The kernel version we are building for | `5.14.0-70.58.1.el9_0.x86_64` |
+| `MOD_NAME`                    | The `Module`'s name                    | `my-mod`                      |
+| `MOD_NAMESPACE`               | The `Module`'s namespace               | `my-namespace`                |
 
 Once the image is built, KMM proceeds with the `Module` reconciliation.
 
@@ -101,6 +101,13 @@ Once the image is built, KMM proceeds with the `Module` reconciliation.
     # the container image already exists.
     insecureSkipTLSVerify: false
 ```
+
+!!! warning "OpenShift's internal container registry is not enabled by default on bare metal clusters"
+
+    A common pattern is to push ModuleLoader images to OpenShift's internal image registry once they are built.
+    That registry is not enabled by default on bare metal installations of OpenShift.
+    Refer to [Configuring the registry for bare metal](https://docs.openshift.com/container-platform/4.13/registry/configuring_registry_storage/configuring-registry-storage-baremetal.html)
+    to enable it.
 
 ### Using Driver Toolkit (DTK)
 
