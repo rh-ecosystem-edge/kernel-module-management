@@ -62,7 +62,12 @@ import (
 	//+kubebuilder:scaffold:imports
 )
 
-var scheme = runtime.NewScheme()
+var (
+	GitCommit = "undefined"
+	Version   = "undefined"
+
+	scheme = runtime.NewScheme()
+)
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
@@ -87,11 +92,7 @@ func main() {
 
 	flag.Parse()
 
-	commit, err := cmd.GitCommit()
-	if err != nil {
-		setupLogger.Error(err, "Could not get the git commit; using <undefined>")
-		commit = "<undefined>"
-	}
+	setupLogger.Info("Creating manager", "version", Version, "git commit", GitCommit)
 
 	operatorNamespace := cmd.GetEnvOrFatalError(constants.OperatorNamespaceEnvVar, setupLogger)
 
@@ -101,7 +102,7 @@ func main() {
 		managed = false
 	}
 
-	setupLogger.Info("Creating manager", "git commit", commit)
+	setupLogger.Info("Parsing configuration file", "path", configFile)
 
 	cfg, err := config.ParseFile(configFile)
 	if err != nil {
