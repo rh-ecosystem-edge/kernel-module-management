@@ -8,6 +8,9 @@ images:
 - name: controller
   newName: quay.io/edge-infrastructure/kernel-module-management-operator
   newTag: latest
+- name: worker
+  newName: quay.io/edge-infrastructure/kernel-module-management-worker
+  newTag: latest
 
 configMapGenerator:
 - files:

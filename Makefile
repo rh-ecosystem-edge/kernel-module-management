@@ -39,6 +39,9 @@ IMAGE_TAG ?= latest
 SIGNER_IMAGE_TAG_BASE ?= quay.io/edge-infrastructure/kernel-module-management-signimage
 SIGNER_IMG ?= $(SIGNER_IMAGE_TAG_BASE):$(IMAGE_TAG)
 
+WORKER_IMAGE_TAG_BASE ?= quay.io/edge-infrastructure/kernel-module-management-worker
+WORKER_IMG ?= $(WORKER_IMAGE_TAG_BASE):$(IMAGE_TAG)
+
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
 BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
@@ -150,6 +153,9 @@ manager: $(shell find -name "*.go") go.mod go.sum  ## Build manager binary.
 manager-hub: $(shell find -name "*.go") go.mod go.sum  ## Build manager-hub binary.
 	go build -ldflags="-X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT)" -o $@ ./cmd/manager-hub
 
+worker: $(shell find -name "*.go") go.mod go.sum  ## Build worker binary.
+	go build -ldflags="-X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT)" -o $@ ./cmd/worker
+
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
@@ -199,7 +205,7 @@ KUSTOMIZE_CONFIG_HUB_DEFAULT ?= config/default-hub
 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
+	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG) worker=$(WORKER_IMG)
 	cd config/manager-base && $(KUSTOMIZE) edit set image must-gather=$(GATHER_IMG) signer=$(SIGNER_IMG)
 	oc apply -k $(KUSTOMIZE_CONFIG_DEFAULT)
 
@@ -264,7 +270,7 @@ operator-sdk:
 bundle: operator-sdk manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
 	rm -fr ./bundle
 	${OPERATOR_SDK} generate kustomize manifests --apis-dir api
-	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
+	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG) worker=$(WORKER_IMG)
 	cd config/manager-base && $(KUSTOMIZE) edit set image must-gather=$(GATHER_IMG) signer=$(SIGNER_IMG)
 
 	OPERATOR_SDK="${OPERATOR_SDK}" \
