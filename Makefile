@@ -5,6 +5,8 @@
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= 0.0.1
 
+GIT_COMMIT ?= $(shell git rev-parse --short HEAD)
+
 # CHANNELS define the bundle channels used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g CHANNELS = "candidate,fast,stable")
 # To re-generate a bundle for other specific channels without changing the standard setup, you can:
@@ -143,10 +145,10 @@ lint: golangci-lint ## Run golangci-lint against code.
 ##@ Build
 
 manager: $(shell find -name "*.go") go.mod go.sum  ## Build manager binary.
-	go build -o $@ ./cmd/manager
+	go build -ldflags="-X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT)" -o $@ ./cmd/manager
 
 manager-hub: $(shell find -name "*.go") go.mod go.sum  ## Build manager-hub binary.
-	go build -o $@ ./cmd/manager-hub
+	go build -ldflags="-X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT)" -o $@ ./cmd/manager-hub
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
