@@ -93,49 +93,17 @@ spec:
 The ModuleLoader pod will first try to unload the in-tree `mod_b` before loading `mod_a` from the ModuleLoader image.  
 When the ModuleLoader pod is terminated and `mod_a` is unloaded, `mod_b` will not be loaded again.
 
-## Security and permissions
+### Image pull policy
 
-Loading kernel modules is a highly sensitive operation.
-Once loaded, kernel modules have all possible permissions to do any kind of operation on the node.
+Many examples in this documentation use the kernel version as image tag for the ModuleLoader image name.  
+If that image tag is being overridden on the registry, the Kubernetes
+[default image pull policy](https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting) that KMM
+honors can lead to nodes not pulling the latest version of an image.  
+Use `.spec.moduleLoader.container.imagePullPolicy` to configure the right
+[image pull policy](https://kubernetes.io/docs/concepts/containers/images/#updating-images) for your ModuleLoader
+DaemonSets.
 
-### `ServiceAccounts` and `SecurityContextConstraints`
-
-[Pod Security admission](https://docs.openshift.com/container-platform/4.12/authentication/understanding-and-managing-pod-security-admission.html) and `SecurityContextConstraints` (SCCs) restrict privileged workload in most namespaces by default;
-namespaces that are part of the [cluster payload](https://docs.openshift.com/container-platform/4.12/authentication/understanding-and-managing-pod-security-admission.html#security-context-constraints-psa-opting_understanding-and-managing-pod-security-admission)
-are an exception to that rule.
-In namespaces where Pod Security admission and SCC synchronization are enabled, the KMM workload needs to be manually
-allowed through RBAC.
-This is done by configuring a ServiceAccount that is allowed to use the `privileged` SCC in the `Module`.
-The authorization model depends on the `Module`'s namespace, as well as its spec:
-
-- if the `.spec.moduleLoader.serviceAccountName` or `.spec.devicePlugin.serviceAccountName` fields are set, they are
-  always used;
-- if those fields are not set, then:
-    - if the `Module` is created in the operator's namespace (`openshift-kmm` by default), then KMM will use its
-      default, powerful `ServiceAccounts` to run the DaemonSets;
-    - if the `Module` is created in any other namespace, then KMM will run the DaemonSets as the namespace's `default`
-      `ServiceAccount`, which cannot run privileged workload unless you manually allow it to use the `privileged` SCC.
-
-!!! warning "`openshift-kmm` and some other namespaces that are part of the [cluster payload](https://docs.openshift.com/container-platform/4.12/authentication/understanding-and-managing-pod-security-admission.html#security-context-constraints-psa-opting_understanding-and-managing-pod-security-admission) are considered trusted namespaces"
-
-    When setting up RBAC permissions, keep in mind that any user or ServiceAccount creating a `Module` resource in the
-    `openshift-kmm` namespace will result in KMM automatically running privileged workload on potentially all nodes in
-    cluster.
-
-To allow any `ServiceAccount` to use the `privileged` SCC and hence to run ModuleLoader and / or device plugin pods,
-use the following command:
-
-```shell
-oc adm policy add-scc-to-user privileged -z "${serviceAccountName}" [ -n "${namespace}" ]
-```
-
-### Pod Security standards
-
-OpenShift runs a [synchronization mechanism](https://docs.openshift.com/container-platform/4.12/authentication/understanding-and-managing-pod-security-admission.html)
-that sets the namespace's Pod Security level automatically based on the security contexts in use.
-No action is needed.
-
-## Example resource
+### Example resource
 
 Below is an annotated `Module` example with most options set.
 More information about specific features is available in the dedicated pages:
@@ -166,6 +134,8 @@ spec:
           - my-kmod
           - my_dep_a
           - my_dep_b
+
+      imagePullPolicy: Always  # optional
 
       inTreeModuleToRemove: my-kmod-intree  # optional
 
@@ -241,7 +211,7 @@ spec:
     node-role.kubernetes.io/worker: ""
 ```
 
-### Variable substitution
+#### Variable substitution
 
 The following `Module` fields support shell-like variable substitution:
 
@@ -258,3 +228,45 @@ The following variables will be substituted:
 | `KERNEL_VERSION` (deprecated) | The kernel version we are building for | `5.14.0-70.58.1.el9_0.x86_64` |
 | `MOD_NAME`                    | The `Module`'s name                    | `my-mod`                      |
 | `MOD_NAMESPACE`               | The `Module`'s namespace               | `my-namespace`                |
+
+## Security and permissions
+
+Loading kernel modules is a highly sensitive operation.
+Once loaded, kernel modules have all possible permissions to do any kind of operation on the node.
+
+### `ServiceAccounts` and `SecurityContextConstraints`
+
+[Pod Security admission](https://docs.openshift.com/container-platform/4.12/authentication/understanding-and-managing-pod-security-admission.html) and `SecurityContextConstraints` (SCCs) restrict privileged workload in most namespaces by default;
+namespaces that are part of the [cluster payload](https://docs.openshift.com/container-platform/4.12/authentication/understanding-and-managing-pod-security-admission.html#security-context-constraints-psa-opting_understanding-and-managing-pod-security-admission)
+are an exception to that rule.
+In namespaces where Pod Security admission and SCC synchronization are enabled, the KMM workload needs to be manually
+allowed through RBAC.
+This is done by configuring a ServiceAccount that is allowed to use the `privileged` SCC in the `Module`.
+The authorization model depends on the `Module`'s namespace, as well as its spec:
+
+- if the `.spec.moduleLoader.serviceAccountName` or `.spec.devicePlugin.serviceAccountName` fields are set, they are
+  always used;
+- if those fields are not set, then:
+    - if the `Module` is created in the operator's namespace (`openshift-kmm` by default), then KMM will use its
+      default, powerful `ServiceAccounts` to run the DaemonSets;
+    - if the `Module` is created in any other namespace, then KMM will run the DaemonSets as the namespace's `default`
+      `ServiceAccount`, which cannot run privileged workload unless you manually allow it to use the `privileged` SCC.
+
+!!! warning "`openshift-kmm` and some other namespaces that are part of the [cluster payload](https://docs.openshift.com/container-platform/4.12/authentication/understanding-and-managing-pod-security-admission.html#security-context-constraints-psa-opting_understanding-and-managing-pod-security-admission) are considered trusted namespaces"
+
+    When setting up RBAC permissions, keep in mind that any user or ServiceAccount creating a `Module` resource in the
+    `openshift-kmm` namespace will result in KMM automatically running privileged workload on potentially all nodes in
+    cluster.
+
+To allow any `ServiceAccount` to use the `privileged` SCC and hence to run ModuleLoader and / or device plugin pods,
+use the following command:
+
+```shell
+oc adm policy add-scc-to-user privileged -z "${serviceAccountName}" [ -n "${namespace}" ]
+```
+
+### Pod Security standards
+
+OpenShift runs a [synchronization mechanism](https://docs.openshift.com/container-platform/4.12/authentication/understanding-and-managing-pod-security-admission.html)
+that sets the namespace's Pod Security level automatically based on the security contexts in use.
+No action is needed.
