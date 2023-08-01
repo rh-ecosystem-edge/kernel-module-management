@@ -1,0 +1,36 @@
+# Build the manager binary
+FROM registry.access.redhat.com/ubi9/go-toolset:1.19 as builder
+
+# Add the vendored dependencies
+COPY vendor vendor
+
+# Copy the Go Modules manifests
+COPY go.mod go.mod
+COPY go.sum go.sum
+
+# Copy the go source
+COPY api api
+COPY cmd/worker cmd/worker
+COPY internal internal
+
+# Copy Makefile
+COPY Makefile Makefile
+COPY docs.mk docs.mk
+
+# Copy the .git directory which is needed to store the build info
+COPY .git .git
+
+# Build
+RUN git config --global --add safe.directory ${PWD}
+RUN ["make", "worker"]
+
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.2
+
+RUN ["microdnf", "-y", "install", "kmod"]
+
+WORKDIR /
+
+COPY --from=builder /opt/app-root/src/worker /usr/local/bin/worker
+USER 65534:65534
+
+ENTRYPOINT ["/usr/local/bin/worker"]
