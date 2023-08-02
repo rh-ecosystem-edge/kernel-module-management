@@ -7,7 +7,7 @@ package syncronizedmap
 import (
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockKernelOsDtkMapping is a mock of KernelOsDtkMapping interface.

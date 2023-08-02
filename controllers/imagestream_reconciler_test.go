@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 
-	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	imagev1 "github.com/openshift/api/image/v1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
+	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	runtimectrl "sigs.k8s.io/controller-runtime"

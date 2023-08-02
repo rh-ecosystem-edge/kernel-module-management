@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	openapivi "github.com/openshift/api/image/v1"
@@ -15,6 +14,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
+	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

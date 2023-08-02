@@ -7,9 +7,9 @@ package module
 import (
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
 	v1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	api "github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockKernelMapper is a mock of KernelMapper interface.

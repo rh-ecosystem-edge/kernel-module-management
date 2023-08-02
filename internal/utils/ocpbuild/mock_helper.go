@@ -8,9 +8,9 @@ import (
 	context "context"
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
 	v1 "github.com/openshift/api/build/v1"
 	api "github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
+	gomock "go.uber.org/mock/gomock"
 	v10 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

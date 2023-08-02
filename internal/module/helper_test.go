@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
