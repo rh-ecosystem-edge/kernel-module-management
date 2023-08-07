@@ -54,6 +54,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/manifestwork"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
 	signocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/sign/ocpbuild"
@@ -115,7 +116,8 @@ func main() {
 
 	client := mgr.GetClient()
 
-	filterAPI := filter.New(client)
+	nmcHelper := nmc.NewHelper(client)
+	filterAPI := filter.New(client, nmcHelper)
 	kernelOsDtkMapping := syncronizedmap.NewKernelOsDtkMapping()
 
 	metricsAPI := metrics.New()

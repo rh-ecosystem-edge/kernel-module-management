@@ -94,8 +94,6 @@ func NewModuleReconciler(
 //+kubebuilder:rbac:groups="core",resources=serviceaccounts,verbs=get;list;watch
 //+kubebuilder:rbac:groups="build.openshift.io",resources=builds,verbs=get;list;create;delete;watch;patch
 //+kubebuilder:rbac:groups="batch",resources=jobs,verbs=create;list;watch;delete
-//+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=nodemodulesconfigs,verbs=get;list;watch;update;patch;create
-//+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=nodemodulesconfigs/status,verbs=get;
 
 // Reconcile lists all nodes and looks for kernels that match its mappings.
 // For each mapping that matches at least one node in the cluster, it creates a DaemonSet running the container image

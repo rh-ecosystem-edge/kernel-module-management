@@ -220,14 +220,7 @@ spec:
           - get
           - list
           - patch
-          - update
           - watch
-        - apiGroups:
-          - kmm.sigs.x-k8s.io
-          resources:
-          - nodemodulesconfigs/status
-          verbs:
-          - get
         - apiGroups:
           - kmm.sigs.x-k8s.io
           resources:
