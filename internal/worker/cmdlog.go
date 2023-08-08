@@ -51,13 +51,13 @@ func (cl *CommandLogger) Wait() error {
 	close(errs)
 
 	// TODO move to errors.Join() when we move to Go 1.20
-	var err error
+	var err *multierror.Error
 
 	for chErr := range errs {
 		err = multierror.Append(err, chErr)
 	}
 
-	return err
+	return err.ErrorOrNil()
 }
 
 func (cl *CommandLogger) write(r io.Reader, name string, errs chan<- error) {

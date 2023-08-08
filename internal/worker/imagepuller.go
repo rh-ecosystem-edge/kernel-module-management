@@ -149,11 +149,13 @@ func (i *imagePuller) PullAndExtract(ctx context.Context, imageName string, inse
 	close(errs)
 
 	// TODO move to errors.Join() when we move to Go 1.20
-	err = nil
+	var sumErr *multierror.Error
 
 	for chErr := range errs {
-		err = multierror.Append(err, chErr)
+		sumErr = multierror.Append(sumErr, chErr)
 	}
+
+	err = sumErr.ErrorOrNil()
 
 	if err != nil {
 		return res, fmt.Errorf("got one or more errors while writing the image: %v", err)
