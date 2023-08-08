@@ -63,6 +63,9 @@ spec:
       kind: Module
       name: modules.kmm.sigs.x-k8s.io
       version: v1beta1
+    - kind: NodeModulesConfig
+      name: nodemodulesconfigs.kmm.sigs.x-k8s.io
+      version: v1beta1
     - description: PreflightValidation initiates a preflight validations for all Modules
         on the current Kubernetes cluster.
       displayName: Preflight Validation
