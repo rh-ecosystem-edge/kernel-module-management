@@ -53,6 +53,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/preflight"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
@@ -119,7 +120,8 @@ func main() {
 
 	client := mgr.GetClient()
 
-	filterAPI := filter.New(client)
+	nmcHelper := nmc.NewHelper(client)
+	filterAPI := filter.New(client, nmcHelper)
 	kernelOsDtkMapping := syncronizedmap.NewKernelOsDtkMapping()
 
 	metricsAPI := metrics.New()
@@ -163,13 +165,23 @@ func main() {
 		statusupdater.NewModuleStatusUpdater(client),
 		operatorNamespace,
 	)
-
 	if err = mc.SetupWithManager(mgr, constants.KernelLabel); err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.ModuleReconcilerName)
 	}
 
-	nodeKernelReconciler := controllers.NewNodeKernelReconciler(client, constants.KernelLabel, filterAPI, kernelOsDtkMapping)
+	mnc := controllers.NewModuleNMCReconciler(
+		client,
+		kernelAPI,
+		registryAPI,
+		nmcHelper,
+		filterAPI,
+		authFactory,
+	)
+	if err = mnc.SetupWithManager(mgr); err != nil {
+		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.ModuleNMCReconcilerName)
+	}
 
+	nodeKernelReconciler := controllers.NewNodeKernelReconciler(client, constants.KernelLabel, filterAPI, kernelOsDtkMapping)
 	if err = nodeKernelReconciler.SetupWithManager(mgr); err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.NodeKernelReconcilerName)
 	}
