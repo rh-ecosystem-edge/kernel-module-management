@@ -162,6 +162,8 @@ spec:
           resources:
           - pods
           verbs:
+          - create
+          - delete
           - get
           - list
           - patch
@@ -224,6 +226,12 @@ spec:
           - list
           - patch
           - watch
+        - apiGroups:
+          - kmm.sigs.x-k8s.io
+          resources:
+          - nodemodulesconfigs/status
+          verbs:
+          - patch
         - apiGroups:
           - kmm.sigs.x-k8s.io
           resources:
@@ -321,6 +329,8 @@ spec:
                 command:
                 - /usr/local/bin/manager
                 env:
+                - name: RELATED_IMAGES_WORKER
+                  value: quay.io/edge-infrastructure/kernel-module-management-worker:latest
                 - name: SSL_CERT_DIR
                   value: /etc/pki/ca-trust/extracted/pem
                 - name: OPERATOR_NAMESPACE
