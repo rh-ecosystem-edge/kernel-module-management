@@ -22,8 +22,6 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/config"
-	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -48,6 +46,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	buildocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build/ocpbuild"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cmd"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/config"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/daemonset"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
@@ -60,6 +59,7 @@ import (
 	signocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/sign/ocpbuild"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
+	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -96,6 +96,7 @@ func main() {
 	setupLogger.Info("Creating manager", "version", Version, "git commit", GitCommit)
 
 	operatorNamespace := cmd.GetEnvOrFatalError(constants.OperatorNamespaceEnvVar, setupLogger)
+	workerImage := cmd.GetEnvOrFatalError("RELATED_IMAGES_WORKER", setupLogger)
 
 	managed, err := GetBoolEnv("KMM_MANAGED")
 	if err != nil {
@@ -181,7 +182,19 @@ func main() {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.ModuleNMCReconcilerName)
 	}
 
+	workerHelper := controllers.NewWorkerHelper(
+		client,
+		controllers.NewPodManager(client, workerImage, scheme),
+	)
+
+	ctx := ctrl.SetupSignalHandler()
+
+	if err = controllers.NewNodeModulesConfigReconciler(client, workerHelper).SetupWithManager(ctx, mgr); err != nil {
+		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.NodeModulesConfigReconcilerName)
+	}
+
 	nodeKernelReconciler := controllers.NewNodeKernelReconciler(client, constants.KernelLabel, filterAPI, kernelOsDtkMapping)
+
 	if err = nodeKernelReconciler.SetupWithManager(mgr); err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.NodeKernelReconcilerName)
 	}
@@ -251,7 +264,7 @@ func main() {
 	}
 
 	setupLogger.Info("starting manager")
-	if err = mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err = mgr.Start(ctx); err != nil {
 		cmd.FatalError(setupLogger, err, "problem running manager")
 	}
 }

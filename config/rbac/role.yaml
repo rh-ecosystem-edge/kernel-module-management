@@ -79,6 +79,8 @@ rules:
   resources:
   - pods
   verbs:
+  - create
+  - delete
   - get
   - list
   - patch
@@ -141,6 +143,12 @@ rules:
   - list
   - patch
   - watch
+- apiGroups:
+  - kmm.sigs.x-k8s.io
+  resources:
+  - nodemodulesconfigs/status
+  verbs:
+  - patch
 - apiGroups:
   - kmm.sigs.x-k8s.io
   resources:
