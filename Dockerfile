@@ -12,7 +12,6 @@ COPY vendor vendor
 COPY api api
 COPY api-hub api-hub
 COPY cmd cmd
-COPY controllers controllers
 COPY docs.mk docs.mk
 COPY internal internal
 
