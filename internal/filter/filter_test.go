@@ -10,7 +10,6 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 	"go.uber.org/mock/gomock"
 	appsv1 "k8s.io/api/apps/v1"
-	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,6 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	buildv1 "github.com/openshift/api/build/v1"
 	hubv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api-hub/v1beta1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	mockClient "github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
@@ -115,21 +115,21 @@ var _ = Describe("nodeBecomesSchedulable", func() {
 	)
 })
 
-var _ = Describe("moduleJobSuccess", func() {
-	DescribeTable("should work as expected", func(jobControlledByModule, jobSucceeded, expectedRes bool) {
-		newJob := batchv1.Job{
-			ObjectMeta: metav1.ObjectMeta{Name: "someJob", Namespace: "moduleNamespace"},
+var _ = Describe("moduleBuildSuccess", func() {
+	DescribeTable("should work as expected", func(buildControlledByModule, buildSucceeded, expectedRes bool) {
+		newBuild := buildv1.Build{
+			ObjectMeta: metav1.ObjectMeta{Name: "someBuild", Namespace: "moduleNamespace"},
 		}
-		if jobSucceeded {
-			newJob.Status.Succeeded = 1
+		if buildSucceeded {
+			newBuild.Status.Phase = buildv1.BuildPhaseComplete
 		}
 
-		res := moduleJobSuccess.Update(event.UpdateEvent{ObjectNew: &newJob})
+		res := moduleBuildSuccess.Update(event.UpdateEvent{ObjectNew: &newBuild})
 		Expect(res).To(Equal(expectedRes))
 
 	},
-		Entry("job succeeded", true, true, true),
-		Entry("job not succeeded", true, false, false),
+		Entry("build succeeded", true, true, true),
+		Entry("build not succeeded", true, false, false),
 	)
 })
 

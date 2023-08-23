@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/go-multierror"
+	buildv1 "github.com/openshift/api/build/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
@@ -16,7 +17,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
-	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -290,7 +290,7 @@ func (mnr *ModuleNMCReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		NewControllerManagedBy(mgr).
 		For(&kmmv1beta1.Module{}).
 		Owns(&kmmv1beta1.NodeModulesConfig{}).
-		Owns(&batchv1.Job{}, builder.WithPredicates(filter.ModuleNMCReconcileJobPredicate())).
+		Owns(&buildv1.Build{}, builder.WithPredicates(filter.ModuleNMCReconcileBuildPredicate())).
 		Watches(
 			&v1.Node{},
 			handler.EnqueueRequestsFromMapFunc(mnr.filter.FindModulesForNMCNodeChange),
