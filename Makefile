@@ -106,14 +106,14 @@ help: ## Display this help.
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) crd paths="./api/..." output:crd:artifacts:config=config/crd/bases
 	$(CONTROLLER_GEN) webhook paths="./api/..." output:webhook:artifacts:config=config/webhook
-	$(CONTROLLER_GEN) rbac:roleName=manager-role paths="./controllers" output:rbac:artifacts:config=config/rbac
+	$(CONTROLLER_GEN) rbac:roleName=manager-role paths="./internal/controllers" output:rbac:artifacts:config=config/rbac
 	# Hub
 	$(CONTROLLER_GEN) crd paths="./api-hub/..." output:crd:artifacts:config=config/crd-hub/bases
 	$(CONTROLLER_GEN) webhook paths="./api-hub/..." output:webhook:artifacts:config=config/webhook-hub
 	$(CONTROLLER_GEN) \
 		rbac:roleName=manager-role \
-		paths="./controllers/hub" \
-		paths="controllers/imagestream_reconciler.go" \
+		paths="./internal/controllers/hub" \
+		paths="internal/controllers/imagestream_reconciler.go" \
 		output:rbac:artifacts:config=config/rbac-hub
 
 .PHONY: generate
