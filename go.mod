@@ -18,8 +18,8 @@ require (
 	github.com/spf13/cobra v1.7.0
 	go.uber.org/mock v0.2.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.27.4
-	k8s.io/apimachinery v0.27.4
+	k8s.io/api v0.27.5
+	k8s.io/apimachinery v0.27.5
 	k8s.io/client-go v0.27.4
 	k8s.io/klog/v2 v2.100.1
 	k8s.io/kubectl v0.27.4
