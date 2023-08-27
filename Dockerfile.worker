@@ -32,7 +32,5 @@ WORKDIR /
 
 COPY --from=builder /opt/app-root/src/worker /usr/local/bin/worker
 RUN mkdir -p /mnt/img
-RUN chown 65534:65534 /mnt/img
-USER 65534:65534
 
 ENTRYPOINT ["/usr/local/bin/worker"]
