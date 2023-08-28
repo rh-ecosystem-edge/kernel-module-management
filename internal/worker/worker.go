@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -18,24 +19,24 @@ type worker struct {
 	ip     ImagePuller
 	logger logr.Logger
 	mr     ModprobeRunner
+	res    MirrorResolver
 }
 
-func NewWorker(ip ImagePuller, mr ModprobeRunner, logger logr.Logger) Worker {
+func NewWorker(ip ImagePuller, mr ModprobeRunner, res MirrorResolver, logger logr.Logger) Worker {
 	return &worker{
 		ip:     ip,
 		logger: logger,
 		mr:     mr,
+		res:    res,
 	}
 }
 
 func (w *worker) LoadKmod(ctx context.Context, cfg *kmmv1beta1.ModuleConfig) error {
 	imageName := cfg.ContainerImage
 
-	w.logger.Info("Pulling image", "name", imageName)
-
-	pr, err := w.ip.PullAndExtract(ctx, imageName, cfg.InsecurePull)
+	pr, err := w.pullImageOrMirror(ctx, imageName, cfg)
 	if err != nil {
-		return fmt.Errorf("could not pull %q: %v", imageName, err)
+		return fmt.Errorf("could not pull %s or any of its mirrors: %v", imageName, err)
 	}
 
 	if inTree := cfg.InTreeModuleToRemove; inTree != "" {
@@ -72,11 +73,9 @@ func (w *worker) LoadKmod(ctx context.Context, cfg *kmmv1beta1.ModuleConfig) err
 func (w *worker) UnloadKmod(ctx context.Context, cfg *kmmv1beta1.ModuleConfig) error {
 	imageName := cfg.ContainerImage
 
-	w.logger.Info("Pulling image", "name", imageName)
-
-	pr, err := w.ip.PullAndExtract(ctx, imageName, cfg.InsecurePull)
+	pr, err := w.pullImageOrMirror(ctx, imageName, cfg)
 	if err != nil {
-		return fmt.Errorf("could not pull %q: %v", imageName, err)
+		return fmt.Errorf("could not pull %s or any of its mirrors: %v", imageName, err)
 	}
 
 	moduleName := cfg.Modprobe.ModuleName
@@ -104,4 +103,37 @@ func (w *worker) UnloadKmod(ctx context.Context, cfg *kmmv1beta1.ModuleConfig) e
 	// TODO remove firmware
 
 	return nil
+}
+
+func (w *worker) pullImageOrMirror(ctx context.Context, imageName string, cfg *kmmv1beta1.ModuleConfig) (PullResult, error) {
+	imageNames, err := w.res.GetAllReferences(imageName)
+	if err != nil {
+		return PullResult{}, fmt.Errorf("could not resolve all mirrored names for %q: %v", imageName, err)
+	}
+
+	var (
+		ok = false
+		pr = PullResult{}
+	)
+
+	for _, in := range imageNames {
+		logger := w.logger.WithValues("image name", in)
+		logger.Info("Pulling image")
+
+		pr, err = w.ip.PullAndExtract(ctx, in, cfg.InsecurePull)
+		if err != nil {
+			logger.Error(err, "Could not pull image")
+			continue
+		}
+
+		logger.Info("Image pulled successfully", "dir", pr.fsDir)
+		ok = true
+		break
+	}
+
+	if !ok {
+		return pr, errors.New("all mirrors tried")
+	}
+
+	return pr, nil
 }

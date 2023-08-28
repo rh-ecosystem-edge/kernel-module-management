@@ -12,16 +12,18 @@ import (
 
 var _ = Describe("worker_LoadKmod", func() {
 	var (
-		ip *MockImagePuller
-		mr *MockModprobeRunner
-		w  Worker
+		ip  *MockImagePuller
+		mr  *MockModprobeRunner
+		res *MockMirrorResolver
+		w   Worker
 	)
 
 	BeforeEach(func() {
 		ctrl := gomock.NewController(GinkgoT())
 		ip = NewMockImagePuller(ctrl)
 		mr = NewMockModprobeRunner(ctrl)
-		w = NewWorker(ip, mr, GinkgoLogr)
+		res = NewMockMirrorResolver(ctrl)
+		w = NewWorker(ip, mr, res, GinkgoLogr)
 	})
 
 	ctx := context.TODO()
@@ -33,10 +35,13 @@ var _ = Describe("worker_LoadKmod", func() {
 	)
 
 	It("should return an error if the image could not be pulled", func() {
-		ip.
-			EXPECT().
-			PullAndExtract(ctx, imageName, false).
-			Return(PullResult{}, errors.New("random error"))
+		gomock.InOrder(
+			res.EXPECT().GetAllReferences(imageName).Return([]string{imageName}, nil),
+			ip.
+				EXPECT().
+				PullAndExtract(ctx, imageName, false).
+				Return(PullResult{}, errors.New("random error")),
+		)
 
 		Expect(
 			w.LoadKmod(ctx, &v1beta1.ModuleConfig{ContainerImage: imageName}),
@@ -55,6 +60,7 @@ var _ = Describe("worker_LoadKmod", func() {
 		}
 
 		gomock.InOrder(
+			res.EXPECT().GetAllReferences(imageName).Return([]string{imageName}, nil),
 			ip.EXPECT().PullAndExtract(ctx, imageName, false),
 			mr.EXPECT().Run(ctx, "-vd", dirName, moduleName).Return(errors.New("random error")),
 		)
@@ -79,6 +85,7 @@ var _ = Describe("worker_LoadKmod", func() {
 		}
 
 		gomock.InOrder(
+			res.EXPECT().GetAllReferences(imageName).Return([]string{imageName}, nil),
 			ip.EXPECT().PullAndExtract(ctx, imageName, false),
 			mr.EXPECT().Run(ctx, "-rv", inTreeModuleToRemove),
 			mr.EXPECT().Run(ctx, "-vd", dirName, moduleName),
@@ -102,6 +109,7 @@ var _ = Describe("worker_LoadKmod", func() {
 		}
 
 		gomock.InOrder(
+			res.EXPECT().GetAllReferences(imageName).Return([]string{imageName}, nil),
 			ip.EXPECT().PullAndExtract(ctx, imageName, false),
 			mr.EXPECT().Run(ctx, ToInterfaceSlice(rawArgs)...),
 		)
@@ -125,6 +133,7 @@ var _ = Describe("worker_LoadKmod", func() {
 		}
 
 		gomock.InOrder(
+			res.EXPECT().GetAllReferences(imageName).Return([]string{imageName}, nil),
 			ip.EXPECT().PullAndExtract(ctx, imageName, false),
 			mr.
 				EXPECT().
@@ -141,16 +150,18 @@ var _ = Describe("worker_LoadKmod", func() {
 
 var _ = Describe("worker_UnloadKmod", func() {
 	var (
-		ip *MockImagePuller
-		mr *MockModprobeRunner
-		w  Worker
+		ip  *MockImagePuller
+		mr  *MockModprobeRunner
+		res *MockMirrorResolver
+		w   Worker
 	)
 
 	BeforeEach(func() {
 		ctrl := gomock.NewController(GinkgoT())
 		ip = NewMockImagePuller(ctrl)
 		mr = NewMockModprobeRunner(ctrl)
-		w = NewWorker(ip, mr, GinkgoLogr)
+		res = NewMockMirrorResolver(ctrl)
+		w = NewWorker(ip, mr, res, GinkgoLogr)
 	})
 
 	ctx := context.TODO()
@@ -162,10 +173,13 @@ var _ = Describe("worker_UnloadKmod", func() {
 	)
 
 	It("should return an error if the image could not be pulled", func() {
-		ip.
-			EXPECT().
-			PullAndExtract(ctx, imageName, false).
-			Return(PullResult{}, errors.New("random error"))
+		gomock.InOrder(
+			res.EXPECT().GetAllReferences(imageName).Return([]string{imageName}, nil),
+			ip.
+				EXPECT().
+				PullAndExtract(ctx, imageName, false).
+				Return(PullResult{}, errors.New("random error")),
+		)
 
 		Expect(
 			w.UnloadKmod(ctx, &v1beta1.ModuleConfig{ContainerImage: imageName}),
@@ -184,6 +198,7 @@ var _ = Describe("worker_UnloadKmod", func() {
 		}
 
 		gomock.InOrder(
+			res.EXPECT().GetAllReferences(imageName).Return([]string{imageName}, nil),
 			ip.EXPECT().PullAndExtract(ctx, imageName, false),
 			mr.EXPECT().Run(ctx, "-rvd", dirName, moduleName).Return(errors.New("random error")),
 		)
@@ -206,6 +221,7 @@ var _ = Describe("worker_UnloadKmod", func() {
 		}
 
 		gomock.InOrder(
+			res.EXPECT().GetAllReferences(imageName).Return([]string{imageName}, nil),
 			ip.EXPECT().PullAndExtract(ctx, imageName, false),
 			mr.EXPECT().Run(ctx, ToInterfaceSlice(rawArgs)...),
 		)
@@ -228,6 +244,7 @@ var _ = Describe("worker_UnloadKmod", func() {
 		}
 
 		gomock.InOrder(
+			res.EXPECT().GetAllReferences(imageName).Return([]string{imageName}, nil),
 			ip.EXPECT().PullAndExtract(ctx, imageName, false),
 			mr.
 				EXPECT().

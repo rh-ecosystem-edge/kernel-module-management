@@ -668,6 +668,7 @@ func (p *podManagerImpl) baseWorkerPod(
 ) (*v1.Pod, error) {
 	const (
 		trustedCAVolumeName   = "trusted-ca"
+		volNameEtcContainers  = "etc-containers"
 		volNameLibModules     = "lib-modules"
 		volNameUsrLibModules  = "usr-lib-modules"
 		volNameVarLibFirmware = "var-lib-firmware"
@@ -765,12 +766,26 @@ func (p *podManagerImpl) baseWorkerPod(
 				},
 			},
 		},
+		{
+			Name: volNameEtcContainers,
+			VolumeSource: v1.VolumeSource{
+				HostPath: &v1.HostPathVolumeSource{
+					Path: "/etc/containers",
+					Type: &hostPathDirectory,
+				},
+			},
+		},
 	}
 
 	volumeMounts := []v1.VolumeMount{
 		{
 			Name:      volNameConfig,
 			MountPath: volMountPoingConfig,
+			ReadOnly:  true,
+		},
+		{
+			Name:      volNameEtcContainers,
+			MountPath: "/etc/containers",
 			ReadOnly:  true,
 		},
 		{
