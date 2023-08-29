@@ -4,19 +4,19 @@ import (
 	"context"
 	"fmt"
 
+	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 )
 
 //go:generate mockgen -source=helper.go -package=nmc -destination=mock_helper.go
 
 type Helper interface {
 	Get(ctx context.Context, name string) (*kmmv1beta1.NodeModulesConfig, error)
-	SetModuleConfig(ctx context.Context, nmc *kmmv1beta1.NodeModulesConfig, namespace, name string, moduleConfig *kmmv1beta1.ModuleConfig) error
-	RemoveModuleConfig(ctx context.Context, nmc *kmmv1beta1.NodeModulesConfig, namespace, name string) error
+	SetModuleConfig(nmc *kmmv1beta1.NodeModulesConfig, mld *api.ModuleLoaderData, moduleConfig *kmmv1beta1.ModuleConfig) error
+	RemoveModuleConfig(nmc *kmmv1beta1.NodeModulesConfig, namespace, name string) error
 	GetModuleEntry(nmc *kmmv1beta1.NodeModulesConfig, modNamespace, modName string) (*kmmv1beta1.NodeModuleSpec, int)
 }
 
@@ -42,15 +42,23 @@ func (h *helper) Get(ctx context.Context, name string) (*kmmv1beta1.NodeModulesC
 	return &nmc, nil
 }
 
-func (h *helper) SetModuleConfig(ctx context.Context,
+func (h *helper) SetModuleConfig(
 	nmc *kmmv1beta1.NodeModulesConfig,
-	namespace string,
-	name string,
+	mld *api.ModuleLoaderData,
 	moduleConfig *kmmv1beta1.ModuleConfig) error {
 
-	foundEntry, _ := h.GetModuleEntry(nmc, namespace, name)
+	foundEntry, _ := h.GetModuleEntry(nmc, mld.Namespace, mld.Name)
 	if foundEntry == nil {
-		nmc.Spec.Modules = append(nmc.Spec.Modules, kmmv1beta1.NodeModuleSpec{Name: name, Namespace: namespace})
+		nms := kmmv1beta1.NodeModuleSpec{
+			ModuleItem: kmmv1beta1.ModuleItem{
+				ImageRepoSecret:    mld.ImageRepoSecret,
+				Name:               mld.Name,
+				Namespace:          mld.Namespace,
+				ServiceAccountName: mld.ServiceAccountName,
+			},
+		}
+
+		nmc.Spec.Modules = append(nmc.Spec.Modules, nms)
 		foundEntry = &nmc.Spec.Modules[len(nmc.Spec.Modules)-1]
 	}
 	foundEntry.Config = *moduleConfig
@@ -58,7 +66,7 @@ func (h *helper) SetModuleConfig(ctx context.Context,
 	return nil
 }
 
-func (h *helper) RemoveModuleConfig(ctx context.Context, nmc *kmmv1beta1.NodeModulesConfig, namespace, name string) error {
+func (h *helper) RemoveModuleConfig(nmc *kmmv1beta1.NodeModulesConfig, namespace, name string) error {
 	foundEntry, index := h.GetModuleEntry(nmc, namespace, name)
 	if foundEntry != nil {
 		nmc.Spec.Modules = append(nmc.Spec.Modules[:index], nmc.Spec.Modules[index+1:]...)
