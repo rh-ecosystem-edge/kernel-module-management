@@ -7,13 +7,13 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
+	"go.uber.org/mock/gomock"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
-	"go.uber.org/mock/gomock"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -70,13 +70,9 @@ var _ = Describe("Get", func() {
 })
 
 var _ = Describe("SetModuleConfig", func() {
-	var (
-		ctx       context.Context
-		nmcHelper Helper
-	)
+	var nmcHelper Helper
 
 	BeforeEach(func() {
-		ctx = context.Background()
 		nmcHelper = NewHelper(nil)
 	})
 
@@ -87,13 +83,17 @@ var _ = Describe("SetModuleConfig", func() {
 
 	It("adding new module", func() {
 		nmc.Spec.Modules = []kmmv1beta1.NodeModuleSpec{
-			{Name: "some name 1", Namespace: "some namespace 1"},
-			{Name: "some name 2", Namespace: "some namespace 2"},
+			{
+				ModuleItem: kmmv1beta1.ModuleItem{Name: "some name 1", Namespace: "some namespace 1"},
+			},
+			{
+				ModuleItem: kmmv1beta1.ModuleItem{Name: "some name 2", Namespace: "some namespace 2"},
+			},
 		}
 
 		moduleConfig := kmmv1beta1.ModuleConfig{InTreeModuleToRemove: "in-tree-module"}
 
-		err := nmcHelper.SetModuleConfig(ctx, &nmc, namespace, name, &moduleConfig)
+		err := nmcHelper.SetModuleConfig(&nmc, &api.ModuleLoaderData{Name: name, Namespace: namespace}, &moduleConfig)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(nmc.Spec.Modules)).To(Equal(3))
@@ -103,19 +103,23 @@ var _ = Describe("SetModuleConfig", func() {
 	It("changing existing module config", func() {
 		nmc.Spec.Modules = []kmmv1beta1.NodeModuleSpec{
 			{
-				Name:      "some name 1",
-				Namespace: "some namespace 1",
+				ModuleItem: kmmv1beta1.ModuleItem{
+					Name:      "some name 1",
+					Namespace: "some namespace 1",
+				},
 			},
 			{
-				Name:      name,
-				Namespace: namespace,
-				Config:    kmmv1beta1.ModuleConfig{InTreeModuleToRemove: "some-in-tree-module"},
+				ModuleItem: kmmv1beta1.ModuleItem{
+					Name:      name,
+					Namespace: namespace,
+				},
+				Config: kmmv1beta1.ModuleConfig{InTreeModuleToRemove: "some-in-tree-module"},
 			},
 		}
 
 		moduleConfig := kmmv1beta1.ModuleConfig{InTreeModuleToRemove: "in-tree-module"}
 
-		err := nmcHelper.SetModuleConfig(ctx, &nmc, namespace, name, &moduleConfig)
+		err := nmcHelper.SetModuleConfig(&nmc, &api.ModuleLoaderData{Name: name, Namespace: namespace}, &moduleConfig)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(nmc.Spec.Modules)).To(Equal(2))
@@ -124,13 +128,9 @@ var _ = Describe("SetModuleConfig", func() {
 })
 
 var _ = Describe("RemoveModuleConfig", func() {
-	var (
-		ctx       context.Context
-		nmcHelper Helper
-	)
+	var nmcHelper Helper
 
 	BeforeEach(func() {
-		ctx = context.Background()
 		nmcHelper = NewHelper(nil)
 	})
 
@@ -142,18 +142,22 @@ var _ = Describe("RemoveModuleConfig", func() {
 	It("deleting non-existent module", func() {
 		nmc.Spec.Modules = []kmmv1beta1.NodeModuleSpec{
 			{
-				Name:      "some name 1",
-				Namespace: "some namespace 1",
-				Config:    kmmv1beta1.ModuleConfig{InTreeModuleToRemove: "some-in-tree-module-1"},
+				ModuleItem: kmmv1beta1.ModuleItem{
+					Name:      "some name 1",
+					Namespace: "some namespace 1",
+				},
+				Config: kmmv1beta1.ModuleConfig{InTreeModuleToRemove: "some-in-tree-module-1"},
 			},
 			{
-				Name:      "some name 2",
-				Namespace: "some namespace 2",
-				Config:    kmmv1beta1.ModuleConfig{InTreeModuleToRemove: "some-in-tree-module-2"},
+				ModuleItem: kmmv1beta1.ModuleItem{
+					Name:      "some name 2",
+					Namespace: "some namespace 2",
+				},
+				Config: kmmv1beta1.ModuleConfig{InTreeModuleToRemove: "some-in-tree-module-2"},
 			},
 		}
 
-		err := nmcHelper.RemoveModuleConfig(ctx, &nmc, namespace, name)
+		err := nmcHelper.RemoveModuleConfig(&nmc, namespace, name)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(nmc.Spec.Modules)).To(Equal(2))
@@ -164,18 +168,22 @@ var _ = Describe("RemoveModuleConfig", func() {
 	It("deleting existing module", func() {
 		nmc.Spec.Modules = []kmmv1beta1.NodeModuleSpec{
 			{
-				Name:      "some name 1",
-				Namespace: "some namespace 1",
-				Config:    kmmv1beta1.ModuleConfig{InTreeModuleToRemove: "some-in-tree-module-1"},
+				ModuleItem: kmmv1beta1.ModuleItem{
+					Name:      "some name 1",
+					Namespace: "some namespace 1",
+				},
+				Config: kmmv1beta1.ModuleConfig{InTreeModuleToRemove: "some-in-tree-module-1"},
 			},
 			{
-				Name:      name,
-				Namespace: namespace,
-				Config:    kmmv1beta1.ModuleConfig{InTreeModuleToRemove: "some-in-tree-module-2"},
+				ModuleItem: kmmv1beta1.ModuleItem{
+					Name:      name,
+					Namespace: namespace,
+				},
+				Config: kmmv1beta1.ModuleConfig{InTreeModuleToRemove: "some-in-tree-module-2"},
 			},
 		}
 
-		err := nmcHelper.RemoveModuleConfig(ctx, &nmc, namespace, name)
+		err := nmcHelper.RemoveModuleConfig(&nmc, namespace, name)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(nmc.Spec.Modules)).To(Equal(1))
@@ -206,8 +214,18 @@ var _ = Describe("GetModuleEntry", func() {
 		nmc := kmmv1beta1.NodeModulesConfig{
 			Spec: kmmv1beta1.NodeModulesConfigSpec{
 				Modules: []kmmv1beta1.NodeModuleSpec{
-					{Name: "some name 1", Namespace: "some namespace 1"},
-					{Name: "some name 2", Namespace: "some namespace 2"},
+					{
+						ModuleItem: kmmv1beta1.ModuleItem{
+							Name:      "some name 1",
+							Namespace: "some namespace 1",
+						},
+					},
+					{
+						ModuleItem: kmmv1beta1.ModuleItem{
+							Name:      "some name 2",
+							Namespace: "some namespace 2",
+						},
+					},
 				},
 			},
 		}
@@ -221,8 +239,18 @@ var _ = Describe("GetModuleEntry", func() {
 		nmc := kmmv1beta1.NodeModulesConfig{
 			Spec: kmmv1beta1.NodeModulesConfigSpec{
 				Modules: []kmmv1beta1.NodeModuleSpec{
-					{Name: "some name 1", Namespace: "some namespace 1"},
-					{Name: "some name 2", Namespace: "some namespace 2"},
+					{
+						ModuleItem: kmmv1beta1.ModuleItem{
+							Name:      "some name 1",
+							Namespace: "some namespace 1",
+						},
+					},
+					{
+						ModuleItem: kmmv1beta1.ModuleItem{
+							Name:      "some name 2",
+							Namespace: "some namespace 2",
+						},
+					},
 				},
 			},
 		}
@@ -253,7 +281,12 @@ var _ = Describe("RemoveModuleStatus", func() {
 
 	It("should remove a status if it exists in the list", func() {
 		statuses := []kmmv1beta1.NodeModuleStatus{
-			{Namespace: namespace, Name: name},
+			{
+				ModuleItem: kmmv1beta1.ModuleItem{
+					Namespace: namespace,
+					Name:      name,
+				},
+			},
 		}
 
 		RemoveModuleStatus(&statuses, namespace, name)
@@ -271,6 +304,12 @@ var _ = Describe("SetModuleStatus", func() {
 	now := metav1.Now()
 
 	s := kmmv1beta1.NodeModuleStatus{
+		ModuleItem: kmmv1beta1.ModuleItem{
+			ImageRepoSecret:    nil, // TODO
+			Name:               name,
+			Namespace:          namespace,
+			ServiceAccountName: "sa",
+		},
 		Config: &kmmv1beta1.ModuleConfig{
 			KernelVersion:        "some-kver",
 			ContainerImage:       "some-kernel-image",
@@ -278,9 +317,6 @@ var _ = Describe("SetModuleStatus", func() {
 			InTreeModuleToRemove: "intree",
 		},
 		LastTransitionTime: &now,
-		Name:               name,
-		Namespace:          namespace,
-		ServiceAccountName: "sa",
 	}
 
 	It("should do nothing if the slice is nil", func() {
