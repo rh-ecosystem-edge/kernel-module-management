@@ -190,7 +190,7 @@ var _ = Describe("workerHelper_ProcessModuleSpec", func() {
 		ctrl := gomock.NewController(GinkgoT())
 		client = testclient.NewMockClient(ctrl)
 		pm = NewMockpodManager(ctrl)
-		wh = NewWorkerHelper(client, pm)
+		wh = newWorkerHelper(client, pm)
 	})
 
 	It("should create a loader Pod if the corresponding status is missing", func() {
@@ -384,7 +384,7 @@ var _ = Describe("workerHelper_ProcessOrphanModuleStatus", func() {
 		status := &kmmv1beta1.NodeModuleStatus{InProgress: true}
 
 		Expect(
-			NewWorkerHelper(nil, nil).ProcessOrphanModuleStatus(ctx, nmc, status),
+			newWorkerHelper(nil, nil).ProcessOrphanModuleStatus(ctx, nmc, status),
 		).NotTo(
 			HaveOccurred(),
 		)
@@ -400,7 +400,7 @@ var _ = Describe("workerHelper_ProcessOrphanModuleStatus", func() {
 		client.EXPECT().Status().Return(sw)
 		sw.EXPECT().Patch(ctx, nmc, gomock.Any())
 		Expect(
-			NewWorkerHelper(client, nil).ProcessOrphanModuleStatus(ctx, nmc, status),
+			newWorkerHelper(client, nil).ProcessOrphanModuleStatus(ctx, nmc, status),
 		).NotTo(
 			HaveOccurred(),
 		)
@@ -410,7 +410,7 @@ var _ = Describe("workerHelper_ProcessOrphanModuleStatus", func() {
 		ctrl := gomock.NewController(GinkgoT())
 		client := testclient.NewMockClient(ctrl)
 		pm := NewMockpodManager(ctrl)
-		wh := NewWorkerHelper(client, pm)
+		wh := newWorkerHelper(client, pm)
 
 		nmc := &kmmv1beta1.NodeModulesConfig{}
 		status := &kmmv1beta1.NodeModuleStatus{
@@ -442,7 +442,7 @@ var _ = Describe("workerHelper_SyncStatus", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		kubeClient = testclient.NewMockClient(ctrl)
 		pm = NewMockpodManager(ctrl)
-		wh = NewWorkerHelper(kubeClient, pm)
+		wh = newWorkerHelper(kubeClient, pm)
 		sw = testclient.NewMockStatusWriter(ctrl)
 	})
 
@@ -721,7 +721,7 @@ var _ = Describe("workerHelper_RemoveOrphanFinalizers", func() {
 		ctrl := gomock.NewController(GinkgoT())
 		kubeClient = testclient.NewMockClient(ctrl)
 		pm = NewMockpodManager(ctrl)
-		wh = NewWorkerHelper(kubeClient, pm)
+		wh = newWorkerHelper(kubeClient, pm)
 	})
 
 	It("should do nothing if no pods are present", func() {
@@ -853,7 +853,7 @@ var _ = Describe("podManagerImpl_CreateUnloaderPod", func() {
 			client.EXPECT().Create(ctx, cmpmock.DiffEq(expected)),
 		)
 
-		pm := NewPodManager(client, workerImage, scheme)
+		pm := newPodManager(client, workerImage, scheme)
 		pm.(*podManagerImpl).psh = psh
 
 		Expect(
@@ -891,7 +891,7 @@ var _ = Describe("podManagerImpl_DeletePod", func() {
 			}
 
 			Expect(
-				NewPodManager(kubeclient, workerImage, scheme).DeletePod(ctx, patchedPod),
+				newPodManager(kubeclient, workerImage, scheme).DeletePod(ctx, patchedPod),
 			).NotTo(
 				HaveOccurred(),
 			)
@@ -914,7 +914,7 @@ var _ = Describe("podManagerImpl_ListWorkerPodsOnNode", func() {
 	BeforeEach(func() {
 		ctrl := gomock.NewController(GinkgoT())
 		kubeClient = testclient.NewMockClient(ctrl)
-		pm = NewPodManager(kubeClient, workerImage, scheme)
+		pm = newPodManager(kubeClient, workerImage, scheme)
 	})
 
 	opts := []interface{}{

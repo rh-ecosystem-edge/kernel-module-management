@@ -57,16 +57,11 @@ type NMCReconciler struct {
 }
 
 func NewNMCReconciler(client client.Client, scheme *runtime.Scheme, workerImage string) *NMCReconciler {
+	pm := newPodManager(client, workerImage, scheme)
+	helper := newWorkerHelper(client, pm)
 	return &NMCReconciler{
 		client: client,
-		helper: &workerHelperImpl{
-			client: client,
-			pm: &podManagerImpl{
-				client:      client,
-				scheme:      scheme,
-				workerImage: workerImage,
-			},
-		},
+		helper: helper,
 	}
 }
 
@@ -210,7 +205,7 @@ type workerHelperImpl struct {
 	pm     podManager
 }
 
-func NewWorkerHelper(client client.Client, pm podManager) workerHelper {
+func newWorkerHelper(client client.Client, pm podManager) workerHelper {
 	return &workerHelperImpl{
 		client: client,
 		pm:     pm,
@@ -476,7 +471,7 @@ type podManagerImpl struct {
 	workerImage string
 }
 
-func NewPodManager(client client.Client, workerImage string, scheme *runtime.Scheme) podManager {
+func newPodManager(client client.Client, workerImage string, scheme *runtime.Scheme) podManager {
 	return &podManagerImpl{
 		client:      client,
 		psh:         &pullSecretHelperImpl{client: client},
