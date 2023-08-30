@@ -31,6 +31,6 @@ RUN ["microdnf", "-y", "install", "kmod"]
 WORKDIR /
 
 COPY --from=builder /opt/app-root/src/worker /usr/local/bin/worker
-RUN mkdir -p /mnt/img
+RUN ["mkdir", "-p", "/mnt/img", "/var/run/kmm/pull-secrets"]
 
 ENTRYPOINT ["/usr/local/bin/worker"]
