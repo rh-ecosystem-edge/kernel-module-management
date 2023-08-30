@@ -87,6 +87,7 @@ var _ = Describe("ModuleNMCReconciler_Reconcile", func() {
 		shouldBeOnNode bool) {
 		mod := kmmv1beta1.Module{}
 		node := v1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: moduleName},
 			Status: v1.NodeStatus{
 				NodeInfo: v1.NodeSystemInfo{KernelVersion: kernelVersion},
 			},
@@ -119,7 +120,7 @@ var _ = Describe("ModuleNMCReconciler_Reconcile", func() {
 		}
 		mockReconHelper.EXPECT().shouldModuleRunOnNode(node, &mld).Return(shouldBeOnNode, nil)
 		if shouldBeOnNode {
-			mockReconHelper.EXPECT().enableModuleOnNode(ctx, &mld, node.Name, kernelVersion).Return(returnedError)
+			mockReconHelper.EXPECT().enableModuleOnNode(ctx, &mld, &node, kernelVersion).Return(returnedError)
 		} else {
 			mockReconHelper.EXPECT().disableModuleOnNode(ctx, mod.Namespace, mod.Name, node.Name).Return(returnedError)
 		}
@@ -154,7 +155,7 @@ var _ = Describe("ModuleNMCReconciler_Reconcile", func() {
 			mockReconHelper.EXPECT().getNodesList(ctx).Return([]v1.Node{node}, nil),
 			mockKernel.EXPECT().GetModuleLoaderDataForKernel(&mod, kernelVersion).Return(&mld, nil),
 			mockReconHelper.EXPECT().shouldModuleRunOnNode(node, &mld).Return(true, nil),
-			mockReconHelper.EXPECT().enableModuleOnNode(ctx, &mld, node.Name, kernelVersion).Return(nil),
+			mockReconHelper.EXPECT().enableModuleOnNode(ctx, &mld, &node, kernelVersion).Return(nil),
 		)
 
 		res, err := mnr.Reconcile(ctx, req)
@@ -197,7 +198,7 @@ var _ = Describe("ModuleReconciler_getRequestedModule", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mnrh = newModuleNMCReconcilerHelper(clnt, nil, nil, nil)
+		mnrh = newModuleNMCReconcilerHelper(clnt, nil, nil, nil, scheme)
 	})
 
 	ctx := context.Background()
@@ -240,7 +241,7 @@ var _ = Describe("ModuleReconciler_setFinalizer", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mnrh = newModuleNMCReconcilerHelper(clnt, nil, nil, nil)
+		mnrh = newModuleNMCReconcilerHelper(clnt, nil, nil, nil, scheme)
 		mod = kmmv1beta1.Module{}
 	})
 
@@ -277,7 +278,7 @@ var _ = Describe("ModuleReconciler_getNodes", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mnrh = newModuleNMCReconcilerHelper(clnt, nil, nil, nil)
+		mnrh = newModuleNMCReconcilerHelper(clnt, nil, nil, nil, scheme)
 	})
 
 	ctx := context.Background()
@@ -324,7 +325,7 @@ var _ = Describe("finalizeModule", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
 		helper = nmc.NewMockHelper(ctrl)
-		mnrh = newModuleNMCReconcilerHelper(clnt, nil, helper, nil)
+		mnrh = newModuleNMCReconcilerHelper(clnt, nil, helper, nil, scheme)
 		mod = &kmmv1beta1.Module{
 			ObjectMeta: metav1.ObjectMeta{Name: "moduleName", Namespace: "moduleNamespace"},
 		}
@@ -403,7 +404,7 @@ var _ = Describe("shouldModuleRunOnNode", func() {
 	)
 
 	BeforeEach(func() {
-		mnrh = newModuleNMCReconcilerHelper(nil, nil, nil, nil)
+		mnrh = newModuleNMCReconcilerHelper(nil, nil, nil, nil, scheme)
 		kernelVersion = "some version"
 	})
 
@@ -492,9 +493,9 @@ var _ = Describe("enableModuleOnNode", func() {
 		mnrh                 moduleNMCReconcilerHelperAPI
 		helper               *nmc.MockHelper
 		mld                  *api.ModuleLoaderData
+		node                 v1.Node
 		expectedModuleConfig *kmmv1beta1.ModuleConfig
 		kernelVersion        string
-		nodeName             string
 	)
 
 	BeforeEach(func() {
@@ -503,9 +504,11 @@ var _ = Describe("enableModuleOnNode", func() {
 		helper = nmc.NewMockHelper(ctrl)
 		rgst = registry.NewMockRegistry(ctrl)
 		authFactory = auth.NewMockRegistryAuthGetterFactory(ctrl)
-		mnrh = newModuleNMCReconcilerHelper(clnt, rgst, helper, authFactory)
+		mnrh = newModuleNMCReconcilerHelper(clnt, rgst, helper, authFactory, scheme)
+		node = v1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: "nodeName"},
+		}
 		kernelVersion = "some version"
-		nodeName = "node name"
 		ctx = context.Background()
 		mld = &api.ModuleLoaderData{
 			KernelVersion:        kernelVersion,
@@ -529,7 +532,7 @@ var _ = Describe("enableModuleOnNode", func() {
 			authFactory.EXPECT().NewRegistryAuthGetterFrom(mld).Return(authGetter),
 			rgst.EXPECT().ImageExists(ctx, mld.ContainerImage, gomock.Any(), authGetter).Return(false, nil),
 		)
-		err := mnrh.enableModuleOnNode(ctx, mld, nodeName, kernelVersion)
+		err := mnrh.enableModuleOnNode(ctx, mld, &node, kernelVersion)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -539,13 +542,13 @@ var _ = Describe("enableModuleOnNode", func() {
 			authFactory.EXPECT().NewRegistryAuthGetterFrom(mld).Return(authGetter),
 			rgst.EXPECT().ImageExists(ctx, mld.ContainerImage, gomock.Any(), authGetter).Return(false, fmt.Errorf("some error")),
 		)
-		err := mnrh.enableModuleOnNode(ctx, mld, nodeName, kernelVersion)
+		err := mnrh.enableModuleOnNode(ctx, mld, &node, kernelVersion)
 		Expect(err).To(HaveOccurred())
 	})
 
 	It("NMC does not exists", func() {
 		nmc := &kmmv1beta1.NodeModulesConfig{
-			ObjectMeta: metav1.ObjectMeta{Name: nodeName},
+			ObjectMeta: metav1.ObjectMeta{Name: node.Name},
 		}
 
 		authGetter := &auth.MockRegistryAuthGetter{}
@@ -557,13 +560,13 @@ var _ = Describe("enableModuleOnNode", func() {
 			clnt.EXPECT().Create(ctx, gomock.Any()).Return(nil),
 		)
 
-		err := mnrh.enableModuleOnNode(ctx, mld, nodeName, kernelVersion)
+		err := mnrh.enableModuleOnNode(ctx, mld, &node, kernelVersion)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("NMC exists", func() {
 		nmc := &kmmv1beta1.NodeModulesConfig{
-			ObjectMeta: metav1.ObjectMeta{Name: nodeName},
+			ObjectMeta: metav1.ObjectMeta{Name: node.Name},
 		}
 		authGetter := &auth.MockRegistryAuthGetter{}
 		gomock.InOrder(
@@ -571,14 +574,15 @@ var _ = Describe("enableModuleOnNode", func() {
 			rgst.EXPECT().ImageExists(ctx, mld.ContainerImage, gomock.Any(), authGetter).Return(true, nil),
 			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, nmc *kmmv1beta1.NodeModulesConfig, _ ...ctrlclient.GetOption) error {
-					nmc.SetName(nodeName)
+					nmc.SetName(node.Name)
 					return nil
 				},
 			),
 			helper.EXPECT().SetModuleConfig(nmc, mld, expectedModuleConfig).Return(nil),
+			clnt.EXPECT().Patch(ctx, gomock.Any(), gomock.Any()).Return(nil),
 		)
 
-		err := mnrh.enableModuleOnNode(ctx, mld, nodeName, kernelVersion)
+		err := mnrh.enableModuleOnNode(ctx, mld, &node, kernelVersion)
 		Expect(err).NotTo(HaveOccurred())
 	})
 })
@@ -600,7 +604,7 @@ var _ = Describe("disableModuleOnNode", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
 		helper = nmc.NewMockHelper(ctrl)
-		mnrh = newModuleNMCReconcilerHelper(clnt, nil, helper, nil)
+		mnrh = newModuleNMCReconcilerHelper(clnt, nil, helper, nil, scheme)
 		nodeName = "node name"
 		moduleName = "moduleName"
 		moduleNamespace = "moduleNamespace"
