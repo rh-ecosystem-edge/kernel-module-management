@@ -288,18 +288,15 @@ var _ = Describe("ModuleReconcilerNodePredicate", func() {
 	})
 })
 
-var _ = Describe("NodeKernelReconcilerPredicate", func() {
-	const (
-		kernelVersion = "1.2.3"
-		labelName     = "test-label"
-	)
+var _ = Describe("KernelDTKReconcilerPredicate", func() {
+	const kernelVersion = "1.2.3"
 
 	var p predicate.Predicate
 
 	BeforeEach(func() {
 		mockCtrl = gomock.NewController(GinkgoT())
 		f = New(nil, nil)
-		p = f.NodeKernelReconcilerPredicate(labelName)
+		p = KernelDTKReconcilerPredicate()
 	})
 
 	It("should return true on CREATE events", func() {
@@ -316,18 +313,19 @@ var _ = Describe("NodeKernelReconcilerPredicate", func() {
 
 	It("should return false on UPDATE events if the data hasn't changed", func() {
 
-		By("kernel version in nodeInfo is the same as the label")
+		By("kernel version hasn't changed")
 
 		ev := event.UpdateEvent{
 			ObjectNew: &v1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{labelName: kernelVersion},
-				},
 				Status: v1.NodeStatus{
 					NodeInfo: v1.NodeSystemInfo{KernelVersion: kernelVersion},
 				},
 			},
-			ObjectOld: &v1.Node{},
+			ObjectOld: &v1.Node{
+				Status: v1.NodeStatus{
+					NodeInfo: v1.NodeSystemInfo{KernelVersion: kernelVersion},
+				},
+			},
 		}
 
 		Expect(
@@ -362,18 +360,19 @@ var _ = Describe("NodeKernelReconcilerPredicate", func() {
 
 	It("should return true on UPDATE events if the data has changed", func() {
 
-		By("kernel version in nodeInfo is different than the label")
+		By("kernel version in nodeInfo has changed")
 
 		ev := event.UpdateEvent{
 			ObjectNew: &v1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{labelName: labelName},
-				},
 				Status: v1.NodeStatus{
 					NodeInfo: v1.NodeSystemInfo{KernelVersion: kernelVersion},
 				},
 			},
-			ObjectOld: &v1.Node{},
+			ObjectOld: &v1.Node{
+				Status: v1.NodeStatus{
+					NodeInfo: v1.NodeSystemInfo{KernelVersion: "old-kernel-version"},
+				},
+			},
 		}
 
 		Expect(

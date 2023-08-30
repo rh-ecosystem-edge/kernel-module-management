@@ -9,7 +9,6 @@ import (
 	reflect "reflect"
 
 	v1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
-	api "github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	gomock "go.uber.org/mock/gomock"
 	v1 "k8s.io/api/apps/v1"
 	v10 "k8s.io/api/core/v1"
@@ -95,18 +94,4 @@ func (m *MockDaemonSetCreator) SetDevicePluginAsDesired(ctx context.Context, ds 
 func (mr *MockDaemonSetCreatorMockRecorder) SetDevicePluginAsDesired(ctx, ds, mod, useDefaultSA interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDevicePluginAsDesired", reflect.TypeOf((*MockDaemonSetCreator)(nil).SetDevicePluginAsDesired), ctx, ds, mod, useDefaultSA)
-}
-
-// SetDriverContainerAsDesired mocks base method.
-func (m *MockDaemonSetCreator) SetDriverContainerAsDesired(ctx context.Context, ds *v1.DaemonSet, mld *api.ModuleLoaderData, useDefaultSA bool) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetDriverContainerAsDesired", ctx, ds, mld, useDefaultSA)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// SetDriverContainerAsDesired indicates an expected call of SetDriverContainerAsDesired.
-func (mr *MockDaemonSetCreatorMockRecorder) SetDriverContainerAsDesired(ctx, ds, mld, useDefaultSA interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDriverContainerAsDesired", reflect.TypeOf((*MockDaemonSetCreator)(nil).SetDriverContainerAsDesired), ctx, ds, mld, useDefaultSA)
 }
