@@ -56,11 +56,10 @@ const ModuleReconcilerName = "Module"
 type ModuleReconciler struct {
 	client.Client
 
-	daemonAPI         daemonset.DaemonSetCreator
-	filter            *filter.Filter
-	statusUpdaterAPI  statusupdater.ModuleStatusUpdater
-	reconHelperAPI    moduleReconcilerHelperAPI
-	operatorNamespace string
+	daemonAPI        daemonset.DaemonSetCreator
+	filter           *filter.Filter
+	statusUpdaterAPI statusupdater.ModuleStatusUpdater
+	reconHelperAPI   moduleReconcilerHelperAPI
 }
 
 func NewModuleReconciler(
@@ -76,11 +75,10 @@ func NewModuleReconciler(
 ) *ModuleReconciler {
 	reconHelperAPI := newModuleReconcilerHelper(client, buildAPI, signAPI, daemonAPI, kernelAPI, metricsAPI, operatorNamespace)
 	return &ModuleReconciler{
-		daemonAPI:         daemonAPI,
-		reconHelperAPI:    reconHelperAPI,
-		filter:            filter,
-		statusUpdaterAPI:  statusUpdaterAPI,
-		operatorNamespace: operatorNamespace,
+		daemonAPI:        daemonAPI,
+		reconHelperAPI:   reconHelperAPI,
+		filter:           filter,
+		statusUpdaterAPI: statusUpdaterAPI,
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ocp/ca"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/worker"
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -47,6 +48,8 @@ const (
 
 //+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=nodemodulesconfigs,verbs=get;list;watch
 //+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=nodemodulesconfigs/status,verbs=patch
+//+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=nodemodulesconfigs/finalizers,verbs=patch;update
+//+kubebuilder:rbac:groups="core",resources=configmaps,verbs=get;list;watch
 //+kubebuilder:rbac:groups="core",resources=pods,verbs=create;delete;get;list;watch
 //+kubebuilder:rbac:groups="core",resources=nodes,verbs=get;list;watch
 //+kubebuilder:rbac:groups="core",resources=secrets,verbs=get;list;watch
@@ -56,8 +59,8 @@ type NMCReconciler struct {
 	helper workerHelper
 }
 
-func NewNMCReconciler(client client.Client, scheme *runtime.Scheme, workerImage string) *NMCReconciler {
-	pm := newPodManager(client, workerImage, scheme)
+func NewNMCReconciler(client client.Client, scheme *runtime.Scheme, workerImage string, caHelper ca.Helper) *NMCReconciler {
+	pm := newPodManager(client, workerImage, scheme, caHelper)
 	helper := newWorkerHelper(client, pm)
 	return &NMCReconciler{
 		client: client,
@@ -465,14 +468,16 @@ type podManager interface {
 }
 
 type podManagerImpl struct {
+	caHelper    ca.Helper
 	client      client.Client
 	psh         pullSecretHelper
 	scheme      *runtime.Scheme
 	workerImage string
 }
 
-func newPodManager(client client.Client, workerImage string, scheme *runtime.Scheme) podManager {
+func newPodManager(client client.Client, workerImage string, scheme *runtime.Scheme, caHelper ca.Helper) podManager {
 	return &podManagerImpl{
+		caHelper:    caHelper,
 		client:      client,
 		psh:         &pullSecretHelperImpl{client: client},
 		scheme:      scheme,
@@ -588,6 +593,7 @@ func (p *podManagerImpl) baseWorkerPod(
 	owner client.Object,
 ) (*v1.Pod, error) {
 	const (
+		trustedCAVolumeName   = "trusted-ca"
 		volNameLibModules     = "lib-modules"
 		volNameUsrLibModules  = "usr-lib-modules"
 		volNameVarLibFirmware = "var-lib-firmware"
@@ -599,6 +605,16 @@ func (p *podManagerImpl) baseWorkerPod(
 	psv, psvm, err := p.psh.VolumesAndVolumeMounts(ctx, item)
 	if err != nil {
 		return nil, fmt.Errorf("could not list pull secrets for worker Pod: %v", err)
+	}
+
+	clusterCACM, err := p.caHelper.GetClusterCA(ctx, item.Namespace)
+	if err != nil {
+		return nil, fmt.Errorf("could not get the cluster CA ConfigMap: %v", err)
+	}
+
+	servingCACM, err := p.caHelper.GetServiceCA(ctx, item.Namespace)
+	if err != nil {
+		return nil, fmt.Errorf("could not get the serving CA ConfigMap: %v", err)
 	}
 
 	volumes := []v1.Volume{
@@ -644,6 +660,37 @@ func (p *podManagerImpl) baseWorkerPod(
 				},
 			},
 		},
+		{
+			Name: trustedCAVolumeName,
+			VolumeSource: v1.VolumeSource{
+				Projected: &v1.ProjectedVolumeSource{
+					Sources: []v1.VolumeProjection{
+						{
+							ConfigMap: &v1.ConfigMapProjection{
+								LocalObjectReference: v1.LocalObjectReference{Name: clusterCACM.Name},
+								Items: []v1.KeyToPath{
+									{
+										Key:  clusterCACM.KeyName,
+										Path: "cluster-ca.pem",
+									},
+								},
+							},
+						},
+						{
+							ConfigMap: &v1.ConfigMapProjection{
+								LocalObjectReference: v1.LocalObjectReference{Name: servingCACM.Name},
+								Items: []v1.KeyToPath{
+									{
+										Key:  servingCACM.KeyName,
+										Path: "service-ca.pem",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	volumeMounts := []v1.VolumeMount{
@@ -665,6 +712,12 @@ func (p *podManagerImpl) baseWorkerPod(
 		{
 			Name:      volNameVarLibFirmware,
 			MountPath: "/var/lib/firmware",
+		},
+		// Replace all UBI CA certs with OpenShift's.
+		{
+			Name:      trustedCAVolumeName,
+			ReadOnly:  true,
+			MountPath: "/etc/pki/tls/certs", // Read by the Go runtime by default
 		},
 	}
 
