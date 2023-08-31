@@ -146,6 +146,13 @@ rules:
 - apiGroups:
   - kmm.sigs.x-k8s.io
   resources:
+  - nodemodulesconfigs/finalizers
+  verbs:
+  - patch
+  - update
+- apiGroups:
+  - kmm.sigs.x-k8s.io
+  resources:
   - nodemodulesconfigs/status
   verbs:
   - patch

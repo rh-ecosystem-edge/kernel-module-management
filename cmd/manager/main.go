@@ -22,6 +22,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ocp/ca"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -170,6 +171,12 @@ func main() {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.ModuleReconcilerName)
 	}
 
+	caHelper := ca.NewHelper(client, scheme)
+
+	if err = controllers.NewModuleCAReconciler(client, caHelper, operatorNamespace).SetupWithManager(mgr); err != nil {
+		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.ModuleCAReconcilerName)
+	}
+
 	mnc := controllers.NewModuleNMCReconciler(
 		client,
 		kernelAPI,
@@ -185,7 +192,7 @@ func main() {
 
 	ctx := ctrl.SetupSignalHandler()
 
-	if err = controllers.NewNMCReconciler(client, scheme, workerImage).SetupWithManager(ctx, mgr); err != nil {
+	if err = controllers.NewNMCReconciler(client, scheme, workerImage, caHelper).SetupWithManager(ctx, mgr); err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.NodeModulesConfigReconcilerName)
 	}
 

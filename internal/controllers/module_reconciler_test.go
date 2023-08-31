@@ -51,10 +51,9 @@ var _ = Describe("ModuleReconciler_Reconcile", func() {
 		mockSU = statusupdater.NewMockModuleStatusUpdater(ctrl)
 
 		mr = &ModuleReconciler{
-			daemonAPI:         mockDC,
-			reconHelperAPI:    mockReconHelper,
-			statusUpdaterAPI:  mockSU,
-			operatorNamespace: "different namespace",
+			daemonAPI:        mockDC,
+			reconHelperAPI:   mockReconHelper,
+			statusUpdaterAPI: mockSU,
 		}
 	})
 

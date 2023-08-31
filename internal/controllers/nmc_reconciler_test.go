@@ -14,6 +14,7 @@ import (
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	testclient "github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ocp/ca"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/worker"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
@@ -770,11 +771,24 @@ const (
 	workerImage        = "worker-image"
 )
 
+var (
+	clusterCACM = &ca.ConfigMap{
+		KeyName: "cluster-ca-key",
+		Name:    "cluster-ca",
+	}
+
+	serviceCACM = &ca.ConfigMap{
+		KeyName: "service-ca-key",
+		Name:    "service-ca",
+	}
+)
+
 var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 	It("should work as expected", func() {
 		ctrl := gomock.NewController(GinkgoT())
 		client := testclient.NewMockClient(ctrl)
 		psh := NewMockpullSecretHelper(ctrl)
+		caHelper := ca.NewMockHelper(ctrl)
 
 		nmc := &kmmv1beta1.NodeModulesConfig{
 			ObjectMeta: metav1.ObjectMeta{Name: nmcName},
@@ -805,15 +819,13 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 
 		gomock.InOrder(
 			psh.EXPECT().VolumesAndVolumeMounts(ctx, &mi),
+			caHelper.EXPECT().GetClusterCA(ctx, namespace).Return(clusterCACM, nil),
+			caHelper.EXPECT().GetServiceCA(ctx, namespace).Return(serviceCACM, nil),
 			client.EXPECT().Create(ctx, cmpmock.DiffEq(expected)),
 		)
 
-		pm := &podManagerImpl{
-			client:      client,
-			psh:         psh,
-			scheme:      scheme,
-			workerImage: workerImage,
-		}
+		pm := newPodManager(client, workerImage, scheme, caHelper)
+		pm.(*podManagerImpl).psh = psh
 
 		Expect(
 			pm.CreateLoaderPod(ctx, nmc, nms),
@@ -828,6 +840,7 @@ var _ = Describe("podManagerImpl_CreateUnloaderPod", func() {
 		ctrl := gomock.NewController(GinkgoT())
 		client := testclient.NewMockClient(ctrl)
 		psh := NewMockpullSecretHelper(ctrl)
+		caHelper := ca.NewMockHelper(ctrl)
 
 		nmc := &kmmv1beta1.NodeModulesConfig{
 			ObjectMeta: metav1.ObjectMeta{Name: nmcName},
@@ -850,10 +863,12 @@ var _ = Describe("podManagerImpl_CreateUnloaderPod", func() {
 
 		gomock.InOrder(
 			psh.EXPECT().VolumesAndVolumeMounts(ctx, &mi),
+			caHelper.EXPECT().GetClusterCA(ctx, namespace).Return(clusterCACM, nil),
+			caHelper.EXPECT().GetServiceCA(ctx, namespace).Return(serviceCACM, nil),
 			client.EXPECT().Create(ctx, cmpmock.DiffEq(expected)),
 		)
 
-		pm := newPodManager(client, workerImage, scheme)
+		pm := newPodManager(client, workerImage, scheme, caHelper)
 		pm.(*podManagerImpl).psh = psh
 
 		Expect(
@@ -891,7 +906,7 @@ var _ = Describe("podManagerImpl_DeletePod", func() {
 			}
 
 			Expect(
-				newPodManager(kubeclient, workerImage, scheme).DeletePod(ctx, patchedPod),
+				newPodManager(kubeclient, workerImage, scheme, nil).DeletePod(ctx, patchedPod),
 			).NotTo(
 				HaveOccurred(),
 			)
@@ -914,7 +929,7 @@ var _ = Describe("podManagerImpl_ListWorkerPodsOnNode", func() {
 	BeforeEach(func() {
 		ctrl := gomock.NewController(GinkgoT())
 		kubeClient = testclient.NewMockClient(ctrl)
-		pm = newPodManager(kubeClient, workerImage, scheme)
+		pm = newPodManager(kubeClient, workerImage, scheme, nil)
 	})
 
 	opts := []interface{}{
@@ -958,6 +973,7 @@ func getBaseWorkerPod(subcommand string, action WorkerAction, owner ctrlclient.O
 	GinkgoHelper()
 
 	const (
+		trustedCAVolumeName   = "trusted-ca"
 		volNameLibModules     = "lib-modules"
 		volNameUsrLibModules  = "usr-lib-modules"
 		volNameVarLibFirmware = "var-lib-firmware"
@@ -1023,6 +1039,11 @@ modprobe:
 							Name:      volNameVarLibFirmware,
 							MountPath: "/var/lib/firmware",
 						},
+						{
+							Name:      trustedCAVolumeName,
+							ReadOnly:  true,
+							MountPath: "/etc/pki/tls/certs",
+						},
 					},
 				},
 			},
@@ -1069,6 +1090,37 @@ modprobe:
 						HostPath: &v1.HostPathVolumeSource{
 							Path: "/var/lib/firmware",
 							Type: &hostPathDirectoryOrCreate,
+						},
+					},
+				},
+				{
+					Name: trustedCAVolumeName,
+					VolumeSource: v1.VolumeSource{
+						Projected: &v1.ProjectedVolumeSource{
+							Sources: []v1.VolumeProjection{
+								{
+									ConfigMap: &v1.ConfigMapProjection{
+										LocalObjectReference: v1.LocalObjectReference{Name: clusterCACM.Name},
+										Items: []v1.KeyToPath{
+											{
+												Key:  clusterCACM.KeyName,
+												Path: "cluster-ca.pem",
+											},
+										},
+									},
+								},
+								{
+									ConfigMap: &v1.ConfigMapProjection{
+										LocalObjectReference: v1.LocalObjectReference{Name: serviceCACM.Name},
+										Items: []v1.KeyToPath{
+											{
+												Key:  serviceCACM.KeyName,
+												Path: "service-ca.pem",
+											},
+										},
+									},
+								},
+							},
 						},
 					},
 				},

@@ -2,6 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   annotations:
+    kmm.openshift.io/ca.type: service
     service.beta.openshift.io/inject-cabundle: "true"
   name: service-ca
   namespace: system

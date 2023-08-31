@@ -7,4 +7,5 @@ metadata:
     app.kubernetes.io/name: kmm
     app.kubernetes.io/part-of: kmm
     config.openshift.io/inject-trusted-cabundle: "true"
+    kmm.openshift.io/ca.type: cluster
   name: kmm-operator-cluster-ca
