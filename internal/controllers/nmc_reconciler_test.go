@@ -13,6 +13,7 @@ import (
 	. "github.com/onsi/gomega"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	testclient "github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/config"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ocp/ca"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/worker"
@@ -781,6 +782,11 @@ var (
 		KeyName: "service-ca-key",
 		Name:    "service-ca",
 	}
+
+	workerCfg = &config.Worker{
+		RunAsUser:   pointer.Int64(1234),
+		SELinuxType: "someType",
+	}
 )
 
 var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
@@ -824,7 +830,7 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 			client.EXPECT().Create(ctx, cmpmock.DiffEq(expected)),
 		)
 
-		pm := newPodManager(client, workerImage, scheme, caHelper)
+		pm := newPodManager(client, workerImage, scheme, caHelper, workerCfg)
 		pm.(*podManagerImpl).psh = psh
 
 		Expect(
@@ -868,7 +874,7 @@ var _ = Describe("podManagerImpl_CreateUnloaderPod", func() {
 			client.EXPECT().Create(ctx, cmpmock.DiffEq(expected)),
 		)
 
-		pm := newPodManager(client, workerImage, scheme, caHelper)
+		pm := newPodManager(client, workerImage, scheme, caHelper, workerCfg)
 		pm.(*podManagerImpl).psh = psh
 
 		Expect(
@@ -906,7 +912,7 @@ var _ = Describe("podManagerImpl_DeletePod", func() {
 			}
 
 			Expect(
-				newPodManager(kubeclient, workerImage, scheme, nil).DeletePod(ctx, patchedPod),
+				newPodManager(kubeclient, workerImage, scheme, nil, nil).DeletePod(ctx, patchedPod),
 			).NotTo(
 				HaveOccurred(),
 			)
@@ -929,7 +935,7 @@ var _ = Describe("podManagerImpl_ListWorkerPodsOnNode", func() {
 	BeforeEach(func() {
 		ctrl := gomock.NewController(GinkgoT())
 		kubeClient = testclient.NewMockClient(ctrl)
-		pm = newPodManager(kubeClient, workerImage, scheme, nil)
+		pm = newPodManager(kubeClient, workerImage, scheme, nil, nil)
 	})
 
 	opts := []interface{}{
@@ -1018,6 +1024,8 @@ modprobe:
 						Capabilities: &v1.Capabilities{
 							Add: []v1.Capability{"SYS_MODULE"},
 						},
+						RunAsUser:      workerCfg.RunAsUser,
+						SELinuxOptions: &v1.SELinuxOptions{Type: workerCfg.SELinuxType},
 					},
 					VolumeMounts: []v1.VolumeMount{
 						{

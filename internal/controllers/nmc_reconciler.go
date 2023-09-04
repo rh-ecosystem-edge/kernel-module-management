@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/go-multierror"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/config"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
@@ -59,8 +60,14 @@ type NMCReconciler struct {
 	helper workerHelper
 }
 
-func NewNMCReconciler(client client.Client, scheme *runtime.Scheme, workerImage string, caHelper ca.Helper) *NMCReconciler {
-	pm := newPodManager(client, workerImage, scheme, caHelper)
+func NewNMCReconciler(
+	client client.Client,
+	scheme *runtime.Scheme,
+	workerImage string,
+	caHelper ca.Helper,
+	workerCfg *config.Worker,
+) *NMCReconciler {
+	pm := newPodManager(client, workerImage, scheme, caHelper, workerCfg)
 	helper := newWorkerHelper(client, pm)
 	return &NMCReconciler{
 		client: client,
@@ -472,15 +479,23 @@ type podManagerImpl struct {
 	client      client.Client
 	psh         pullSecretHelper
 	scheme      *runtime.Scheme
+	workerCfg   *config.Worker
 	workerImage string
 }
 
-func newPodManager(client client.Client, workerImage string, scheme *runtime.Scheme, caHelper ca.Helper) podManager {
+func newPodManager(
+	client client.Client,
+	workerImage string,
+	scheme *runtime.Scheme,
+	caHelper ca.Helper,
+	workerCfg *config.Worker,
+) podManager {
 	return &podManagerImpl{
 		caHelper:    caHelper,
 		client:      client,
 		psh:         &pullSecretHelperImpl{client: client},
 		scheme:      scheme,
+		workerCfg:   workerCfg,
 		workerImage: workerImage,
 	}
 }
@@ -737,6 +752,8 @@ func (p *podManagerImpl) baseWorkerPod(
 						Capabilities: &v1.Capabilities{
 							Add: []v1.Capability{"SYS_MODULE"},
 						},
+						RunAsUser:      p.workerCfg.RunAsUser,
+						SELinuxOptions: &v1.SELinuxOptions{Type: p.workerCfg.SELinuxType},
 					},
 				},
 			},

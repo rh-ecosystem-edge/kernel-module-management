@@ -3,7 +3,7 @@ FROM quay.io/openshift/origin-cli:4.14 as builder
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.2
 
 RUN microdnf update -y \
-    && microdnf install -y tar rsync findutils gzip iproute util-linux \
+    && microdnf install -y tar rsync findutils gzip iproute util-linux shadow-utils \
     && microdnf clean all
 
 LABEL org.opencontainers.image.title=kmm-operator-must-gather
@@ -17,5 +17,10 @@ COPY --from=builder /usr/bin/oc /usr/bin/oc
 
 # copy all collection scripts to /usr/bin
 COPY must-gather/* /usr/bin/
+
+RUN ["groupadd", "--system", "-g", "201", "kmm"]
+RUN ["useradd", "--system", "-u", "201", "-g", "201", "-s", "/sbin/nologin", "kmm"]
+
+USER 201:201
 
 CMD /usr/bin/gather

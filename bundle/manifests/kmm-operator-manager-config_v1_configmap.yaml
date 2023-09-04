@@ -7,6 +7,8 @@ data:
     leaderElection:
       enabled: true
       resourceID: kmm.sigs.x-k8s.io
+    worker:
+      seLinuxType: spc_t
 kind: ConfigMap
 metadata:
   labels:
