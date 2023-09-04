@@ -22,6 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -37,8 +38,13 @@ const (
 	ModuleNMCReconcilerName = "ModuleNMCReconciler"
 )
 
+type schedulingData struct {
+	mld       *api.ModuleLoaderData
+	node      *v1.Node
+	nmcExists bool
+}
+
 type ModuleNMCReconciler struct {
-	kernelAPI   module.KernelMapper
 	filter      *filter.Filter
 	reconHelper moduleNMCReconcilerHelperAPI
 }
@@ -50,9 +56,8 @@ func NewModuleNMCReconciler(client client.Client,
 	filter *filter.Filter,
 	authFactory auth.RegistryAuthGetterFactory,
 	scheme *runtime.Scheme) *ModuleNMCReconciler {
-	reconHelper := newModuleNMCReconcilerHelper(client, registryAPI, nmcHelper, authFactory, scheme)
+	reconHelper := newModuleNMCReconcilerHelper(client, kernelAPI, registryAPI, nmcHelper, authFactory, scheme)
 	return &ModuleNMCReconciler{
-		kernelAPI:   kernelAPI,
 		filter:      filter,
 		reconHelper: reconHelper,
 	}
@@ -85,31 +90,26 @@ func (mnr *ModuleNMCReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, fmt.Errorf("failed to set finalizer on %s Module: %v", req.NamespacedName, err)
 	}
 
-	// get all nodes
-	nodes, err := mnr.reconHelper.getNodesList(ctx)
+	// get nodes targeted by selector
+	targetedNodes, err := mnr.reconHelper.getNodesListBySelector(ctx, mod)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to get nodes list: %v", err)
+		return ctrl.Result{}, fmt.Errorf("failed to get list of nodes by selector: %v", err)
 	}
 
+	currentNMCs, err := mnr.reconHelper.getNMCsByModuleSet(ctx, mod)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get NMCs for %s Module: %v", req.NamespacedName, err)
+	}
+
+	sdMap, prepareErrs := mnr.reconHelper.prepareSchedulingData(ctx, mod, targetedNodes, currentNMCs)
 	var sumErr *multierror.Error
-	for _, node := range nodes {
-		kernelVersion := strings.TrimSuffix(node.Status.NodeInfo.KernelVersion, "+")
-		mld, err := mnr.kernelAPI.GetModuleLoaderDataForKernel(mod, kernelVersion)
-		if err != nil && !errors.Is(err, module.ErrNoMatchingKernelMapping) {
-			logger.Info(utils.WarnString(fmt.Sprintf("internal errors while fetching kernel mapping for version %s: %v", kernelVersion, err)))
-			sumErr = multierror.Append(sumErr, err)
-			continue
-		}
-		shouldBeOnNode, err := mnr.reconHelper.shouldModuleRunOnNode(node, mld)
-		if err != nil {
-			logger.Info(utils.WarnString(fmt.Sprintf("failed to determine if module %s/%s should be on node %s: %v", mld.Namespace, mld.Name, node.Name, err)))
-			sumErr = multierror.Append(sumErr, err)
-			continue
-		}
-		if shouldBeOnNode {
-			err = mnr.reconHelper.enableModuleOnNode(ctx, mld, &node, kernelVersion)
-		} else {
-			err = mnr.reconHelper.disableModuleOnNode(ctx, mod.Namespace, mod.Name, node.Name)
+	sumErr = multierror.Append(sumErr, prepareErrs...)
+
+	for nodeName, sd := range sdMap {
+		if sd.mld != nil {
+			err = mnr.reconHelper.enableModuleOnNode(ctx, sd.mld, sd.node)
+		} else if sd.nmcExists {
+			err = mnr.reconHelper.disableModuleOnNode(ctx, mod.Namespace, mod.Name, nodeName)
 		}
 		sumErr = multierror.Append(sumErr, err)
 	}
@@ -125,16 +125,18 @@ func (mnr *ModuleNMCReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 type moduleNMCReconcilerHelperAPI interface {
 	setFinalizer(ctx context.Context, mod *kmmv1beta1.Module) error
-	getRequestedModule(ctx context.Context, namespacedName types.NamespacedName) (*kmmv1beta1.Module, error)
-	getNodesList(ctx context.Context) ([]v1.Node, error)
 	finalizeModule(ctx context.Context, mod *kmmv1beta1.Module) error
-	shouldModuleRunOnNode(node v1.Node, mld *api.ModuleLoaderData) (bool, error)
-	enableModuleOnNode(ctx context.Context, mld *api.ModuleLoaderData, node *v1.Node, kernelVersion string) error
+	getRequestedModule(ctx context.Context, namespacedName types.NamespacedName) (*kmmv1beta1.Module, error)
+	getNodesListBySelector(ctx context.Context, mod *kmmv1beta1.Module) ([]v1.Node, error)
+	getNMCsByModuleSet(ctx context.Context, mod *kmmv1beta1.Module) (sets.Set[string], error)
+	prepareSchedulingData(ctx context.Context, mod *kmmv1beta1.Module, targetedNodes []v1.Node, currentNMCs sets.Set[string]) (map[string]schedulingData, []error)
+	enableModuleOnNode(ctx context.Context, mld *api.ModuleLoaderData, node *v1.Node) error
 	disableModuleOnNode(ctx context.Context, modNamespace, modName, nodeName string) error
 }
 
 type moduleNMCReconcilerHelper struct {
 	client      client.Client
+	kernelAPI   module.KernelMapper
 	registryAPI registry.Registry
 	nmcHelper   nmc.Helper
 	authFactory auth.RegistryAuthGetterFactory
@@ -142,12 +144,14 @@ type moduleNMCReconcilerHelper struct {
 }
 
 func newModuleNMCReconcilerHelper(client client.Client,
+	kernelAPI module.KernelMapper,
 	registryAPI registry.Registry,
 	nmcHelper nmc.Helper,
 	authFactory auth.RegistryAuthGetterFactory,
 	scheme *runtime.Scheme) moduleNMCReconcilerHelperAPI {
 	return &moduleNMCReconcilerHelper{
 		client:      client,
+		kernelAPI:   kernelAPI,
 		registryAPI: registryAPI,
 		nmcHelper:   nmcHelper,
 		authFactory: authFactory,
@@ -205,33 +209,82 @@ func (mnrh *moduleNMCReconcilerHelper) finalizeModule(ctx context.Context, mod *
 	return mnrh.client.Patch(ctx, mod, client.MergeFrom(modCopy))
 }
 
-func (mnrh *moduleNMCReconcilerHelper) getNodesList(ctx context.Context) ([]v1.Node, error) {
-	nodes := v1.NodeList{}
-	err := mnrh.client.List(ctx, &nodes)
+func (mnrh *moduleNMCReconcilerHelper) getNodesListBySelector(ctx context.Context, mod *kmmv1beta1.Module) ([]v1.Node, error) {
+	logger := log.FromContext(ctx)
+	logger.V(1).Info("Listing nodes", "selector", mod.Spec.Selector)
+
+	selectedNodes := v1.NodeList{}
+	opt := client.MatchingLabels(mod.Spec.Selector)
+	if err := mnrh.client.List(ctx, &selectedNodes, opt); err != nil {
+		return nil, fmt.Errorf("could not list nodes: %v", err)
+	}
+	nodes := make([]v1.Node, 0, len(selectedNodes.Items))
+
+	for _, node := range selectedNodes.Items {
+		if utils.IsNodeSchedulable(&node) {
+			nodes = append(nodes, node)
+		}
+	}
+	return nodes, nil
+}
+
+func (mnrh *moduleNMCReconcilerHelper) getNMCsByModuleSet(ctx context.Context, mod *kmmv1beta1.Module) (sets.Set[string], error) {
+	nmcNamesList, err := mnrh.getNMCsNamesForModule(ctx, mod)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get list of nodes: %v", err)
+		return nil, fmt.Errorf("failed to get list of %s/%s module's NMC for map: %v", mod.Namespace, mod.Name, err)
 	}
-	return nodes.Items, nil
+
+	return sets.New[string](nmcNamesList...), nil
 }
 
-func (mnrh *moduleNMCReconcilerHelper) shouldModuleRunOnNode(node v1.Node, mld *api.ModuleLoaderData) (bool, error) {
-	if mld == nil {
-		return false, nil
+func (mnrh *moduleNMCReconcilerHelper) getNMCsNamesForModule(ctx context.Context, mod *kmmv1beta1.Module) ([]string, error) {
+	logger := log.FromContext(ctx)
+	moduleNMCLabel := utils.GetModuleNMCLabel(mod.Namespace, mod.Name)
+	logger.V(1).Info("Listing nmcs", "selector", moduleNMCLabel)
+	selectedNMCs := kmmv1beta1.NodeModulesConfigList{}
+	opt := client.MatchingLabels(map[string]string{moduleNMCLabel: ""})
+	if err := mnrh.client.List(ctx, &selectedNMCs, opt); err != nil {
+		return nil, fmt.Errorf("could not list NMCs: %v", err)
 	}
-
-	nodeKernelVersion := strings.TrimSuffix(node.Status.NodeInfo.KernelVersion, "+")
-	if nodeKernelVersion != mld.KernelVersion {
-		return false, nil
+	result := make([]string, len(selectedNMCs.Items))
+	for i := range selectedNMCs.Items {
+		result[i] = selectedNMCs.Items[i].Name
 	}
-
-	if !utils.IsNodeSchedulable(&node) {
-		return false, nil
-	}
-
-	return utils.IsObjectSelectedByLabels(node.GetLabels(), mld.Selector)
+	return result, nil
 }
 
-func (mnrh *moduleNMCReconcilerHelper) enableModuleOnNode(ctx context.Context, mld *api.ModuleLoaderData, node *v1.Node, kernelVersion string) error {
+// prepareSchedulingData prepare data needed to scheduling enable/disable module per node
+// in case there is an error during handling one of the nodes, function continues to the next node
+// It returns the map of scheduling data per successfully processed node, and slice of errors
+// per unsuccessfuly processed nodes
+func (mnrh *moduleNMCReconcilerHelper) prepareSchedulingData(ctx context.Context,
+	mod *kmmv1beta1.Module,
+	targetedNodes []v1.Node,
+	currentNMCs sets.Set[string]) (map[string]schedulingData, []error) {
+
+	logger := log.FromContext(ctx)
+	result := make(map[string]schedulingData)
+	errs := make([]error, 0, len(targetedNodes))
+	for _, node := range targetedNodes {
+		kernelVersion := strings.TrimSuffix(node.Status.NodeInfo.KernelVersion, "+")
+		mld, err := mnrh.kernelAPI.GetModuleLoaderDataForKernel(mod, kernelVersion)
+		if err != nil && !errors.Is(err, module.ErrNoMatchingKernelMapping) {
+			// deleting earlier, so as not to change NMC in case we failed to determine mld
+			currentNMCs.Delete(node.Name)
+			logger.Info(utils.WarnString(fmt.Sprintf("internal errors while fetching kernel mapping for version %s: %v", kernelVersion, err)))
+			errs = append(errs, err)
+			continue
+		}
+		result[node.Name] = schedulingData{mld: mld, node: &node, nmcExists: currentNMCs.Has(node.Name)}
+		currentNMCs.Delete(node.Name)
+	}
+	for _, nmcName := range currentNMCs.UnsortedList() {
+		result[nmcName] = schedulingData{mld: nil, nmcExists: true}
+	}
+	return result, errs
+}
+
+func (mnrh *moduleNMCReconcilerHelper) enableModuleOnNode(ctx context.Context, mld *api.ModuleLoaderData, node *v1.Node) error {
 	logger := log.FromContext(ctx)
 	exists, err := module.ImageExists(ctx, mnrh.authFactory, mnrh.registryAPI, mld, mld.ContainerImage)
 	if err != nil {
@@ -242,7 +295,7 @@ func (mnrh *moduleNMCReconcilerHelper) enableModuleOnNode(ctx context.Context, m
 		return nil
 	}
 	moduleConfig := kmmv1beta1.ModuleConfig{
-		KernelVersion:        kernelVersion,
+		KernelVersion:        mld.KernelVersion,
 		ContainerImage:       mld.ContainerImage,
 		InTreeModuleToRemove: mld.InTreeModuleToRemove,
 		Modprobe:             mld.Modprobe,
@@ -272,13 +325,8 @@ func (mnrh *moduleNMCReconcilerHelper) enableModuleOnNode(ctx context.Context, m
 }
 
 func (mnrh *moduleNMCReconcilerHelper) disableModuleOnNode(ctx context.Context, modNamespace, modName, nodeName string) error {
-	nmc, err := mnrh.nmcHelper.Get(ctx, nodeName)
-	if err != nil {
-		if k8serrors.IsNotFound(err) {
-			// NodeModulesConfig does not exists, module was never running on the node, we are good
-			return nil
-		}
-		return fmt.Errorf("failed to get the NodeModulesConfig for node %s: %v", nodeName, err)
+	nmc := &kmmv1beta1.NodeModulesConfig{
+		ObjectMeta: metav1.ObjectMeta{Name: nodeName},
 	}
 
 	return mnrh.removeModuleFromNMC(ctx, nmc, modNamespace, modName)
