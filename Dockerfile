@@ -32,6 +32,14 @@ FROM registry.access.redhat.com/ubi9/ubi-minimal:9.2
 ARG TARGET
 
 COPY --from=builder /opt/app-root/src/${TARGET} /usr/local/bin/manager
-USER 65534:65534
+
+RUN microdnf update -y && \
+    microdnf install -y shadow-utils && \
+    microdnf clean all
+
+RUN ["groupadd", "--system", "-g", "201", "kmm"]
+RUN ["useradd", "--system", "-u", "201", "-g", "201", "-s", "/sbin/nologin", "kmm"]
+
+USER 201:201
 
 ENTRYPOINT ["/usr/local/bin/manager"]

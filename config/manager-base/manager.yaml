@@ -39,9 +39,7 @@ spec:
       securityContext:
         runAsNonRoot: true
       containers:
-      - command:
-        - /usr/local/bin/manager
-        image: controller:latest
+      - image: controller:latest
         name: manager
         env:
           - name: OPERATOR_NAMESPACE

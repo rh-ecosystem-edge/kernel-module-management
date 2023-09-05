@@ -26,11 +26,17 @@ RUN ["make", "worker"]
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.2
 
-RUN ["microdnf", "-y", "install", "kmod"]
-
-WORKDIR /
+RUN microdnf update -y && \
+    microdnf install -y kmod shadow-utils && \
+    microdnf clean all
 
 COPY --from=builder /opt/app-root/src/worker /usr/local/bin/worker
+
+RUN ["groupadd", "--system", "-g", "201", "kmm"]
+RUN ["useradd", "--system", "-u", "201", "-g", "201", "-s", "/sbin/nologin", "kmm"]
 RUN ["mkdir", "-p", "/var/run/kmm/images", "/var/run/kmm/pull-secrets"]
+RUN ["chown", "-R", "201:201", "/var/run/kmm/images", "/var/run/kmm/pull-secrets"]
+
+USER 201:201
 
 ENTRYPOINT ["/usr/local/bin/worker"]

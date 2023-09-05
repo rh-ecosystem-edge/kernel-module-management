@@ -1,11 +1,21 @@
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.2 as ksource
 
 # install the package that will contain the sign utilities
-RUN ["microdnf", "install", "-y", "kernel-devel"]
+RUN microdnf update -y && \
+    microdnf install -y kernel-devel && \
+    microdnf clean all
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.2
 
 COPY --from=ksource /usr/src/kernels/*/scripts/sign-file /usr/local/bin/
-USER 65534:65534
+
+RUN microdnf update -y && \
+    microdnf install -y shadow-utils && \
+    microdnf clean all
+
+RUN ["groupadd", "--system", "-g", "201", "kmm"]
+RUN ["useradd", "--system", "-u", "201", "-g", "201", "-s", "/sbin/nologin", "kmm"]
+
+USER 201:201
 
 ENTRYPOINT ["/usr/local/bin/sign-file"]
