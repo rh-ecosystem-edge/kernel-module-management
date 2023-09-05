@@ -56,6 +56,7 @@ const (
 //+kubebuilder:rbac:groups="core",resources=pods,verbs=create;delete;get;list;watch
 //+kubebuilder:rbac:groups="core",resources=nodes,verbs=get;list;watch
 //+kubebuilder:rbac:groups="core",resources=secrets,verbs=get;list;watch
+//+kubebuilder:rbac:groups="core",resources=serviceaccounts,verbs=get;list;watch
 
 type NMCReconciler struct {
 	client client.Client
@@ -431,13 +432,13 @@ func (h *nmcReconcilerHelperImpl) SyncStatus(ctx context.Context, nmcObj *kmmv1b
 		if status == nil {
 			status = &kmmv1beta1.NodeModuleStatus{
 				ModuleItem: kmmv1beta1.ModuleItem{
-					ImageRepoSecret:    nil,
-					Name:               modName,
-					Namespace:          modNamespace,
-					ServiceAccountName: "",
+					Name:      modName,
+					Namespace: modNamespace,
 				},
 			}
 		}
+
+		status.ServiceAccountName = p.Spec.ServiceAccountName
 
 		deletePod := false
 		updateModuleStatus := false

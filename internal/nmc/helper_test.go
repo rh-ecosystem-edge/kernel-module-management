@@ -76,8 +76,10 @@ var _ = Describe("SetModuleConfig", func() {
 		nmcHelper = NewHelper(nil)
 	})
 
-	namespace := "test_namespace"
-	name := "test_name"
+	const (
+		namespace = "test_namespace"
+		name      = "test_name"
+	)
 
 	nmc := kmmv1beta1.NodeModulesConfig{}
 
@@ -98,9 +100,12 @@ var _ = Describe("SetModuleConfig", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(nmc.Spec.Modules)).To(Equal(3))
 		Expect(nmc.Spec.Modules[2].Config.InTreeModuleToRemove).To(Equal("in-tree-module"))
+		Expect(nmc.Spec.Modules[2].ServiceAccountName).To(Equal("default"))
 	})
 
 	It("changing existing module config", func() {
+		const saName = "test-sa"
+
 		nmc.Spec.Modules = []kmmv1beta1.NodeModuleSpec{
 			{
 				ModuleItem: kmmv1beta1.ModuleItem{
@@ -118,12 +123,18 @@ var _ = Describe("SetModuleConfig", func() {
 		}
 
 		moduleConfig := kmmv1beta1.ModuleConfig{InTreeModuleToRemove: "in-tree-module"}
+		mld := api.ModuleLoaderData{
+			Name:               name,
+			Namespace:          namespace,
+			ServiceAccountName: saName,
+		}
 
-		err := nmcHelper.SetModuleConfig(&nmc, &api.ModuleLoaderData{Name: name, Namespace: namespace}, &moduleConfig)
+		err := nmcHelper.SetModuleConfig(&nmc, &mld, &moduleConfig)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(nmc.Spec.Modules)).To(Equal(2))
 		Expect(nmc.Spec.Modules[1].Config.InTreeModuleToRemove).To(Equal("in-tree-module"))
+		Expect(nmc.Spec.Modules[1].ServiceAccountName).To(Equal(saName))
 	})
 })
 

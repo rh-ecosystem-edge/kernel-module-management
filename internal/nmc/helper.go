@@ -51,10 +51,8 @@ func (h *helper) SetModuleConfig(
 	if foundEntry == nil {
 		nms := kmmv1beta1.NodeModuleSpec{
 			ModuleItem: kmmv1beta1.ModuleItem{
-				ImageRepoSecret:    mld.ImageRepoSecret,
-				Name:               mld.Name,
-				Namespace:          mld.Namespace,
-				ServiceAccountName: mld.ServiceAccountName,
+				Name:      mld.Name,
+				Namespace: mld.Namespace,
 			},
 		}
 
@@ -62,7 +60,14 @@ func (h *helper) SetModuleConfig(
 		foundEntry = &nmc.Spec.Modules[len(nmc.Spec.Modules)-1]
 	}
 
+	saName := mld.ServiceAccountName
+	if saName == "" {
+		saName = "default"
+	}
+
 	foundEntry.Config = *moduleConfig
+	foundEntry.ImageRepoSecret = mld.ImageRepoSecret
+	foundEntry.ServiceAccountName = saName
 
 	return nil
 }
