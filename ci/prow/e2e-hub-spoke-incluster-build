@@ -3,6 +3,7 @@
 set -euxo pipefail
 
 readonly SKIP_MAKE_DEPLOY="${SKIP_MAKE_DEPLOY:-false}"
+readonly SKIP_MAKE_DEPLOY_HUB="${SKIP_MAKE_DEPLOY_HUB:-false}"
 readonly SKIP_ACM_INSTALLATION="${SKIP_ACM_INSTALLATION:-false}"
 
 export CLUSTER_NAME=local-cluster
@@ -30,15 +31,19 @@ else
   '
 fi
 
+if [ "$SKIP_MAKE_DEPLOY_HUB" == true ]; then
+  echo "Skipping KMM-Hub deployment"
+else
+  echo "Deploy KMMO-Hub..."
+  make deploy-hub KUSTOMIZE_CONFIG_HUB_DEFAULT=ci/install-ci-hub
+  oc wait --for=condition=Available --timeout=1m deployment/kmm-operator-hub-controller-manager -n ${OPERATOR_NAMESPACE}
+fi
+
 if [ "$SKIP_MAKE_DEPLOY" == true ]; then
   echo "Skipping KMM deployment"
 else
-  echo "Deploy KMMO..."
-  export KUSTOMIZE_CONFIG_HUB_DEFAULT=ci/install-ci-hub
-  export KUSTOMIZE_CONFIG_DEFAULT=ci/install-ci-spoke
-  make deploy-hub
-  make deploy
-  oc wait --for=condition=Available --timeout=1m deployment/kmm-operator-hub-controller-manager -n ${OPERATOR_NAMESPACE}
+  echo "Deploy KMM..."
+  make deploy KUSTOMIZE_CONFIG_DEFAULT=ci/install-ci-spoke
   oc wait --for=condition=Available --timeout=1m deployment/kmm-operator-controller-manager -n ${OPERATOR_NAMESPACE}
 fi
 
