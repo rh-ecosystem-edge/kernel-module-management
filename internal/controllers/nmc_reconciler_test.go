@@ -1074,6 +1074,7 @@ func getBaseWorkerPod(subcommand string, action WorkerAction, owner ctrlclient.O
 		volNameLibModules     = "lib-modules"
 		volNameUsrLibModules  = "usr-lib-modules"
 		volNameVarLibFirmware = "var-lib-firmware"
+		volNameModulesOrder   = "modules-order"
 	)
 
 	hostPathDirectory := v1.HostPathDirectory
@@ -1102,6 +1103,9 @@ modprobe:
   parameters:
   - a
   - b
+`,
+				"modules-order": `softdep a pre: b
+softdep b pre: c
 `,
 			},
 		},
@@ -1147,6 +1151,11 @@ modprobe:
 							Name:      trustedCAVolumeName,
 							ReadOnly:  true,
 							MountPath: "/etc/pki/tls/certs",
+						},
+						{
+							Name:      volNameModulesOrder,
+							ReadOnly:  true,
+							MountPath: "/etc/modprobe.d",
 						},
 					},
 				},
@@ -1234,6 +1243,19 @@ modprobe:
 						HostPath: &v1.HostPathVolumeSource{
 							Path: "/etc/containers",
 							Type: &hostPathDirectory,
+						},
+					},
+				},
+				{
+					Name: volNameModulesOrder,
+					VolumeSource: v1.VolumeSource{
+						DownwardAPI: &v1.DownwardAPIVolumeSource{
+							Items: []v1.DownwardAPIVolumeFile{
+								{
+									Path:     "softdep.conf",
+									FieldRef: &v1.ObjectFieldSelector{FieldPath: "metadata.annotations['modules-order']"},
+								},
+							},
 						},
 					},
 				},
