@@ -37,12 +37,14 @@ import (
 
 const (
 	ModuleNMCReconcilerName = "ModuleNMCReconciler"
+	actionDelete            = "delete"
+	actionAdd               = "add"
 )
 
 type schedulingData struct {
-	mld       *api.ModuleLoaderData
-	node      *v1.Node
-	nmcExists bool
+	action string
+	mld    *api.ModuleLoaderData
+	node   *v1.Node
 }
 
 type ModuleNMCReconciler struct {
@@ -107,9 +109,10 @@ func (mnr *ModuleNMCReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	sumErr = multierror.Append(sumErr, prepareErrs...)
 
 	for nodeName, sd := range sdMap {
-		if sd.mld != nil {
+		if sd.action == actionAdd {
 			err = mnr.reconHelper.enableModuleOnNode(ctx, sd.mld, sd.node)
-		} else if sd.nmcExists {
+		}
+		if sd.action == actionDelete {
 			err = mnr.reconHelper.disableModuleOnNode(ctx, mod.Namespace, mod.Name, nodeName)
 		}
 		sumErr = multierror.Append(sumErr, err)
@@ -216,14 +219,11 @@ func (mnrh *moduleNMCReconcilerHelper) finalizeModule(ctx context.Context, mod *
 	}
 
 	var sumErr *multierror.Error
-	// errs := make([]error, 0, len(nmcList.Items))
 	for _, nmc := range nmcList.Items {
 		err := mnrh.removeModuleFromNMC(ctx, &nmc, mod.Namespace, mod.Name)
 		sumErr = multierror.Append(sumErr, err)
-		//errs = append(errs, err)
 	}
 
-	//err = errors.Join(errs...)
 	err := sumErr.ErrorOrNil()
 	if err != nil {
 		return fmt.Errorf("failed to remove %s module from some of NMCs: %v", modNSN, err)
@@ -318,11 +318,11 @@ func (mnrh *moduleNMCReconcilerHelper) prepareSchedulingData(ctx context.Context
 			errs = append(errs, err)
 			continue
 		}
-		result[node.Name] = schedulingData{mld: mld, node: &node, nmcExists: currentNMCs.Has(node.Name)}
+		result[node.Name] = prepareNodeSchedulingData(&node, mld, currentNMCs)
 		currentNMCs.Delete(node.Name)
 	}
 	for _, nmcName := range currentNMCs.UnsortedList() {
-		result[nmcName] = schedulingData{mld: nil, nmcExists: true}
+		result[nmcName] = schedulingData{action: actionDelete}
 	}
 	return result, errs
 }
@@ -397,4 +397,31 @@ func (mnrh *moduleNMCReconcilerHelper) removeModuleFromNMC(ctx context.Context, 
 
 	logger.Info("Disabled module in NMC", "name", modName, "namespace", modNamespace, "NMC", nmcObj.Name, "result", opRes)
 	return nil
+}
+
+func prepareNodeSchedulingData(node *v1.Node, mld *api.ModuleLoaderData, currentNMCs sets.Set[string]) schedulingData {
+	versionLabel := ""
+	present := false
+	if mld != nil {
+		versionLabel, present = utils.GetNodesModuleLoaderVersionLabel(node.GetLabels(), mld.Namespace, mld.Name)
+	}
+	switch {
+	case mld == nil && currentNMCs.Has(node.Name):
+		// mld missing, Module does not have mapping for node's kernel, NMC for the node exists
+		return schedulingData{action: actionDelete}
+	case mld.ModuleVersion == "":
+		// mld exists, Version not define, should be running
+		return schedulingData{action: actionAdd, mld: mld, node: node}
+	case present && versionLabel == mld.ModuleVersion:
+		// mld exists, version label defined and equal to Module's version, should be running
+		return schedulingData{action: actionAdd, mld: mld, node: node}
+	case present && versionLabel != mld.ModuleVersion:
+		// mld exists, version label defined but not equal to Module's version, nothing needs to be changed in NMC (the previous version should run)
+		return schedulingData{}
+	case !present && mld.ModuleVersion != "":
+		// mld exists, version label missing, Module's version defined, shoud not be running
+		return schedulingData{action: actionDelete}
+	}
+	// nothing should be done
+	return schedulingData{}
 }
