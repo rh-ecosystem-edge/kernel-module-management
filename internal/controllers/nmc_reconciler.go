@@ -417,6 +417,7 @@ func (h *nmcReconcilerHelperImpl) SyncStatus(ctx context.Context, nmcObj *kmmv1b
 	patchFrom := client.MergeFrom(nmcObj.DeepCopy())
 	// TODO move to errors.Join() when we move to Go 1.20
 	var errs *multierror.Error
+	podsToDelete := make([]v1.Pod, 0, len(pods))
 
 	for _, p := range pods {
 		podNSN := types.NamespacedName{Namespace: p.Namespace, Name: p.Name}
@@ -441,18 +442,17 @@ func (h *nmcReconcilerHelperImpl) SyncStatus(ctx context.Context, nmcObj *kmmv1b
 
 		status.ServiceAccountName = p.Spec.ServiceAccountName
 
-		deletePod := false
 		updateModuleStatus := false
 
 		switch phase {
 		case v1.PodFailed:
 			status.InProgress = false
-			deletePod = true
 			updateModuleStatus = true
-		case v1.PodSucceeded:
-			deletePod = true
+			podsToDelete = append(podsToDelete, p)
 
+		case v1.PodSucceeded:
 			if p.Labels[actionLabelKey] == WorkerActionUnload {
+				podsToDelete = append(podsToDelete, p)
 				nmc.RemoveModuleStatus(&nmcObj.Status.Modules, modNamespace, modName)
 				break
 			}
@@ -479,6 +479,7 @@ func (h *nmcReconcilerHelperImpl) SyncStatus(ctx context.Context, nmcObj *kmmv1b
 				FinishedAt
 
 			status.LastTransitionTime = &podLTT
+			podsToDelete = append(podsToDelete, p)
 		case v1.PodPending, v1.PodRunning:
 			status.InProgress = true
 			updateModuleStatus = true
@@ -490,31 +491,27 @@ func (h *nmcReconcilerHelperImpl) SyncStatus(ctx context.Context, nmcObj *kmmv1b
 			)
 		}
 
-		if deletePod {
-			if err = h.pm.DeletePod(ctx, &p); err != nil {
-				errs = multierror.Append(
-					errs,
-					fmt.Errorf("could not delete worker Pod %s: %v", podNSN, errs),
-				)
-
-				continue
-			}
-		}
-
 		if updateModuleStatus {
 			nmc.SetModuleStatus(&nmcObj.Status.Modules, *status)
 		}
 	}
 
+	err = h.client.Status().Patch(ctx, nmcObj, patchFrom)
+	errs = multierror.Append(errs, err)
 	if err = errs.ErrorOrNil(); err != nil {
 		return fmt.Errorf("encountered errors while reconciling NMC %s status: %v", nmcObj.Name, err)
 	}
 
-	if err = h.client.Status().Patch(ctx, nmcObj, patchFrom); err != nil {
-		return fmt.Errorf("could not patch NodeModulesConfig %s status: %v", nmcObj.Name, err)
+	// Delete the pod after the NMC status was updated successfully. Otherwise, in case NMC status update has failed, but the
+	// pod was already deleted, we have no way to know how to update NMC status, and it will always be stuck in the previous
+	// status without any real way to see/affect. In case we fail to delete pod after NMC status is updated, we will be stuck
+	// in the reconcile loop, and in that case we can always try to delete the pod manually, and after that the flow will be able to continue
+	for _, pod := range podsToDelete {
+		err = h.pm.DeletePod(ctx, &pod)
+		errs = multierror.Append(errs, err)
 	}
 
-	return nil
+	return errs.ErrorOrNil()
 }
 
 const (
