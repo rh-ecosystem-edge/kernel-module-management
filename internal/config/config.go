@@ -9,6 +9,8 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/http"
 	"gopkg.in/yaml.v3"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
@@ -28,10 +30,17 @@ type LeaderElection struct {
 	ResourceID string `yaml:"resourceID"`
 }
 
+type Metrics struct {
+	BindAddress      string `yaml:"bindAddress"`
+	DisableHTTP2     bool   `yaml:"disableHTTP2"`
+	EnableAuthnAuthz bool   `yaml:"enableAuthnAuthz"`
+	SecureServing    bool   `yaml:"secureServing"`
+}
+
 type Config struct {
 	HealthProbeBindAddress string         `yaml:"healthProbeBindAddress"`
-	MetricsBindAddress     string         `yaml:"metricsBindAddress"`
 	LeaderElection         LeaderElection `yaml:"leaderElection"`
+	Metrics                Metrics        `yaml:"metrics"`
 	Webhook                Webhook        `yaml:"webhook"`
 	Worker                 Worker         `yaml:"worker"`
 }
@@ -60,11 +69,25 @@ func (c *Config) ManagerOptions(logger logr.Logger) *manager.Options {
 		webhookOpts.TLSOpts = []func(*tls.Config){http.DisableHTTP2}
 	}
 
+	metrics := server.Options{
+		BindAddress:   c.Metrics.BindAddress,
+		SecureServing: c.Metrics.SecureServing,
+	}
+
+	if c.Metrics.EnableAuthnAuthz {
+		metrics.FilterProvider = filters.WithAuthenticationAndAuthorization
+	}
+
+	if c.Metrics.SecureServing && c.Metrics.DisableHTTP2 {
+		logger.Info("Disabling HTTP/2 in the metrics server")
+		metrics.TLSOpts = []func(*tls.Config){http.DisableHTTP2}
+	}
+
 	return &manager.Options{
 		HealthProbeBindAddress: c.HealthProbeBindAddress,
 		LeaderElection:         c.LeaderElection.Enabled,
 		LeaderElectionID:       c.LeaderElection.ResourceID,
-		MetricsBindAddress:     c.MetricsBindAddress,
+		Metrics:                metrics,
 		WebhookServer:          webhook.NewServer(webhookOpts),
 	}
 }

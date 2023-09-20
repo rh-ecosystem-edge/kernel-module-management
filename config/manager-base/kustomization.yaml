@@ -7,7 +7,6 @@ resources:
 - configmap-service-ca.yaml
 
 patches:
-- path: manager_auth_proxy_patch.yaml
 - path: manager_config_patch.yaml
 - path: ocp.patch.yaml
 

@@ -48,7 +48,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2023-11-15T16:36:55Z"
+    createdAt: "2023-11-16T10:48:48Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -360,6 +360,9 @@ spec:
                 - containerPort: 9443
                   name: webhook-server
                   protocol: TCP
+                - containerPort: 8443
+                  name: metrics
+                  protocol: TCP
                 readinessProbe:
                   httpGet:
                     path: /readyz
@@ -388,29 +391,6 @@ spec:
                 - mountPath: /controller_config.yaml
                   name: manager-config
                   subPath: controller_config.yaml
-              - args:
-                - --secure-listen-address=0.0.0.0:8443
-                - --upstream=http://127.0.0.1:8080/
-                - --logtostderr=true
-                - --v=0
-                image: registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.13
-                name: kube-rbac-proxy
-                ports:
-                - containerPort: 8443
-                  name: https
-                  protocol: TCP
-                resources:
-                  limits:
-                    cpu: 500m
-                    memory: 128Mi
-                  requests:
-                    cpu: 5m
-                    memory: 64Mi
-                securityContext:
-                  allowPrivilegeEscalation: false
-                  capabilities:
-                    drop:
-                    - ALL
               nodeSelector:
                 node-role.kubernetes.io/master: ""
               securityContext:
