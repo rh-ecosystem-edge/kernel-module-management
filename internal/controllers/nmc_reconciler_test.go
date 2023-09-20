@@ -15,6 +15,7 @@ import (
 	testclient "github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/config"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ocp/ca"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/worker"
 	"go.uber.org/mock/gomock"
@@ -35,7 +36,7 @@ const nmcName = "nmc"
 var _ = Describe("NodeModulesConfigReconciler_Reconcile", func() {
 	var (
 		kubeClient *testclient.MockClient
-		wh         *MockworkerHelper
+		wh         *MocknmcReconcilerHelper
 
 		r *NMCReconciler
 
@@ -47,7 +48,7 @@ var _ = Describe("NodeModulesConfigReconciler_Reconcile", func() {
 	BeforeEach(func() {
 		ctrl := gomock.NewController(GinkgoT())
 		kubeClient = testclient.NewMockClient(ctrl)
-		wh = NewMockworkerHelper(ctrl)
+		wh = NewMocknmcReconcilerHelper(ctrl)
 		r = &NMCReconciler{
 			client: kubeClient,
 			helper: wh,
@@ -147,7 +148,8 @@ var _ = Describe("NodeModulesConfigReconciler_Reconcile", func() {
 			wh.EXPECT().SyncStatus(ctx, nmc),
 			wh.EXPECT().ProcessModuleSpec(contextWithValueMatch, nmc, &spec0, &status0),
 			wh.EXPECT().ProcessModuleSpec(contextWithValueMatch, nmc, &spec1, nil),
-			wh.EXPECT().ProcessOrphanModuleStatus(contextWithValueMatch, nmc, &status2),
+			wh.EXPECT().ProcessUnconfiguredModuleStatus(contextWithValueMatch, nmc, &status2),
+			wh.EXPECT().GarbageCollectInUseLabels(ctx, nmc),
 		)
 
 		Expect(
@@ -174,7 +176,95 @@ var moduleConfig = kmmv1beta1.ModuleConfig{
 	},
 }
 
-var _ = Describe("workerHelper_ProcessModuleSpec", func() {
+var _ = Describe("nmcReconcilerHelperImpl_GarbageCollectInUseLabels", func() {
+	var (
+		ctx = context.TODO()
+
+		client *testclient.MockClient
+		wh     nmcReconcilerHelper
+	)
+
+	BeforeEach(func() {
+		ctrl := gomock.NewController(GinkgoT())
+		client = testclient.NewMockClient(ctrl)
+		wh = newWorkerHelper(client, nil)
+	})
+
+	It("should do nothing if no labels should be collected", func() {
+		nmcObj := &kmmv1beta1.NodeModulesConfig{
+
+			Status: kmmv1beta1.NodeModulesConfigStatus{
+				Modules: make([]kmmv1beta1.NodeModuleStatus, 0),
+			},
+		}
+
+		Expect(
+			wh.GarbageCollectInUseLabels(ctx, nmcObj),
+		).NotTo(
+			HaveOccurred(),
+		)
+	})
+
+	It("should work as expected", func() {
+		bInUse := nmc.ModuleInUseLabel("b", "b")
+		cInUse := nmc.ModuleInUseLabel("c", "c")
+
+		nmcObj := &kmmv1beta1.NodeModulesConfig{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{
+					nmc.ModuleInUseLabel("a", "a"): "",
+					bInUse:                         "",
+					cInUse:                         "",
+				},
+			},
+			Spec: kmmv1beta1.NodeModulesConfigSpec{
+				Modules: []kmmv1beta1.NodeModuleSpec{
+					{
+						ModuleItem: kmmv1beta1.ModuleItem{
+							Namespace: "b",
+							Name:      "b",
+						},
+					},
+				},
+			},
+			Status: kmmv1beta1.NodeModulesConfigStatus{
+				Modules: []kmmv1beta1.NodeModuleStatus{
+					{
+						ModuleItem: kmmv1beta1.ModuleItem{
+							Namespace: "c",
+							Name:      "c",
+						},
+					},
+					{
+						ModuleItem: kmmv1beta1.ModuleItem{
+							Namespace: "d",
+							Name:      "d",
+						},
+					},
+				},
+			},
+		}
+
+		client.EXPECT().Patch(ctx, nmcObj, gomock.Any())
+
+		Expect(
+			wh.GarbageCollectInUseLabels(ctx, nmcObj),
+		).NotTo(
+			HaveOccurred(),
+		)
+
+		Expect(nmcObj.Labels).To(
+			Equal(
+				map[string]string{
+					bInUse: "",
+					cInUse: "",
+				},
+			),
+		)
+	})
+})
+
+var _ = Describe("nmcReconcilerHelperImpl_ProcessModuleSpec", func() {
 	const (
 		name      = "name"
 		namespace = "namespace"
@@ -185,7 +275,7 @@ var _ = Describe("workerHelper_ProcessModuleSpec", func() {
 
 		client *testclient.MockClient
 		pm     *MockpodManager
-		wh     workerHelper
+		wh     nmcReconcilerHelper
 	)
 
 	BeforeEach(func() {
@@ -213,7 +303,7 @@ var _ = Describe("workerHelper_ProcessModuleSpec", func() {
 		)
 	})
 
-	It("should create a loader Pod if inStatus is false, but the Config is not define (nil)", func() {
+	It("should create a loader Pod if inProgress is false, but the Config is not define (nil)", func() {
 		nmc := &kmmv1beta1.NodeModulesConfig{}
 		spec := &kmmv1beta1.NodeModuleSpec{
 			ModuleItem: kmmv1beta1.ModuleItem{
@@ -378,7 +468,7 @@ var _ = Describe("workerHelper_ProcessModuleSpec", func() {
 	)
 })
 
-var _ = Describe("workerHelper_ProcessOrphanModuleStatus", func() {
+var _ = Describe("nmcReconcilerHelperImpl_ProcessUnconfiguredModuleStatus", func() {
 	ctx := context.TODO()
 
 	It("should do nothing if the status sync is in progress", func() {
@@ -386,7 +476,7 @@ var _ = Describe("workerHelper_ProcessOrphanModuleStatus", func() {
 		status := &kmmv1beta1.NodeModuleStatus{InProgress: true}
 
 		Expect(
-			newWorkerHelper(nil, nil).ProcessOrphanModuleStatus(ctx, nmc, status),
+			newWorkerHelper(nil, nil).ProcessUnconfiguredModuleStatus(ctx, nmc, status),
 		).NotTo(
 			HaveOccurred(),
 		)
@@ -402,7 +492,7 @@ var _ = Describe("workerHelper_ProcessOrphanModuleStatus", func() {
 		client.EXPECT().Status().Return(sw)
 		sw.EXPECT().Patch(ctx, nmc, gomock.Any())
 		Expect(
-			newWorkerHelper(client, nil).ProcessOrphanModuleStatus(ctx, nmc, status),
+			newWorkerHelper(client, nil).ProcessUnconfiguredModuleStatus(ctx, nmc, status),
 		).NotTo(
 			HaveOccurred(),
 		)
@@ -422,22 +512,22 @@ var _ = Describe("workerHelper_ProcessOrphanModuleStatus", func() {
 		pm.EXPECT().CreateUnloaderPod(ctx, nmc, status)
 
 		Expect(
-			wh.ProcessOrphanModuleStatus(ctx, nmc, status),
+			wh.ProcessUnconfiguredModuleStatus(ctx, nmc, status),
 		).NotTo(
 			HaveOccurred(),
 		)
 	})
 })
 
-var _ = Describe("workerHelper_SyncStatus", func() {
+var _ = Describe("nmcReconcilerHelperImpl_SyncStatus", func() {
 	var (
 		ctx = context.TODO()
 
 		ctrl       *gomock.Controller
 		kubeClient *testclient.MockClient
 		pm         *MockpodManager
-		wh         workerHelper
 		sw         *testclient.MockStatusWriter
+		wh         nmcReconcilerHelper
 	)
 
 	BeforeEach(func() {
@@ -574,7 +664,7 @@ var _ = Describe("workerHelper_SyncStatus", func() {
 		Expect(nmc.Status.Modules[1].InProgress).To(BeTrue())
 	})
 
-	It("should remove the status if an unloader pod was successful", func() {
+	It("should remove the status and label if an unloader pod was successful", func() {
 		const (
 			modName      = "module"
 			modNamespace = "namespace"
@@ -708,7 +798,7 @@ var _ = Describe("workerHelper_SyncStatus", func() {
 	})
 })
 
-var _ = Describe("workerHelper_RemoveOrphanFinalizers", func() {
+var _ = Describe("nmcReconcilerHelperImpl_RemoveOrphanFinalizers", func() {
 	const nodeName = "node-name"
 
 	var (
@@ -716,7 +806,7 @@ var _ = Describe("workerHelper_RemoveOrphanFinalizers", func() {
 
 		kubeClient *testclient.MockClient
 		pm         *MockpodManager
-		wh         workerHelper
+		wh         nmcReconcilerHelper
 	)
 
 	BeforeEach(func() {

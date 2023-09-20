@@ -9,7 +9,6 @@ import (
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	"go.uber.org/mock/gomock"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -99,7 +98,6 @@ var _ = Describe("SetModuleConfig", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(nmc.Spec.Modules)).To(Equal(3))
 		Expect(nmc.Spec.Modules[2].Config.InTreeModuleToRemove).To(Equal("in-tree-module"))
-		Expect(nmc.GetLabels()).To(HaveKeyWithValue(utils.GetModuleNMCLabel(namespace, name), ""))
 	})
 
 	It("changing existing module config", func() {
@@ -126,7 +124,6 @@ var _ = Describe("SetModuleConfig", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(nmc.Spec.Modules)).To(Equal(2))
 		Expect(nmc.Spec.Modules[1].Config.InTreeModuleToRemove).To(Equal("in-tree-module"))
-		Expect(nmc.GetLabels()).To(HaveKeyWithValue(utils.GetModuleNMCLabel(namespace, name), ""))
 	})
 })
 
@@ -166,11 +163,10 @@ var _ = Describe("RemoveModuleConfig", func() {
 		Expect(len(nmc.Spec.Modules)).To(Equal(2))
 		Expect(nmc.Spec.Modules[0].Config.InTreeModuleToRemove).To(Equal("some-in-tree-module-1"))
 		Expect(nmc.Spec.Modules[1].Config.InTreeModuleToRemove).To(Equal("some-in-tree-module-2"))
-		Expect(nmc.GetLabels()).NotTo(HaveKeyWithValue(utils.GetModuleNMCLabel(namespace, name), ""))
 	})
 
 	It("deleting existing module", func() {
-		nmc.SetLabels(map[string]string{utils.GetModuleNMCLabel(namespace, name): ""})
+		nmc.SetLabels(map[string]string{ModuleConfiguredLabel(namespace, name): ""})
 		nmc.Spec.Modules = []kmmv1beta1.NodeModuleSpec{
 			{
 				ModuleItem: kmmv1beta1.ModuleItem{
@@ -193,7 +189,6 @@ var _ = Describe("RemoveModuleConfig", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(nmc.Spec.Modules)).To(Equal(1))
 		Expect(nmc.Spec.Modules[0].Config.InTreeModuleToRemove).To(Equal("some-in-tree-module-1"))
-		Expect(nmc.GetLabels()).NotTo(HaveKeyWithValue(utils.GetModuleNMCLabel(namespace, name), ""))
 	})
 })
 
