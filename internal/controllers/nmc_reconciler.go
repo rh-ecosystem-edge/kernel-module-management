@@ -12,6 +12,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/config"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/labels"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ocp/ca"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/worker"
@@ -20,6 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/kubectl/pkg/cmd/util/podcmd"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -57,7 +59,7 @@ const (
 
 type NMCReconciler struct {
 	client client.Client
-	helper workerHelper
+	helper nmcReconcilerHelper
 }
 
 func NewNMCReconciler(
@@ -123,6 +125,8 @@ func (r *NMCReconciler) Reconcile(ctx context.Context, req reconcile.Request) (r
 				errs,
 				fmt.Errorf("error processing Module %s: %v", moduleNameKey, err),
 			)
+
+			continue
 		}
 
 		delete(statusMap, moduleNameKey)
@@ -134,7 +138,7 @@ func (r *NMCReconciler) Reconcile(ctx context.Context, req reconcile.Request) (r
 	for statusNameKey, status := range statusMap {
 		logger := logger.WithValues("status", statusNameKey)
 
-		if err := r.helper.ProcessOrphanModuleStatus(ctrl.LoggerInto(ctx, logger), &nmcObj, status); err != nil {
+		if err := r.helper.ProcessUnconfiguredModuleStatus(ctrl.LoggerInto(ctx, logger), &nmcObj, status); err != nil {
 			errs = multierror.Append(
 				errs,
 				fmt.Errorf("erorr processing orphan status for Module %s: %v", statusNameKey, err),
@@ -142,7 +146,15 @@ func (r *NMCReconciler) Reconcile(ctx context.Context, req reconcile.Request) (r
 		}
 	}
 
-	return ctrl.Result{}, errs.ErrorOrNil()
+	if err := errs.ErrorOrNil(); err != nil {
+		return reconcile.Result{}, fmt.Errorf("could not process orphan statuses: %v", err)
+	}
+
+	if err := r.helper.GarbageCollectInUseLabels(ctx, &nmcObj); err != nil {
+		return reconcile.Result{}, fmt.Errorf("could not garbage collect in-use labels for NMC %s: %v", req.NamespacedName, err)
+	}
+
+	return ctrl.Result{}, nil
 }
 
 func (r *NMCReconciler) SetupWithManager(ctx context.Context, mgr manager.Manager) error {
@@ -203,23 +215,63 @@ func FindNodeCondition(cond []v1.NodeCondition, conditionType v1.NodeConditionTy
 
 //go:generate mockgen -source=nmc_reconciler.go -package=controllers -destination=mock_nmc_reconciler.go workerHelper
 
-type workerHelper interface {
+type nmcReconcilerHelper interface {
+	GarbageCollectInUseLabels(ctx context.Context, nmc *kmmv1beta1.NodeModulesConfig) error
 	ProcessModuleSpec(ctx context.Context, nmc *kmmv1beta1.NodeModulesConfig, spec *kmmv1beta1.NodeModuleSpec, status *kmmv1beta1.NodeModuleStatus) error
-	ProcessOrphanModuleStatus(ctx context.Context, nmc *kmmv1beta1.NodeModulesConfig, status *kmmv1beta1.NodeModuleStatus) error
-	SyncStatus(ctx context.Context, nmc *kmmv1beta1.NodeModulesConfig) error
+	ProcessUnconfiguredModuleStatus(ctx context.Context, nmc *kmmv1beta1.NodeModulesConfig, status *kmmv1beta1.NodeModuleStatus) error
 	RemoveOrphanFinalizers(ctx context.Context, nodeName string) error
+	SyncStatus(ctx context.Context, nmc *kmmv1beta1.NodeModulesConfig) error
 }
 
-type workerHelperImpl struct {
+type nmcReconcilerHelperImpl struct {
 	client client.Client
 	pm     podManager
 }
 
-func newWorkerHelper(client client.Client, pm podManager) workerHelper {
-	return &workerHelperImpl{
+func newWorkerHelper(client client.Client, pm podManager) nmcReconcilerHelper {
+	return &nmcReconcilerHelperImpl{
 		client: client,
 		pm:     pm,
 	}
+}
+
+// GarbageCollectInUseLabels removes all module-in-use labels for which there is no corresponding entry either in
+// spec.modules or in status.modules.
+func (h *nmcReconcilerHelperImpl) GarbageCollectInUseLabels(ctx context.Context, nmcObj *kmmv1beta1.NodeModulesConfig) error {
+	labelSet := sets.New[string]()
+	desiredSet := sets.New[string]()
+
+	for k := range nmcObj.Labels {
+		if ok, _, _ := nmc.IsModuleInUseLabel(k); ok {
+			labelSet.Insert(k)
+		}
+	}
+
+	for _, s := range nmcObj.Spec.Modules {
+		desiredSet.Insert(
+			nmc.ModuleInUseLabel(s.Namespace, s.Name),
+		)
+	}
+
+	for _, s := range nmcObj.Status.Modules {
+		desiredSet.Insert(
+			nmc.ModuleInUseLabel(s.Namespace, s.Name),
+		)
+	}
+
+	diff := labelSet.Difference(desiredSet)
+
+	if diff.Len() != 0 {
+		patchFrom := client.MergeFrom(nmcObj.DeepCopy())
+
+		for k := range diff {
+			delete(nmcObj.Labels, k)
+		}
+
+		return h.client.Patch(ctx, nmcObj, patchFrom)
+	}
+
+	return nil
 }
 
 // ProcessModuleSpec determines if a worker Pod should be created for a Module entry in a
@@ -232,9 +284,9 @@ func newWorkerHelper(client client.Client, pm podManager) workerHelper {
 //
 // An unloading worker Pod is created when the entry in .spec.modules has a different config compared to the entry in
 // .status.modules.
-func (w *workerHelperImpl) ProcessModuleSpec(
+func (h *nmcReconcilerHelperImpl) ProcessModuleSpec(
 	ctx context.Context,
-	nmc *kmmv1beta1.NodeModulesConfig,
+	nmcObj *kmmv1beta1.NodeModulesConfig,
 	spec *kmmv1beta1.NodeModuleSpec,
 	status *kmmv1beta1.NodeModuleStatus,
 ) error {
@@ -242,7 +294,7 @@ func (w *workerHelperImpl) ProcessModuleSpec(
 
 	if status == nil {
 		logger.Info("Missing status; creating loader Pod")
-		return w.pm.CreateLoaderPod(ctx, nmc, spec)
+		return h.pm.CreateLoaderPod(ctx, nmcObj, spec)
 	}
 
 	if status.InProgress {
@@ -252,30 +304,30 @@ func (w *workerHelperImpl) ProcessModuleSpec(
 
 	if status.Config == nil {
 		logger.Info("Missing status config and pod is not running: previously failed pod, creating loader Pod")
-		return w.pm.CreateLoaderPod(ctx, nmc, spec)
+		return h.pm.CreateLoaderPod(ctx, nmcObj, spec)
 	}
 
 	if !reflect.DeepEqual(spec.Config, *status.Config) {
 		logger.Info("Outdated config in status; creating unloader Pod")
 
-		return w.pm.CreateUnloaderPod(ctx, nmc, status)
+		return h.pm.CreateUnloaderPod(ctx, nmcObj, status)
 	}
 
 	node := v1.Node{}
 
-	if err := w.client.Get(ctx, types.NamespacedName{Name: nmc.Name}, &node); err != nil {
-		return fmt.Errorf("could not get node %s: %v", nmc.Name, err)
+	if err := h.client.Get(ctx, types.NamespacedName{Name: nmcObj.Name}, &node); err != nil {
+		return fmt.Errorf("could not get node %s: %v", nmcObj.Name, err)
 	}
 
 	readyCondition := FindNodeCondition(node.Status.Conditions, v1.NodeReady)
 	if readyCondition == nil {
-		return fmt.Errorf("node %s has no Ready condition", nmc.Name)
+		return fmt.Errorf("node %s has no Ready condition", nmcObj.Name)
 	}
 
 	if readyCondition.Status == v1.ConditionTrue && status.LastTransitionTime.Before(&readyCondition.LastTransitionTime) {
 		logger.Info("Outdated last transition time status; creating unloader Pod")
 
-		return w.pm.CreateLoaderPod(ctx, nmc, spec)
+		return h.pm.CreateLoaderPod(ctx, nmcObj, spec)
 	}
 
 	logger.Info("Spec and status in sync; nothing to do")
@@ -283,7 +335,14 @@ func (w *workerHelperImpl) ProcessModuleSpec(
 	return nil
 }
 
-func (w *workerHelperImpl) ProcessOrphanModuleStatus(
+// ProcessUnconfiguredModuleStatus cleans up a NodeModuleStatus.
+// It should be called for each status entry for which the NodeModulesConfigs does not have a spec entry; this means
+// that KMM wants the module unloaded from the node.
+// If status.Config field is nil, then it represents a module that could not be loaded by a worker Pod.
+// ProcessUnconfiguredModuleStatus will then remove status from nmcObj's Status.Modules.
+// If status.Config is not nil, it means that the module was successfully loaded.
+// ProcessUnconfiguredModuleStatus will then create a worker pod to unload the module.
+func (h *nmcReconcilerHelperImpl) ProcessUnconfiguredModuleStatus(
 	ctx context.Context,
 	nmcObj *kmmv1beta1.NodeModulesConfig,
 	status *kmmv1beta1.NodeModuleStatus,
@@ -299,16 +358,16 @@ func (w *workerHelperImpl) ProcessOrphanModuleStatus(
 		logger.Info("Missing status config and pod is not running: previously failed pod, no need to unload")
 		patchFrom := client.MergeFrom(nmcObj.DeepCopy())
 		nmc.RemoveModuleStatus(&nmcObj.Status.Modules, status.Namespace, status.Name)
-		return w.client.Status().Patch(ctx, nmcObj, patchFrom)
+		return h.client.Status().Patch(ctx, nmcObj, patchFrom)
 	}
 
 	logger.Info("Creating unloader Pod")
 
-	return w.pm.CreateUnloaderPod(ctx, nmcObj, status)
+	return h.pm.CreateUnloaderPod(ctx, nmcObj, status)
 }
 
-func (w *workerHelperImpl) RemoveOrphanFinalizers(ctx context.Context, nodeName string) error {
-	pods, err := w.pm.ListWorkerPodsOnNode(ctx, nodeName)
+func (h *nmcReconcilerHelperImpl) RemoveOrphanFinalizers(ctx context.Context, nodeName string) error {
+	pods, err := h.pm.ListWorkerPodsOnNode(ctx, nodeName)
 	if err != nil {
 		return fmt.Errorf("could not delete orphan worker Pods on node %s: %v", nodeName, err)
 	}
@@ -323,7 +382,7 @@ func (w *workerHelperImpl) RemoveOrphanFinalizers(ctx context.Context, nodeName 
 		mergeFrom := client.MergeFrom(pod.DeepCopy())
 
 		if controllerutil.RemoveFinalizer(pod, nodeModulesConfigFinalizer) {
-			if err = w.client.Patch(ctx, pod, mergeFrom); err != nil {
+			if err = h.client.Patch(ctx, pod, mergeFrom); err != nil {
 				errs = multierror.Append(
 					errs,
 					fmt.Errorf("could not patch Pod %s/%s: %v", pod.Namespace, pod.Name, err),
@@ -337,12 +396,12 @@ func (w *workerHelperImpl) RemoveOrphanFinalizers(ctx context.Context, nodeName 
 	return errs.ErrorOrNil()
 }
 
-func (w *workerHelperImpl) SyncStatus(ctx context.Context, nmcObj *kmmv1beta1.NodeModulesConfig) error {
+func (h *nmcReconcilerHelperImpl) SyncStatus(ctx context.Context, nmcObj *kmmv1beta1.NodeModulesConfig) error {
 	logger := ctrl.LoggerFrom(ctx)
 
 	logger.Info("Syncing status")
 
-	pods, err := w.pm.ListWorkerPodsOnNode(ctx, nmcObj.Name)
+	pods, err := h.pm.ListWorkerPodsOnNode(ctx, nmcObj.Name)
 	if err != nil {
 		return fmt.Errorf("could not list worker pods for NodeModulesConfig %s: %v", nmcObj.Name, err)
 	}
@@ -418,7 +477,6 @@ func (w *workerHelperImpl) SyncStatus(ctx context.Context, nmcObj *kmmv1beta1.No
 				FinishedAt
 
 			status.LastTransitionTime = &podLTT
-
 		case v1.PodPending, v1.PodRunning:
 			status.InProgress = true
 			updateModuleStatus = true
@@ -431,7 +489,7 @@ func (w *workerHelperImpl) SyncStatus(ctx context.Context, nmcObj *kmmv1beta1.No
 		}
 
 		if deletePod {
-			if err = w.pm.DeletePod(ctx, &p); err != nil {
+			if err = h.pm.DeletePod(ctx, &p); err != nil {
 				errs = multierror.Append(
 					errs,
 					fmt.Errorf("could not delete worker Pod %s: %v", podNSN, errs),
@@ -450,7 +508,7 @@ func (w *workerHelperImpl) SyncStatus(ctx context.Context, nmcObj *kmmv1beta1.No
 		return fmt.Errorf("encountered errors while reconciling NMC %s status: %v", nmcObj.Name, err)
 	}
 
-	if err = w.client.Status().Patch(ctx, nmcObj, patchFrom); err != nil {
+	if err = h.client.Status().Patch(ctx, nmcObj, patchFrom); err != nil {
 		return fmt.Errorf("could not patch NodeModulesConfig %s status: %v", nmcObj.Name, err)
 	}
 
@@ -514,7 +572,7 @@ func (p *podManagerImpl) CreateLoaderPod(ctx context.Context, nmc client.Object,
 		return fmt.Errorf("could not set worker config: %v", err)
 	}
 
-	setWorkerActionLabel(pod, WorkerActionLoad)
+	labels.SetLabel(pod, actionLabelKey, WorkerActionLoad)
 	pod.Spec.RestartPolicy = v1.RestartPolicyNever
 
 	return p.client.Create(ctx, pod)
@@ -534,7 +592,7 @@ func (p *podManagerImpl) CreateUnloaderPod(ctx context.Context, nmc client.Objec
 		return fmt.Errorf("could not set worker config: %v", err)
 	}
 
-	setWorkerActionLabel(pod, WorkerActionUnload)
+	labels.SetLabel(pod, actionLabelKey, WorkerActionUnload)
 
 	return p.client.Create(ctx, pod)
 }
@@ -771,18 +829,6 @@ func (p *podManagerImpl) baseWorkerPod(
 	controllerutil.AddFinalizer(&pod, nodeModulesConfigFinalizer)
 
 	return &pod, nil
-}
-
-func setWorkerActionLabel(pod *v1.Pod, action WorkerAction) {
-	labels := pod.GetLabels()
-
-	if labels == nil {
-		labels = make(map[string]string)
-	}
-
-	labels[actionLabelKey] = string(action)
-
-	pod.SetLabels(labels)
 }
 
 func setWorkerConfigAnnotation(pod *v1.Pod, cfg kmmv1beta1.ModuleConfig) error {
