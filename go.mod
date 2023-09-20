@@ -16,7 +16,7 @@ require (
 	github.com/openshift/api v0.0.0-20230425161039-9a7a7c17dbf8
 	github.com/prometheus/client_golang v1.16.0
 	github.com/spf13/cobra v1.7.0
-	go.uber.org/mock v0.2.0
+	go.uber.org/mock v0.3.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.27.6
 	k8s.io/apimachinery v0.27.6
