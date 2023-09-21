@@ -15,33 +15,28 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-//+kubebuilder:rbac:groups="core",resources=nodes,verbs=get;patch;list;watch
+//+kubebuilder:rbac:groups="core",resources=nodes,verbs=get;list;watch
 
 const (
-	NodeKernelReconcilerName = "NodeKernel"
+	KernelDTKReconcilerName = "KernelDTK"
 )
 
 // We expect an osImageVersion of the form 411.86.202210072320-0 for example
 var osVersionRegexp = regexp.MustCompile(`\d+\.\d+\.\d+\-\d`)
 
-type NodeKernelReconciler struct {
+type KernelDTKReconciler struct {
 	client             client.Client
-	labelName          string
-	filter             *filter.Filter
 	kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping
 }
 
-func NewNodeKernelReconciler(client client.Client, labelName string, filter *filter.Filter,
-	kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) *NodeKernelReconciler {
-	return &NodeKernelReconciler{
+func NewKernelDTKReconciler(client client.Client, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping) *KernelDTKReconciler {
+	return &KernelDTKReconciler{
 		client:             client,
-		labelName:          labelName,
-		filter:             filter,
 		kernelOsDtkMapping: kernelOsDtkMapping,
 	}
 }
 
-func (r *NodeKernelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *KernelDTKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	node := v1.Node{}
 
 	logger := log.FromContext(ctx)
@@ -58,34 +53,17 @@ func (r *NodeKernelReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	r.kernelOsDtkMapping.SetNodeInfo(kernelVersion, osImageVersion)
 	logger.Info("registered node info mapping", "kernelVersion", kernelVersion, "osImageVersion", osImageVersion)
 
-	logger.Info(
-		"Patching node label",
-		"old kernel", node.Labels[r.labelName],
-		"new kernel", kernelVersion)
-
-	p := client.MergeFrom(node.DeepCopy())
-
-	if node.Labels == nil {
-		node.Labels = make(map[string]string)
-	}
-
-	node.Labels[r.labelName] = kernelVersion
-
-	if err := r.client.Patch(ctx, &node, p); err != nil {
-		return ctrl.Result{}, fmt.Errorf("could not patch the node: %v", err)
-	}
-
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *NodeKernelReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *KernelDTKReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.
 		NewControllerManagedBy(mgr).
-		Named(NodeKernelReconcilerName).
+		Named(KernelDTKReconcilerName).
 		For(&v1.Node{}).
 		WithEventFilter(
-			r.filter.NodeKernelReconcilerPredicate(r.labelName),
+			filter.KernelDTKReconcilerPredicate(),
 		).
 		Complete(r)
 }

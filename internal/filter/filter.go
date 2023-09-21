@@ -167,10 +167,10 @@ func ModuleNMCReconcileBuildPredicate() predicate.Predicate {
 // CREATE: always, as we need to make sure we add a new entry to 'kernelToOS' mapping
 // UPDATE: only if the kernel version or the os image version changed
 // DELETE: never
-func (f *Filter) NodeKernelReconcilerPredicate(labelName string) predicate.Predicate {
+func KernelDTKReconcilerPredicate() predicate.Predicate {
 	return predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			kernelVersionChanged := e.ObjectNew.GetLabels()[labelName] != e.ObjectNew.(*v1.Node).Status.NodeInfo.KernelVersion
+			kernelVersionChanged := e.ObjectNew.(*v1.Node).Status.NodeInfo.KernelVersion != e.ObjectOld.(*v1.Node).Status.NodeInfo.KernelVersion
 			osImageChanged := e.ObjectNew.(*v1.Node).Status.NodeInfo.OSImage != e.ObjectOld.(*v1.Node).Status.NodeInfo.OSImage
 			return kernelVersionChanged || osImageChanged
 		},
@@ -181,7 +181,6 @@ func (f *Filter) NodeKernelReconcilerPredicate(labelName string) predicate.Predi
 }
 
 func (f *Filter) ImageStreamReconcilerPredicate() predicate.Predicate {
-
 	return predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			newTags := map[string]string{}

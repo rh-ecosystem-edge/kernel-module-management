@@ -30,7 +30,6 @@ var _ = Describe("NodeKernelReconciler_Reconcile", func() {
 	})
 	const (
 		kernelVersion = "1.2.3"
-		labelName     = "label-name"
 		nodeName      = "node-name"
 	)
 
@@ -38,7 +37,7 @@ var _ = Describe("NodeKernelReconciler_Reconcile", func() {
 		ctx := context.Background()
 		clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).Return(errors.New("some error"))
 
-		nkr := NewNodeKernelReconciler(clnt, labelName, nil, nil)
+		nkr := NewKernelDTKReconciler(clnt, nil)
 		req := runtimectrl.Request{
 			NamespacedName: types.NamespacedName{Name: nodeName},
 		}
@@ -52,48 +51,40 @@ var _ = Describe("NodeKernelReconciler_Reconcile", func() {
 	validOSImage := fmt.Sprintf("Red Hat Enterprise Linux CoreOS %s (Ootpa)", osVersion)
 
 	DescribeTable(
-		"should set the label",
-		func(kv, expected, osImage string, alreadyLabeled bool) {
+		"should register the NodeInfo",
+		func(statusKernelVersion, expectedKernelVersion, osImage string) {
 			node := v1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: nodeName},
 				Status: v1.NodeStatus{
 					NodeInfo: v1.NodeSystemInfo{
-						KernelVersion: kv,
+						KernelVersion: statusKernelVersion,
 						OSImage:       osImage,
 					},
 				},
 			}
 
-			if alreadyLabeled {
-				node.SetLabels(map[string]string{labelName: "some-value"})
-			}
-
-			node.SetLabels(map[string]string{labelName: kernelVersion})
 			nsn := types.NamespacedName{Name: nodeName}
 
 			ctx := context.Background()
 			gomock.InOrder(
 				clnt.EXPECT().Get(ctx, nsn, &v1.Node{}).DoAndReturn(
 					func(_ interface{}, _ interface{}, n *v1.Node, _ ...ctrlclient.GetOption) error {
-						n.ObjectMeta = node.ObjectMeta
 						n.Status = node.Status
 						return nil
 					},
 				),
-				mockSKODM.EXPECT().SetNodeInfo(kernelVersion, osVersion),
-				clnt.EXPECT().Patch(ctx, &node, gomock.Any()),
+				mockSKODM.EXPECT().SetNodeInfo(expectedKernelVersion, osVersion),
 			)
 
-			nkr := NewNodeKernelReconciler(clnt, labelName, nil, mockSKODM)
+			nkr := NewKernelDTKReconciler(clnt, mockSKODM)
 			req := runtimectrl.Request{NamespacedName: nsn}
 
 			res, err := nkr.Reconcile(ctx, req)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(res.Requeue).To(BeFalse())
 		},
-		Entry(nil, kernelVersion, kernelVersion, validOSImage, false),
-		Entry(nil, kernelVersion, kernelVersion, validOSImage, true),
-		Entry(nil, kernelVersion+"+", kernelVersion, validOSImage, true),
+		Entry(nil, kernelVersion, kernelVersion, validOSImage),
+		Entry(nil, kernelVersion+"+", kernelVersion, validOSImage),
 	)
 
 	It("should fail if it cannot parse the osImage version from the nodeInfo", func() {
@@ -119,7 +110,7 @@ var _ = Describe("NodeKernelReconciler_Reconcile", func() {
 			),
 		)
 
-		nkr := NewNodeKernelReconciler(clnt, labelName, nil, nil)
+		nkr := NewKernelDTKReconciler(clnt, nil)
 		req := runtimectrl.Request{
 			NamespacedName: types.NamespacedName{Name: nodeName},
 		}
