@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"strings"
 
-	buildv1 "github.com/openshift/api/build/v1"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
@@ -36,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	buildv1 "github.com/openshift/api/build/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
@@ -345,7 +344,7 @@ func (mrh *moduleReconcilerHelper) handleDevicePlugin(ctx context.Context, mod *
 	}
 
 	logger := log.FromContext(ctx)
-	ds := getExistingDS(existingModuleDS, mod.Namespace, mod.Name, "", mod.Spec.ModuleLoader.Container.Version, true)
+	ds := getExistingDS(existingModuleDS, mod.Namespace, mod.Name, mod.Spec.ModuleLoader.Container.Version)
 	if ds == nil {
 		logger.Info("creating new device plugin DS", "version", mod.Spec.ModuleLoader.Container.Version)
 		ds = &appsv1.DaemonSet{
@@ -483,19 +482,12 @@ func isModuleBuildAndSignCapable(mod *kmmv1beta1.Module) (bool, bool) {
 func getExistingDS(existingDS []appsv1.DaemonSet,
 	moduleNamespace string,
 	moduleName string,
-	kernelVersion string,
-	moduleVersion string,
-	isDevicePlugin bool) *appsv1.DaemonSet {
+	moduleVersion string) *appsv1.DaemonSet {
 
-	versionLabel := utils.GetModuleLoaderVersionLabelName(moduleNamespace, moduleName)
-	if isDevicePlugin {
-		versionLabel = utils.GetDevicePluginVersionLabelName(moduleNamespace, moduleName)
-	}
+	versionLabel := utils.GetDevicePluginVersionLabelName(moduleNamespace, moduleName)
 	for _, ds := range existingDS {
-		dsLabels := ds.GetLabels()
-		dsKernelVersion := dsLabels[constants.KernelLabel]
-		dsModuleVersion := dsLabels[versionLabel]
-		if dsKernelVersion == kernelVersion && dsModuleVersion == moduleVersion {
+		dsModuleVersion := ds.GetLabels()[versionLabel]
+		if dsModuleVersion == moduleVersion {
 			return &ds
 		}
 	}
