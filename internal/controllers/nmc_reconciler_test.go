@@ -1070,6 +1070,7 @@ func getBaseWorkerPod(subcommand string, action WorkerAction, owner ctrlclient.O
 
 	const (
 		trustedCAVolumeName   = "trusted-ca"
+		volNameEtcContainers  = "etc-containers"
 		volNameLibModules     = "lib-modules"
 		volNameUsrLibModules  = "usr-lib-modules"
 		volNameVarLibFirmware = "var-lib-firmware"
@@ -1121,6 +1122,11 @@ modprobe:
 						{
 							Name:      volNameConfig,
 							MountPath: "/etc/kmm-worker",
+							ReadOnly:  true,
+						},
+						{
+							Name:      volNameEtcContainers,
+							MountPath: "/etc/containers",
 							ReadOnly:  true,
 						},
 						{
@@ -1219,6 +1225,15 @@ modprobe:
 									},
 								},
 							},
+						},
+					},
+				},
+				{
+					Name: volNameEtcContainers,
+					VolumeSource: v1.VolumeSource{
+						HostPath: &v1.HostPathVolumeSource{
+							Path: "/etc/containers",
+							Type: &hostPathDirectory,
 						},
 					},
 				},

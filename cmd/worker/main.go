@@ -100,7 +100,8 @@ func main() {
 
 		ip := worker.NewImagePuller(worker.ImagesDir, keyChain, logger)
 		mr := worker.NewModprobeRunner(logger)
-		w = worker.NewWorker(ip, mr, logger)
+		res := worker.NewMirrorResolver(logger)
+		w = worker.NewWorker(ip, mr, res, logger)
 
 		return nil
 	}
