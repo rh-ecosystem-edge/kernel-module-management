@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-readonly SKIP_MAKE_DEPLOY="${SKIP_MAKE_DEPLOY:-false}"
 POD_NAME=''
 
 wait_for_pod_and_print_logs () {
@@ -19,13 +18,6 @@ export KVER=$(oc debug node/${NODE} -- uname -r)
 
 echo "Label a node to match selector in Module afterwards..."
 oc label node ${NODE} task=kmm-ci
-
-if [ "$SKIP_MAKE_DEPLOY" == true ]; then
-  echo "Skipping deployment"
-else
-  echo "Deploy KMMO..."
-  make deploy
-fi
 
 echo "Check that the kmm_ci_a module is not loaded on the node..."
 if oc debug node/${NODE} -- chroot host/ lsmod | grep kmm_ci_a; then
