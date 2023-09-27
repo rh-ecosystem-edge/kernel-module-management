@@ -129,6 +129,7 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 						BlockOwnerDeletion: pointer.Bool(true),
 					},
 				},
+				Finalizers: []string{constants.JobEventFinalizer},
 			},
 			Spec: buildv1.BuildSpec{
 				CommonSpec: buildv1.CommonSpec{

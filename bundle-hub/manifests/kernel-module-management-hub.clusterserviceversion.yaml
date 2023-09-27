@@ -58,6 +58,13 @@ spec:
       clusterPermissions:
       - rules:
         - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        - apiGroups:
           - batch
           resources:
           - jobs
@@ -334,13 +341,6 @@ spec:
           - update
           - patch
           - delete
-        - apiGroups:
-          - ""
-          resources:
-          - events
-          verbs:
-          - create
-          - patch
         serviceAccountName: kmm-operator-hub-controller-manager
     strategy: deployment
   installModes:

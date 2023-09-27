@@ -13,7 +13,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/labels"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/meta"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
@@ -358,8 +358,8 @@ func (mnrh *moduleNMCReconcilerHelper) enableModuleOnNode(ctx context.Context, m
 			return err
 		}
 
-		labels.SetLabel(nmcObj, nmc.ModuleConfiguredLabel(mld.Namespace, mld.Name), "")
-		labels.SetLabel(nmcObj, nmc.ModuleInUseLabel(mld.Namespace, mld.Name), "")
+		meta.SetLabel(nmcObj, nmc.ModuleConfiguredLabel(mld.Namespace, mld.Name), "")
+		meta.SetLabel(nmcObj, nmc.ModuleInUseLabel(mld.Namespace, mld.Name), "")
 
 		return controllerutil.SetOwnerReference(node, nmcObj, mnrh.scheme)
 	})
@@ -386,7 +386,7 @@ func (mnrh *moduleNMCReconcilerHelper) removeModuleFromNMC(ctx context.Context, 
 			return err
 		}
 
-		labels.RemoveLabel(nmcObj, nmc.ModuleConfiguredLabel(modNamespace, modName))
+		meta.RemoveLabel(nmcObj, nmc.ModuleConfiguredLabel(modNamespace, modName))
 
 		return nil
 	})
