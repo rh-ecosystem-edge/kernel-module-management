@@ -6,7 +6,6 @@ const (
 	ModuleNameLabel              = "kmm.node.kubernetes.io/module.name"
 	NodeLabelerFinalizer         = "kmm.node.kubernetes.io/node-labeler"
 	TargetKernelTarget           = "kmm.node.kubernetes.io/target-kernel"
-	DaemonSetRole                = "kmm.node.kubernetes.io/role"
 	KernelLabel                  = "kmm.node.kubernetes.io/kernel-version.full"
 	BuildTypeLabel               = "kmm.openshift.io/build.type"
 
@@ -21,9 +20,6 @@ const (
 	DockerfileCMKey                = "dockerfile"
 	PublicSignDataKey              = "cert"
 	PrivateSignDataKey             = "key"
-
-	ModuleLoaderRoleLabelValue = "module-loader"
-	DevicePluginRoleLabelValue = "device-plugin"
 
 	OperatorNamespaceEnvVar = "OPERATOR_NAMESPACE"
 )
