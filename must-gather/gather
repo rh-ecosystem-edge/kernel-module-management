@@ -7,7 +7,7 @@ HUB=false
 NS=''
 
 readonly COMMON_KINDS='clusterrolebindings,configmaps,events,pods,roles,rolebindings,serviceaccounts'
-readonly BUILD_KINDS="${COMMON_KINDS},builds,jobs.batch"
+readonly BUILD_KINDS="${COMMON_KINDS},builds"
 
 collect_common() {
   echo "Collecting common objects"
@@ -26,14 +26,12 @@ collect_common() {
 collect() {
   echo "Collecting KMM objects and logs"
 
-  oc adm inspect modules,preflightvalidations,preflightvalidationsocp -A --dest-dir="$OUTPUT_DIR/inspect"
+  oc adm inspect modules,nodemodulesconfigs,preflightvalidations,preflightvalidationsocp -A --dest-dir="$OUTPUT_DIR/inspect"
   oc adm inspect clusterclaims --dest-dir="$OUTPUT_DIR/inspect"
 
   oc -n "$NS" logs "deployment/kmm-operator-controller-manager" > "${OUTPUT_DIR}/kmm-operator-controller-manager.log"
 
-  namespaces=$(oc get daemonset -A -l kmm.node.kubernetes.io/module.name --no-headers -o custom-columns="NS:.metadata.namespace")
-  IFS=" " read -r -a namespaces <<< "$(echo "${namespaces[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' ')"
-  for ns in "${namespaces[@]}"; do
+  for ns in $(oc get modules -A --no-headers -o custom-columns="NS:.metadata.namespace"); do
     echo "Collecting data in namespace ${ns}"
 
     oc adm inspect -n "$ns" "daemonset.apps,${BUILD_KINDS}" --dest-dir="$OUTPUT_DIR/inspect"
@@ -45,7 +43,7 @@ collect_hub() {
 
   oc adm inspect managedclustermodules,managedclusters --dest-dir="$OUTPUT_DIR/inspect"
   oc adm inspect manifestworks -A --dest-dir="$OUTPUT_DIR/inspect"
-  oc adm inspect "${BUILD_KINDS}" -A --dest-dir="$OUTPUT_DIR/inspect"
+  oc adm inspect "${BUILD_KINDS}" -n "${NS}" --dest-dir="$OUTPUT_DIR/inspect"
 
   oc -n "$NS" logs "deployment.apps/kmm-operator-hub-controller-manager" > "${OUTPUT_DIR}/kmm-operator-hub-controller-manager.log"
 }
