@@ -20,6 +20,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/worker"
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -648,8 +649,6 @@ func (p *podManagerImpl) CreateLoaderPod(ctx context.Context, nmc client.Object,
 
 	labels.SetLabel(pod, actionLabelKey, WorkerActionLoad)
 
-	pod.Spec.RestartPolicy = v1.RestartPolicyNever
-
 	return p.client.Create(ctx, pod)
 }
 
@@ -739,6 +738,17 @@ func (p *podManagerImpl) PodExists(ctx context.Context, nodeName, modName, modNa
 
 	return true, nil
 }
+
+var (
+	requests = v1.ResourceList{
+		v1.ResourceCPU:    resource.MustParse("0.5"),
+		v1.ResourceMemory: resource.MustParse("64Mi"),
+	}
+	limits = v1.ResourceList{
+		v1.ResourceCPU:    resource.MustParse("1"),
+		v1.ResourceMemory: resource.MustParse("128Mi"),
+	}
+)
 
 func (p *podManagerImpl) baseWorkerPod(
 	ctx context.Context,
@@ -908,6 +918,10 @@ func (p *podManagerImpl) baseWorkerPod(
 						},
 						RunAsUser:      p.workerCfg.RunAsUser,
 						SELinuxOptions: &v1.SELinuxOptions{Type: p.workerCfg.SELinuxType},
+					},
+					Resources: v1.ResourceRequirements{
+						Requests: requests,
+						Limits:   limits,
 					},
 				},
 			},
