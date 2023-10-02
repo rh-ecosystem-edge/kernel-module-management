@@ -192,7 +192,9 @@ func main() {
 
 	ctx := ctrl.SetupSignalHandler()
 
-	if err = controllers.NewNMCReconciler(client, scheme, workerImage, caHelper, &cfg.Worker).SetupWithManager(ctx, mgr); err != nil {
+	eventRecorder := mgr.GetEventRecorderFor("kmm")
+
+	if err = controllers.NewNMCReconciler(client, scheme, workerImage, caHelper, &cfg.Worker, eventRecorder).SetupWithManager(ctx, mgr); err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.NodeModulesConfigReconcilerName)
 	}
 
@@ -229,8 +231,6 @@ func main() {
 			cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.NodeKernelClusterClaimReconcilerName)
 		}
 	} else {
-		eventRecorder := mgr.GetEventRecorderFor("kmm-hub")
-
 		if err = controllers.NewBuildSignEventsReconciler(client, eventRecorder).SetupWithManager(mgr); err != nil {
 			cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.BuildSignEventsReconcilerName)
 		}
