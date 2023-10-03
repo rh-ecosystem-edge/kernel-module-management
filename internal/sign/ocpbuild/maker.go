@@ -164,6 +164,7 @@ func (m *maker) MakeBuildTemplate(
 			Namespace:    mld.Namespace,
 			Labels:       ocpbuildutils.GetOCPBuildLabels(mld, BuildType),
 			Annotations:  ocpbuildutils.GetOCPBuildAnnotations(hash),
+			Finalizers:   []string{constants.JobEventFinalizer},
 		},
 		Spec: spec,
 	}

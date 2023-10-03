@@ -88,6 +88,13 @@ spec:
       clusterPermissions:
       - rules:
         - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        - apiGroups:
           - apps
           resources:
           - daemonsets
@@ -471,13 +478,6 @@ spec:
           - update
           - patch
           - delete
-        - apiGroups:
-          - ""
-          resources:
-          - events
-          verbs:
-          - create
-          - patch
         serviceAccountName: kmm-operator-controller-manager
       - rules:
         - apiGroups:

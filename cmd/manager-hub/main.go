@@ -183,6 +183,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	eventRecorder := mgr.GetEventRecorderFor("kmm-hub")
+
+	if err = controllers.NewBuildSignEventsReconciler(client, eventRecorder).SetupWithManager(mgr); err != nil {
+		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.BuildSignEventsReconcilerName)
+	}
+
 	if err = (&v1beta1.ManagedClusterModule{}).SetupWebhookWithManager(mgr); err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create webhook", "webhook", "ManagedClusterModule")
 	}
