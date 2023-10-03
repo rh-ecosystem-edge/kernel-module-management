@@ -13,7 +13,7 @@ collect_common() {
   echo "Collecting common objects"
 
   oc adm inspect clusterversions.config.openshift.io/version --dest-dir="$OUTPUT_DIR/inspect"
-  oc adm inspect crd,images --dest-dir="$OUTPUT_DIR/inspect"
+  oc adm inspect crd,images,nodes --dest-dir="$OUTPUT_DIR/inspect"
 
   oc adm inspect \
     -n "$NS" \
