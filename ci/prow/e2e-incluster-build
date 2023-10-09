@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -euxo pipefail
+
 POD_NAME=''
 
 wait_for_pod_and_print_logs () {
@@ -10,7 +12,15 @@ wait_for_pod_and_print_logs () {
   oc logs "pod/${POD_NAME}" -f
 }
 
-set -euxo pipefail
+check_module_not_loaded () {
+  local module_name="$1"
+
+  echo "Check that the ${module_name} module is not loaded on the node..."
+  if oc debug node/${NODE} -- chroot host/ lsmod | grep "$module_name"; then
+    echo "Unexpected lsmod output - ${module_name} is loaded on the node"
+    return 1
+  fi
+}
 
 echo "Get first node and the kernel version..."
 export NODE=$(oc get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[0].metadata.name}')
@@ -19,11 +29,8 @@ export KVER=$(oc debug node/${NODE} -- uname -r)
 echo "Label a node to match selector in Module afterwards..."
 oc label node ${NODE} task=kmm-ci
 
-echo "Check that the kmm_ci_a module is not loaded on the node..."
-if oc debug node/${NODE} -- chroot host/ lsmod | grep kmm_ci_a; then
- echo "Unexpected lsmod output - the module is present on the node before the module was applied to the cluster"
- exit 1
-fi
+check_module_not_loaded "kmm_ci_a"
+check_module_not_loaded "kmm_ci_b"
 
 echo "Create a build secret..."
 oc create secret generic build-secret --from-literal=ci-build-secret=super-secret-value
@@ -56,11 +63,17 @@ wait_for_pod_and_print_logs
 echo "Check that the module gets loaded on the node..."
 timeout 10m bash -c 'until oc debug node/${NODE} -- chroot host/ lsmod | grep kmm_ci_a; do sleep 3; done'
 
+echo "Check that the dependent module gets loaded on the node..."
+oc debug "node/${NODE}" -- chroot host/ lsmod | grep kmm_ci_b
+
 echo "Remove the Module..."
 oc delete -f ci/module-kmm-ci-build-sign.yaml --wait=false
 
 echo "Check that the module gets unloaded from the node..."
 timeout 1m bash -c 'until ! oc debug node/${NODE} -- chroot host/ lsmod | grep kmm_ci_a; do sleep 3; done'
+
+echo "Check that the dependent module is also unloaded from the node..."
+check_module_not_loaded "kmm_ci_b"
 
 echo "Wait for the Module to be deleted..."
 oc wait --for delete modules.kmm.sigs.x-k8s.io/kmm-ci
