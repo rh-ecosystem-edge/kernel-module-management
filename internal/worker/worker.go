@@ -8,15 +8,17 @@ import (
 	"path/filepath"
 
 	"github.com/go-logr/logr"
+	cp "github.com/otiai10/copy"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 )
 
 //go:generate mockgen -source=worker.go -package=worker -destination=mock_worker.go
 
 type Worker interface {
-	LoadKmod(ctx context.Context, cfg *kmmv1beta1.ModuleConfig) error
+	LoadKmod(ctx context.Context, cfg *kmmv1beta1.ModuleConfig, firmwareMountPath string) error
 	SetFirmwareClassPath(value string) error
-	UnloadKmod(ctx context.Context, cfg *kmmv1beta1.ModuleConfig) error
+	UnloadKmod(ctx context.Context, cfg *kmmv1beta1.ModuleConfig, firmwareMountPath string) error
 }
 
 type worker struct {
@@ -35,7 +37,7 @@ func NewWorker(ip ImagePuller, mr ModprobeRunner, res MirrorResolver, logger log
 	}
 }
 
-func (w *worker) LoadKmod(ctx context.Context, cfg *kmmv1beta1.ModuleConfig) error {
+func (w *worker) LoadKmod(ctx context.Context, cfg *kmmv1beta1.ModuleConfig, firmwareMountPath string) error {
 	imageName := cfg.ContainerImage
 
 	pr, err := w.pullImageOrMirror(ctx, imageName, cfg)
@@ -51,8 +53,22 @@ func (w *worker) LoadKmod(ctx context.Context, cfg *kmmv1beta1.ModuleConfig) err
 		}
 	}
 
-	// TODO copy firmware
-	// TODO handle ModulesLoadingOrder
+	// prepare firmware
+	if cfg.Modprobe.FirmwarePath != "" {
+		imageFirmwarePath := filepath.Join(pr.fsDir, cfg.Modprobe.FirmwarePath)
+		w.logger.Info("preparing firmware for loading", "image directory", imageFirmwarePath, "host mount directory", firmwareMountPath)
+		options := cp.Options{
+			OnError: func(src, dest string, err error) error {
+				if err != nil {
+					return fmt.Errorf("internal copy error: failed to copy from %s to %s: %v", src, dest, err)
+				}
+				return nil
+			},
+		}
+		if err = cp.Copy(imageFirmwarePath, firmwareMountPath, options); err != nil {
+			return fmt.Errorf("failed to copy firmware from path %s to path %s: %v", imageFirmwarePath, firmwareMountPath, err)
+		}
+	}
 
 	moduleName := cfg.Modprobe.ModuleName
 
@@ -98,7 +114,7 @@ func (w *worker) SetFirmwareClassPath(value string) error {
 	return nil
 }
 
-func (w *worker) UnloadKmod(ctx context.Context, cfg *kmmv1beta1.ModuleConfig) error {
+func (w *worker) UnloadKmod(ctx context.Context, cfg *kmmv1beta1.ModuleConfig, firmwareMountPath string) error {
 	imageName := cfg.ContainerImage
 
 	pr, err := w.pullImageOrMirror(ctx, imageName, cfg)
@@ -128,7 +144,32 @@ func (w *worker) UnloadKmod(ctx context.Context, cfg *kmmv1beta1.ModuleConfig) e
 		return fmt.Errorf("could not unload module %s: %v", moduleName, err)
 	}
 
-	// TODO remove firmware
+	//remove firmware files only (no directories)
+	if cfg.Modprobe.FirmwarePath != "" {
+		imageFirmwarePath := filepath.Join(pr.fsDir, cfg.Modprobe.FirmwarePath)
+		err = filepath.Walk(imageFirmwarePath, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if !info.IsDir() {
+				relPath, err := filepath.Rel(imageFirmwarePath, path)
+				if err != nil {
+					w.logger.Info(utils.WarnString("failed to get relative path"), "imageFirmwarePath", imageFirmwarePath, "path", path, "error", err)
+					return nil
+				}
+				fileToRemove := filepath.Join(firmwareMountPath, relPath)
+				w.logger.Info("Removing firmware file", "file", fileToRemove)
+				err = os.Remove(fileToRemove)
+				if err != nil {
+					w.logger.Info(utils.WarnString("failed to delete file"), "file", fileToRemove, "error", err)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			w.logger.Info(utils.WarnString("failed to remove all firmware blobs"), "error", err)
+		}
+	}
 
 	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/budougumi0617/cmpmock"
@@ -175,7 +176,6 @@ var moduleConfig = kmmv1beta1.ModuleConfig{
 		DirName:             "/dir",
 		Args:                nil,
 		RawArgs:             nil,
-		FirmwarePath:        "/firmware-path",
 		ModulesLoadingOrder: []string{"a", "b", "c"},
 	},
 }
@@ -1167,7 +1167,7 @@ var (
 var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 	DescribeTable(
 		"should work as expected",
-		func(firmwareClassPath *string) {
+		func(firmwareClassPath *string, withFirmwareLoading bool) {
 			ctrl := gomock.NewController(GinkgoT())
 			client := testclient.NewMockClient(ctrl)
 			psh := NewMockpullSecretHelper(ctrl)
@@ -1186,12 +1186,17 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 				ServiceAccountName: serviceAccountName,
 			}
 
-			nms := &kmmv1beta1.NodeModuleSpec{
-				ModuleItem: mi,
-				Config:     moduleConfig,
+			moduleConfigToUse := moduleConfig
+			if withFirmwareLoading {
+				moduleConfigToUse.Modprobe.FirmwarePath = "/firmware-path"
 			}
 
-			expected := getBaseWorkerPod("load", WorkerActionLoad, nmc)
+			nms := &kmmv1beta1.NodeModuleSpec{
+				ModuleItem: mi,
+				Config:     moduleConfigToUse,
+			}
+
+			expected := getBaseWorkerPod("load", WorkerActionLoad, nmc, firmwareClassPath, withFirmwareLoading)
 
 			Expect(
 				controllerutil.SetControllerReference(nmc, expected, scheme),
@@ -1208,8 +1213,6 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 				container.SecurityContext = &v1.SecurityContext{
 					Privileged: pointer.Bool(true),
 				}
-
-				container.Args = append(container.Args, "--set-firmware-class-path", *firmwareClassPath)
 			} else {
 				container.SecurityContext = &v1.SecurityContext{
 					Capabilities: &v1.Capabilities{
@@ -1247,9 +1250,11 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 				HaveOccurred(),
 			)
 		},
-		Entry(nil, nil),
-		Entry(nil, pointer.String("")),
-		Entry(nil, pointer.String("some-path")),
+		Entry("pod without firmwareClassPath, without firmware loading", nil, false),
+		Entry("pod with empty firmwareClassPath, without firmware loading", pointer.String(""), false),
+		Entry("pod with firmwareClassPath, without firmware loading", pointer.String("some-path"), false),
+		Entry("pod with firmwareClassPath, with firmware loading", pointer.String("some-path"), true),
+		Entry("pod without firmwareClassPath, with firmware loading", nil, true),
 	)
 })
 
@@ -1270,12 +1275,14 @@ var _ = Describe("podManagerImpl_CreateUnloaderPod", func() {
 			ServiceAccountName: serviceAccountName,
 		}
 
+		moduleConfigToUse := moduleConfig
+		moduleConfigToUse.Modprobe.FirmwarePath = "/firmware-path"
 		status := &kmmv1beta1.NodeModuleStatus{
 			ModuleItem: mi,
-			Config:     &moduleConfig,
+			Config:     &moduleConfigToUse,
 		}
 
-		expected := getBaseWorkerPod("unload", WorkerActionUnload, nmc)
+		expected := getBaseWorkerPod("unload", WorkerActionUnload, nmc, nil, true)
 
 		container, _ := podcmd.FindContainerByName(expected, "worker")
 		Expect(container).NotTo(BeNil())
@@ -1398,7 +1405,7 @@ var _ = Describe("podManagerImpl_ListWorkerPodsOnNode", func() {
 	})
 })
 
-func getBaseWorkerPod(subcommand string, action WorkerAction, owner ctrlclient.Object) *v1.Pod {
+func getBaseWorkerPod(subcommand string, action WorkerAction, owner ctrlclient.Object, firmwareClassPath *string, withFirmware bool) *v1.Pod {
 	GinkgoHelper()
 
 	const (
@@ -1413,15 +1420,7 @@ func getBaseWorkerPod(subcommand string, action WorkerAction, owner ctrlclient.O
 	hostPathDirectory := v1.HostPathDirectory
 	hostPathDirectoryOrCreate := v1.HostPathDirectoryOrCreate
 
-	pod := v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      workerPodName(nmcName, moduleName),
-			Namespace: namespace,
-			Labels: map[string]string{
-				actionLabelKey:            string(action),
-				constants.ModuleNameLabel: moduleName,
-			},
-			Annotations: map[string]string{configAnnotationKey: `containerImage: container image
+	configAnnotationValue := `containerImage: container image
 inTreeModuleToRemove: intree
 insecurePull: true
 kernelVersion: kernel version
@@ -1436,18 +1435,38 @@ modprobe:
   parameters:
   - a
   - b
-`,
-				"modules-order": `softdep a pre: b
+`
+	modulesOrderValue := `softdep a pre: b
 softdep b pre: c
-`,
+`
+
+	args := []string{"kmod", subcommand, "/etc/kmm-worker/config.yaml"}
+	if firmwareClassPath != nil {
+		args = append(args, "--set-firmware-class-path", *firmwareClassPath)
+	}
+	if !withFirmware {
+		configAnnotationValue = strings.ReplaceAll(configAnnotationValue, "firmwarePath: /firmware-path\n  ", "")
+	} else {
+		args = append(args, "--set-firmware-mount-path", "/var/lib/firmware")
+	}
+	pod := v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      workerPodName(nmcName, moduleName),
+			Namespace: namespace,
+			Labels: map[string]string{
+				actionLabelKey:            string(action),
+				constants.ModuleNameLabel: moduleName,
 			},
+			Annotations: map[string]string{
+				configAnnotationKey: configAnnotationValue,
+				modulesOrderKey:     modulesOrderValue},
 		},
 		Spec: v1.PodSpec{
 			Containers: []v1.Container{
 				{
 					Name:  "worker",
 					Image: workerImage,
-					Args:  []string{"kmod", subcommand, "/etc/kmm-worker/config.yaml"},
+					Args:  args,
 					Resources: v1.ResourceRequirements{
 						Limits:   limits,
 						Requests: requests,
@@ -1472,10 +1491,6 @@ softdep b pre: c
 							Name:      volNameUsrLibModules,
 							MountPath: "/usr/lib/modules",
 							ReadOnly:  true,
-						},
-						{
-							Name:      volNameVarLibFirmware,
-							MountPath: "/var/lib/firmware",
 						},
 						{
 							Name:      trustedCAVolumeName,
@@ -1528,15 +1543,6 @@ softdep b pre: c
 					},
 				},
 				{
-					Name: volNameVarLibFirmware,
-					VolumeSource: v1.VolumeSource{
-						HostPath: &v1.HostPathVolumeSource{
-							Path: "/var/lib/firmware",
-							Type: &hostPathDirectoryOrCreate,
-						},
-					},
-				},
-				{
 					Name: trustedCAVolumeName,
 					VolumeSource: v1.VolumeSource{
 						Projected: &v1.ProjectedVolumeSource{
@@ -1583,7 +1589,7 @@ softdep b pre: c
 							Items: []v1.DownwardAPIVolumeFile{
 								{
 									Path:     "softdep.conf",
-									FieldRef: &v1.ObjectFieldSelector{FieldPath: "metadata.annotations['modules-order']"},
+									FieldRef: &v1.ObjectFieldSelector{FieldPath: fmt.Sprintf("metadata.annotations['%s']", modulesOrderKey)},
 								},
 							},
 						},
@@ -1591,6 +1597,29 @@ softdep b pre: c
 				},
 			},
 		},
+	}
+
+	if withFirmware {
+		hostPath := "/var/lib/firmware"
+		if firmwareClassPath != nil {
+			hostPath = *firmwareClassPath
+		}
+		fwVolMount := v1.VolumeMount{
+			Name:      volNameVarLibFirmware,
+			MountPath: "/var/lib/firmware",
+		}
+		pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, fwVolMount)
+		fwVol := v1.Volume{
+			Name: volNameVarLibFirmware,
+			VolumeSource: v1.VolumeSource{
+				HostPath: &v1.HostPathVolumeSource{
+					Path: hostPath,
+					Type: &hostPathDirectoryOrCreate,
+				},
+			},
+		}
+		pod.Spec.Volumes = append(pod.Spec.Volumes, fwVol)
+
 	}
 
 	Expect(
