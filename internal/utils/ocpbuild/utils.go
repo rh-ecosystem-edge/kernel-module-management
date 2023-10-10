@@ -17,7 +17,13 @@ func GetOCPBuildAnnotations(hash uint64) map[string]string {
 }
 
 func GetOCPBuildLabels(mld *api.ModuleLoaderData, buildType string) map[string]string {
-	return moduleKernelLabels(mld.Name, mld.KernelVersion, buildType)
+	labels := moduleKernelLabels(mld.Name, mld.KernelVersion, buildType)
+
+	labels["app.kubernetes.io/name"] = "kmm"
+	labels["app.kubernetes.io/component"] = buildType
+	labels["app.kubernetes.io/part-of"] = "kmm"
+
+	return labels
 }
 
 func moduleKernelLabels(moduleName, kernelVersion, buildType string) map[string]string {

@@ -115,11 +115,7 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: moduleName + "-build-",
 				Namespace:    namespace,
-				Labels: map[string]string{
-					constants.ModuleNameLabel:     moduleName,
-					constants.TargetKernelTarget:  targetKernel,
-					"kmm.openshift.io/build.type": BuildType,
-				},
+				Labels:       ocpbuildutils.GetOCPBuildLabels(&mld, BuildType),
 				OwnerReferences: []metav1.OwnerReference{
 					{
 						APIVersion:         "kmm.sigs.x-k8s.io/v1beta1",
