@@ -14,10 +14,12 @@ import (
 
 var _ = Describe("worker_LoadKmod", func() {
 	var (
-		ip  *MockImagePuller
-		mr  *MockModprobeRunner
-		res *MockMirrorResolver
-		w   Worker
+		ip       *MockImagePuller
+		mr       *MockModprobeRunner
+		res      *MockMirrorResolver
+		w        Worker
+		imageDir string
+		hostDir  string
 	)
 
 	BeforeEach(func() {
@@ -26,6 +28,19 @@ var _ = Describe("worker_LoadKmod", func() {
 		mr = NewMockModprobeRunner(ctrl)
 		res = NewMockMirrorResolver(ctrl)
 		w = NewWorker(ip, mr, res, GinkgoLogr)
+
+		var err error
+		imageDir, err = os.MkdirTemp("", "imageDir")
+		Expect(err).Should(BeNil())
+		hostDir, err = os.MkdirTemp("", "hostMappedDir")
+		Expect(err).Should(BeNil())
+	})
+
+	AfterEach(func() {
+		err := os.RemoveAll(imageDir)
+		Expect(err).Should(BeNil())
+		err = os.RemoveAll(hostDir)
+		Expect(err).Should(BeNil())
 	})
 
 	ctx := context.TODO()
@@ -46,7 +61,7 @@ var _ = Describe("worker_LoadKmod", func() {
 		)
 
 		Expect(
-			w.LoadKmod(ctx, &v1beta1.ModuleConfig{ContainerImage: imageName}),
+			w.LoadKmod(ctx, &v1beta1.ModuleConfig{ContainerImage: imageName}, ""),
 		).To(
 			HaveOccurred(),
 		)
@@ -68,7 +83,7 @@ var _ = Describe("worker_LoadKmod", func() {
 		)
 
 		Expect(
-			w.LoadKmod(ctx, &cfg),
+			w.LoadKmod(ctx, &cfg, ""),
 		).To(
 			HaveOccurred(),
 		)
@@ -94,10 +109,46 @@ var _ = Describe("worker_LoadKmod", func() {
 		)
 
 		Expect(
-			w.LoadKmod(ctx, &cfg),
+			w.LoadKmod(ctx, &cfg, ""),
 		).NotTo(
 			HaveOccurred(),
 		)
+	})
+
+	It("should copy all the firmware files/directories if configured", func() {
+		cfg := v1beta1.ModuleConfig{
+			ContainerImage: imageName,
+			Modprobe: v1beta1.ModprobeSpec{
+				ModuleName:   moduleName,
+				DirName:      dirName,
+				FirmwarePath: "/firmwareDir",
+			},
+		}
+
+		err := os.MkdirAll(imageDir+"/"+"firmwareDir/binDir", 0750)
+		Expect(err).Should(BeNil())
+		err = os.WriteFile(imageDir+"/"+"firmwareDir/firwmwareFile1", []byte("some data 1"), 0660)
+		Expect(err).Should(BeNil())
+		err = os.WriteFile(imageDir+"/"+"firmwareDir/binDir/firwmwareFile2", []byte("some data 2"), 0660)
+		Expect(err).Should(BeNil())
+
+		gomock.InOrder(
+			res.EXPECT().GetAllReferences(imageName).Return([]string{imageName}, nil),
+			ip.EXPECT().PullAndExtract(ctx, imageName, false).Return(PullResult{fsDir: imageDir}, nil),
+			mr.EXPECT().Run(ctx, "-vd", imageDir+dirName, moduleName),
+		)
+
+		Expect(
+			w.LoadKmod(ctx, &cfg, hostDir),
+		).NotTo(
+			HaveOccurred(),
+		)
+		_, err = os.Stat(hostDir + "/binDir")
+		Expect(err).Should(BeNil())
+		_, err = os.Stat(hostDir + "/binDir/firwmwareFile2")
+		Expect(err).Should(BeNil())
+		_, err = os.Stat(hostDir + "/firwmwareFile1")
+		Expect(err).Should(BeNil())
 	})
 
 	It("should use rawArgs if they are defined", func() {
@@ -117,7 +168,7 @@ var _ = Describe("worker_LoadKmod", func() {
 		)
 
 		Expect(
-			w.LoadKmod(ctx, &cfg),
+			w.LoadKmod(ctx, &cfg, ""),
 		).NotTo(
 			HaveOccurred(),
 		)
@@ -143,7 +194,7 @@ var _ = Describe("worker_LoadKmod", func() {
 		)
 
 		Expect(
-			w.LoadKmod(ctx, &cfg),
+			w.LoadKmod(ctx, &cfg, ""),
 		).NotTo(
 			HaveOccurred(),
 		)
@@ -199,10 +250,12 @@ var _ = Describe("worker_SetFirmwareClassPath", func() {
 
 var _ = Describe("worker_UnloadKmod", func() {
 	var (
-		ip  *MockImagePuller
-		mr  *MockModprobeRunner
-		res *MockMirrorResolver
-		w   Worker
+		ip       *MockImagePuller
+		mr       *MockModprobeRunner
+		res      *MockMirrorResolver
+		w        Worker
+		imageDir string
+		hostDir  string
 	)
 
 	BeforeEach(func() {
@@ -211,6 +264,18 @@ var _ = Describe("worker_UnloadKmod", func() {
 		mr = NewMockModprobeRunner(ctrl)
 		res = NewMockMirrorResolver(ctrl)
 		w = NewWorker(ip, mr, res, GinkgoLogr)
+		var err error
+		imageDir, err = os.MkdirTemp("", "imageDir")
+		Expect(err).Should(BeNil())
+		hostDir, err = os.MkdirTemp("", "hostMappedDir")
+		Expect(err).Should(BeNil())
+	})
+
+	AfterEach(func() {
+		err := os.RemoveAll(imageDir)
+		Expect(err).Should(BeNil())
+		err = os.RemoveAll(hostDir)
+		Expect(err).Should(BeNil())
 	})
 
 	ctx := context.TODO()
@@ -231,7 +296,7 @@ var _ = Describe("worker_UnloadKmod", func() {
 		)
 
 		Expect(
-			w.UnloadKmod(ctx, &v1beta1.ModuleConfig{ContainerImage: imageName}),
+			w.UnloadKmod(ctx, &v1beta1.ModuleConfig{ContainerImage: imageName}, ""),
 		).To(
 			HaveOccurred(),
 		)
@@ -253,7 +318,7 @@ var _ = Describe("worker_UnloadKmod", func() {
 		)
 
 		Expect(
-			w.UnloadKmod(ctx, &cfg),
+			w.UnloadKmod(ctx, &cfg, ""),
 		).To(
 			HaveOccurred(),
 		)
@@ -276,7 +341,7 @@ var _ = Describe("worker_UnloadKmod", func() {
 		)
 
 		Expect(
-			w.UnloadKmod(ctx, &cfg),
+			w.UnloadKmod(ctx, &cfg, ""),
 		).NotTo(
 			HaveOccurred(),
 		)
@@ -301,10 +366,59 @@ var _ = Describe("worker_UnloadKmod", func() {
 		)
 
 		Expect(
-			w.UnloadKmod(ctx, &cfg),
+			w.UnloadKmod(ctx, &cfg, ""),
 		).NotTo(
 			HaveOccurred(),
 		)
+	})
+
+	It("should remove all firmware file only", func() {
+		cfg := v1beta1.ModuleConfig{
+			ContainerImage: imageName,
+			Modprobe: v1beta1.ModprobeSpec{
+				ModuleName:   moduleName,
+				DirName:      dirName,
+				FirmwarePath: "/firmwareDir",
+			},
+		}
+
+		// prepare the image firmware directories + files
+		err := os.MkdirAll(imageDir+"/"+"firmwareDir/binDir", 0750)
+		Expect(err).Should(BeNil())
+		err = os.WriteFile(imageDir+"/"+"firmwareDir/firmwareFile1", []byte("some data 1"), 0660)
+		Expect(err).Should(BeNil())
+		err = os.WriteFile(imageDir+"/"+"firmwareDir/binDir/firmwareFile2", []byte("some data 2"), 0660)
+		Expect(err).Should(BeNil())
+
+		// prepare the mapped host firmware directories + files
+		err = os.MkdirAll(hostDir+"/binDir", 0750)
+		Expect(err).Should(BeNil())
+		err = os.WriteFile(hostDir+"/firmwareFile1", []byte("some data 1"), 0660)
+		Expect(err).Should(BeNil())
+		err = os.WriteFile(hostDir+"/binDir/firmwareFile2", []byte("some data 2"), 0660)
+		Expect(err).Should(BeNil())
+
+		gomock.InOrder(
+			res.EXPECT().GetAllReferences(imageName).Return([]string{imageName}, nil),
+			ip.EXPECT().PullAndExtract(ctx, imageName, false).Return(PullResult{fsDir: imageDir}, nil),
+			mr.
+				EXPECT().
+				Run(ctx, "-rvd", imageDir+dirName, moduleName),
+		)
+
+		Expect(
+			w.UnloadKmod(ctx, &cfg, hostDir),
+		).NotTo(
+			HaveOccurred(),
+		)
+
+		// check only the files deletion
+		_, err = os.Stat(hostDir + "/binDir")
+		Expect(err).Should(BeNil())
+		_, err = os.Stat(hostDir + "/binDir/firwmwareFile2")
+		Expect(err).NotTo(BeNil())
+		_, err = os.Stat(hostDir + "/firwmwareFile1")
+		Expect(err).NotTo(BeNil())
 	})
 })
 
