@@ -32,6 +32,12 @@ oc label node ${NODE} task=kmm-ci
 check_module_not_loaded "kmm_ci_a"
 check_module_not_loaded "kmm_ci_b"
 
+echo "Load the dummy module to be removed by the worker Pod before loading kmm-ci"
+oc debug "node/${NODE}" -- chroot host/ sudo modprobe dummy
+
+echo "Verify that dummy is loaded"
+oc debug "node/${NODE}" -- chroot host/ lsmod | grep dummy
+
 echo "Create a build secret..."
 oc create secret generic build-secret --from-literal=ci-build-secret=super-secret-value
 
@@ -65,6 +71,8 @@ timeout 10m bash -c 'until oc debug node/${NODE} -- chroot host/ lsmod | grep km
 
 echo "Check that the dependent module gets loaded on the node..."
 oc debug "node/${NODE}" -- chroot host/ lsmod | grep kmm_ci_b
+
+check_module_not_loaded "dummy"
 
 echo "Remove the Module..."
 oc delete -f ci/module-kmm-ci-build-sign.yaml --wait=false
