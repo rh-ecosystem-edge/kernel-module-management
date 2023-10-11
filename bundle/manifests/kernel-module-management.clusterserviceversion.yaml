@@ -106,15 +106,6 @@ spec:
           - patch
           - watch
         - apiGroups:
-          - batch
-          resources:
-          - jobs
-          verbs:
-          - create
-          - delete
-          - list
-          - watch
-        - apiGroups:
           - build.openshift.io
           resources:
           - builds
@@ -206,14 +197,13 @@ spec:
           verbs:
           - get
           - list
-          - patch
-          - update
           - watch
         - apiGroups:
           - kmm.sigs.x-k8s.io
           resources:
           - modules/finalizers
           verbs:
+          - patch
           - update
         - apiGroups:
           - kmm.sigs.x-k8s.io
@@ -270,10 +260,8 @@ spec:
           - preflightvalidations/status
           verbs:
           - get
-          - list
           - patch
           - update
-          - watch
         - apiGroups:
           - kmm.sigs.x-k8s.io
           resources:
@@ -281,8 +269,6 @@ spec:
           verbs:
           - get
           - list
-          - patch
-          - update
           - watch
         - apiGroups:
           - kmm.sigs.x-k8s.io

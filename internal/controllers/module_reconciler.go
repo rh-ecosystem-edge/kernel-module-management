@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
-	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -80,16 +79,14 @@ func NewModuleReconciler(
 	}
 }
 
-//+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=modules,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=modules,verbs=get;list;watch
 //+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=modules/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=modules/finalizers,verbs=update
 //+kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=create;delete;get;list;patch;watch
 //+kubebuilder:rbac:groups="core",resources=nodes,verbs=get;list;watch
 //+kubebuilder:rbac:groups="core",resources=secrets,verbs=get;list;watch
 //+kubebuilder:rbac:groups="core",resources=configmaps,verbs=create;delete;get;list;patch;watch
 //+kubebuilder:rbac:groups="core",resources=serviceaccounts,verbs=get;list;watch
 //+kubebuilder:rbac:groups="build.openshift.io",resources=builds,verbs=get;list;create;delete;watch;patch
-//+kubebuilder:rbac:groups="batch",resources=jobs,verbs=create;list;watch;delete
 
 // Reconcile lists all nodes and looks for kernels that match its mappings.
 // For each mapping that matches at least one node in the cluster, it creates a DaemonSet running the container image
@@ -467,7 +464,6 @@ func (r *ModuleReconciler) SetupWithManager(mgr ctrl.Manager, kernelLabel string
 		For(&kmmv1beta1.Module{}).
 		Owns(&appsv1.DaemonSet{}).
 		Owns(&buildv1.Build{}).
-		Owns(&batchv1.Job{}).
 		Watches(
 			&v1.Node{},
 			handler.EnqueueRequestsFromMapFunc(r.filter.FindModulesForNode),

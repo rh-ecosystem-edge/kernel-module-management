@@ -22,7 +22,6 @@ import (
 	"time"
 
 	v1beta12 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
-	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -74,7 +73,6 @@ func (r *PreflightValidationReconciler) SetupWithManager(mgr ctrl.Manager) error
 		Named(PreflightValidationReconcilerName).
 		For(&v1beta12.PreflightValidation{}, builder.WithPredicates(filter.PreflightReconcilerUpdatePredicate())).
 		Owns(&buildv1.Build{}).
-		Owns(&batchv1.Job{}).
 		Watches(
 			&v1beta12.Module{},
 			handler.EnqueueRequestsFromMapFunc(r.filter.EnqueueAllPreflightValidations),
@@ -87,8 +85,10 @@ func (r *PreflightValidationReconciler) SetupWithManager(mgr ctrl.Manager) error
 }
 
 //+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=modules,verbs=get;list;watch
-//+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=preflightvalidations,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=preflightvalidations,verbs=get;list;watch
 //+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=preflightvalidations/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=preflightvalidations/finalizers,verbs=update
+//+kubebuilder:rbac:groups="build.openshift.io",resources=builds,verbs=get;list;create;delete;watch;patch
 
 // Reconcile Reconiliation entry point
 func (r *PreflightValidationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
