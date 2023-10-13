@@ -49,7 +49,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/config"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/controllers"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/daemonset"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
@@ -153,22 +152,26 @@ func main() {
 		registryAPI,
 	)
 
-	daemonAPI := daemonset.NewCreator(client, constants.KernelLabel, scheme)
 	kernelAPI := module.NewKernelMapper(buildHelperAPI, sign.NewSignerHelper())
 
-	mc := controllers.NewModuleReconciler(
+	dpc := controllers.NewDevicePluginReconciler(
+		client,
+		metricsAPI,
+		filterAPI,
+		scheme,
+		operatorNamespace)
+	if err = dpc.SetupWithManager(mgr); err != nil {
+		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.DevicePluginReconcilerName)
+	}
+
+	bsc := controllers.NewBuildSignReconciler(
 		client,
 		buildAPI,
 		signAPI,
-		daemonAPI,
 		kernelAPI,
-		metricsAPI,
-		filterAPI,
-		statusupdater.NewModuleStatusUpdater(client),
-		operatorNamespace,
-	)
-	if err = mc.SetupWithManager(mgr, constants.KernelLabel); err != nil {
-		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.ModuleReconcilerName)
+		filterAPI)
+	if err = bsc.SetupWithManager(mgr, constants.KernelLabel); err != nil {
+		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.BuildSignReconcilerName)
 	}
 
 	caHelper := ca.NewHelper(client, scheme)
@@ -204,8 +207,8 @@ func main() {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.KernelDTKReconcilerName)
 	}
 
-	if err = controllers.NewPodNodeModuleReconciler(client, daemonAPI).SetupWithManager(mgr); err != nil {
-		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.PodNodeModuleReconcilerName)
+	if err = controllers.NewDevicePluginPodReconciler(client).SetupWithManager(mgr); err != nil {
+		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.DevicePluginPodReconcilerName)
 	}
 
 	if err = controllers.NewNodeLabelModuleVersionReconciler(client).SetupWithManager(mgr); err != nil {
