@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/budougumi0617/cmpmock"
+	"github.com/mitchellh/hashstructure/v2"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
@@ -1702,7 +1703,16 @@ var _ = Describe("pullSecretHelperImpl_VolumesAndVolumeMounts", func() {
 		kubeClient := testclient.NewMockClient(ctrl)
 		psh := pullSecretHelperImpl{client: kubeClient}
 
-		const irs = "pull-secret-0"
+		const (
+			irs           = "pull-secret-0"
+			saPullSecret1 = "pull-secret-1"
+			saPullSecret2 = "pull-secret-2"
+		)
+
+		saPullSecret1Hash, err := hashstructure.Hash(saPullSecret1, hashstructure.FormatV2, nil)
+		Expect(err).To(BeNil())
+		saPullSecret2Hash, err := hashstructure.Hash(saPullSecret2, hashstructure.FormatV2, nil)
+		Expect(err).To(BeNil())
 
 		item := kmmv1beta1.ModuleItem{
 			ImageRepoSecret:    &v1.LocalObjectReference{Name: irs},
@@ -1718,9 +1728,9 @@ var _ = Describe("pullSecretHelperImpl_VolumesAndVolumeMounts", func() {
 			Get(ctx, nsn, &v1.ServiceAccount{}).
 			Do(func(_ context.Context, _ types.NamespacedName, sa *v1.ServiceAccount, _ ...ctrlclient.GetOption) {
 				sa.ImagePullSecrets = []v1.LocalObjectReference{
-					{Name: "pull-secret-1"},
-					{Name: "pull-secret-1"}, // intentional duplicate, should not be in the volume list
-					{Name: "pull-secret-2"},
+					{Name: saPullSecret1},
+					{Name: saPullSecret1}, // intentional duplicate, should not be in the volume list
+					{Name: saPullSecret2},
 				}
 			})
 
@@ -1729,25 +1739,25 @@ var _ = Describe("pullSecretHelperImpl_VolumesAndVolumeMounts", func() {
 				Name: volNameImageRepoSecret,
 				VolumeSource: v1.VolumeSource{
 					Secret: &v1.SecretVolumeSource{
-						SecretName: "pull-secret-0",
+						SecretName: irs,
 						Optional:   pointer.Bool(false),
 					},
 				},
 			},
 			{
-				Name: "pull-secret-pull-secret-1",
+				Name: fmt.Sprintf("pull-secret-%d", saPullSecret1Hash),
 				VolumeSource: v1.VolumeSource{
 					Secret: &v1.SecretVolumeSource{
-						SecretName: "pull-secret-1",
+						SecretName: saPullSecret1,
 						Optional:   pointer.Bool(true),
 					},
 				},
 			},
 			{
-				Name: "pull-secret-pull-secret-2",
+				Name: fmt.Sprintf("pull-secret-%d", saPullSecret2Hash),
 				VolumeSource: v1.VolumeSource{
 					Secret: &v1.SecretVolumeSource{
-						SecretName: "pull-secret-2",
+						SecretName: saPullSecret2,
 						Optional:   pointer.Bool(true),
 					},
 				},
@@ -1758,17 +1768,17 @@ var _ = Describe("pullSecretHelperImpl_VolumesAndVolumeMounts", func() {
 			{
 				Name:      volNameImageRepoSecret,
 				ReadOnly:  true,
-				MountPath: filepath.Join(worker.PullSecretsDir, "pull-secret-0"),
+				MountPath: filepath.Join(worker.PullSecretsDir, irs),
 			},
 			{
-				Name:      "pull-secret-pull-secret-1",
+				Name:      fmt.Sprintf("pull-secret-%d", saPullSecret1Hash),
 				ReadOnly:  true,
-				MountPath: filepath.Join(worker.PullSecretsDir, "pull-secret-1"),
+				MountPath: filepath.Join(worker.PullSecretsDir, saPullSecret1),
 			},
 			{
-				Name:      "pull-secret-pull-secret-2",
+				Name:      fmt.Sprintf("pull-secret-%d", saPullSecret2Hash),
 				ReadOnly:  true,
-				MountPath: filepath.Join(worker.PullSecretsDir, "pull-secret-2"),
+				MountPath: filepath.Join(worker.PullSecretsDir, saPullSecret2),
 			},
 		}
 
