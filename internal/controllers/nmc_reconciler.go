@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/go-multierror"
+	"github.com/mitchellh/hashstructure/v2"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/config"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
@@ -1183,9 +1184,14 @@ func (p *pullSecretHelperImpl) VolumesAndVolumeMounts(ctx context.Context, item 
 
 			secretNames.Insert(s.Name)
 
+			hashValue, err := hashstructure.Hash(s.Name, hashstructure.FormatV2, nil)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to hash secret %s: %v", s.Name, err)
+			}
+
 			ps := pullSecret{
 				secretName: s.Name,
-				volumeName: "pull-secret-" + s.Name,
+				volumeName: fmt.Sprintf("pull-secret-%d", hashValue),
 				optional:   true, // to match the node's container runtime behaviour
 			}
 
