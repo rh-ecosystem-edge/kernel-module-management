@@ -3,10 +3,10 @@ data: {}
 kind: ConfigMap
 metadata:
   annotations:
-    kmm.openshift.io/ca.type: service
     service.beta.openshift.io/inject-cabundle: "true"
   labels:
     app.kubernetes.io/component: kmm
     app.kubernetes.io/name: kmm
     app.kubernetes.io/part-of: kmm
+    kmm.openshift.io/ca.type: service
   name: kmm-operator-service-ca
