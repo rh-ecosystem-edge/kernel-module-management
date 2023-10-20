@@ -59,8 +59,18 @@ func NewModuleNMCReconciler(client client.Client,
 	nmcHelper nmc.Helper,
 	filter *filter.Filter,
 	authFactory auth.RegistryAuthGetterFactory,
+	operatorNamespace string,
 	scheme *runtime.Scheme) *ModuleNMCReconciler {
-	reconHelper := newModuleNMCReconcilerHelper(client, kernelAPI, registryAPI, nmcHelper, authFactory, scheme)
+	reconHelper := newModuleNMCReconcilerHelper(
+		client,
+		kernelAPI,
+		registryAPI,
+		nmcHelper,
+		authFactory,
+		operatorNamespace,
+		scheme,
+	)
+
 	return &ModuleNMCReconciler{
 		filter:      filter,
 		reconHelper: reconHelper,
@@ -160,12 +170,13 @@ type moduleNMCReconcilerHelperAPI interface {
 }
 
 type moduleNMCReconcilerHelper struct {
-	client      client.Client
-	kernelAPI   module.KernelMapper
-	registryAPI registry.Registry
-	nmcHelper   nmc.Helper
-	authFactory auth.RegistryAuthGetterFactory
-	scheme      *runtime.Scheme
+	client            client.Client
+	kernelAPI         module.KernelMapper
+	registryAPI       registry.Registry
+	nmcHelper         nmc.Helper
+	authFactory       auth.RegistryAuthGetterFactory
+	operatorNamespace string
+	scheme            *runtime.Scheme
 }
 
 func newModuleNMCReconcilerHelper(client client.Client,
@@ -173,14 +184,16 @@ func newModuleNMCReconcilerHelper(client client.Client,
 	registryAPI registry.Registry,
 	nmcHelper nmc.Helper,
 	authFactory auth.RegistryAuthGetterFactory,
+	operatorNamespace string,
 	scheme *runtime.Scheme) moduleNMCReconcilerHelperAPI {
 	return &moduleNMCReconcilerHelper{
-		client:      client,
-		kernelAPI:   kernelAPI,
-		registryAPI: registryAPI,
-		nmcHelper:   nmcHelper,
-		authFactory: authFactory,
-		scheme:      scheme,
+		client:            client,
+		kernelAPI:         kernelAPI,
+		registryAPI:       registryAPI,
+		nmcHelper:         nmcHelper,
+		authFactory:       authFactory,
+		operatorNamespace: operatorNamespace,
+		scheme:            scheme,
 	}
 }
 
@@ -328,6 +341,12 @@ func (mnrh *moduleNMCReconcilerHelper) prepareSchedulingData(ctx context.Context
 			errs = append(errs, err)
 			continue
 		}
+
+		// Use the privileged service account if we're in the operator namespace and none was specified in the Module
+		if mld != nil && mld.ServiceAccountName == "" && mod.Namespace == mnrh.operatorNamespace {
+			mld.ServiceAccountName = "kmm-operator-module-loader"
+		}
+
 		result[node.Name] = prepareNodeSchedulingData(node, mld, currentNMCs)
 		currentNMCs.Delete(node.Name)
 	}
