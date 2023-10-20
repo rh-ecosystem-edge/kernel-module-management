@@ -1,9 +1,11 @@
 healthProbeBindAddress: :8081
 metricsBindAddress: 127.0.0.1:8080
-webhookPort: 9443
 leaderElection:
   enabled: true
   resourceID: kmm.sigs.x-k8s.io
+webhook:
+  disableHTTP2: true  # CVE-2023-44487
+  port: 9443
 worker:
   runAsUser: 0
   seLinuxType: spc_t

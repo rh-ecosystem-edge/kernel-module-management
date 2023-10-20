@@ -1,13 +1,21 @@
 package config
 
 import (
+	"crypto/tls"
 	"fmt"
 	"os"
 
+	"github.com/go-logr/logr"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/http"
 	"gopkg.in/yaml.v3"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
+
+type Webhook struct {
+	DisableHTTP2 bool `yaml:"disableHTTP2"`
+	Port         int  `yaml:"port"`
+}
 
 type Worker struct {
 	RunAsUser            *int64  `yaml:"runAsUser"`
@@ -24,7 +32,7 @@ type Config struct {
 	HealthProbeBindAddress string         `yaml:"healthProbeBindAddress"`
 	MetricsBindAddress     string         `yaml:"metricsBindAddress"`
 	LeaderElection         LeaderElection `yaml:"leaderElection"`
-	WebhookPort            int            `yaml:"webhookPort"`
+	Webhook                Webhook        `yaml:"webhook"`
 	Worker                 Worker         `yaml:"worker"`
 }
 
@@ -44,12 +52,19 @@ func ParseFile(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-func (c *Config) ManagerOptions() *manager.Options {
+func (c *Config) ManagerOptions(logger logr.Logger) *manager.Options {
+	webhookOpts := webhook.Options{Port: c.Webhook.Port}
+
+	if c.Webhook.DisableHTTP2 {
+		logger.Info("Disabling HTTP/2 in the webhook server")
+		webhookOpts.TLSOpts = []func(*tls.Config){http.DisableHTTP2}
+	}
+
 	return &manager.Options{
 		HealthProbeBindAddress: c.HealthProbeBindAddress,
 		LeaderElection:         c.LeaderElection.Enabled,
 		LeaderElectionID:       c.LeaderElection.ResourceID,
 		MetricsBindAddress:     c.MetricsBindAddress,
-		WebhookServer:          webhook.NewServer(webhook.Options{Port: c.WebhookPort}),
+		WebhookServer:          webhook.NewServer(webhookOpts),
 	}
 }
