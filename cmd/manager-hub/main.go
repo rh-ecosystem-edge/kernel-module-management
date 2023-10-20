@@ -17,12 +17,14 @@ limitations under the License.
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"os"
 	"time"
 
 	buildv1 "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/http"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -82,9 +84,13 @@ func main() {
 
 	setupLogger := logger.WithName("setup")
 
-	var configFile string
+	var (
+		configFile         string
+		enableWehbookHTTP2 bool
+	)
 
 	flag.StringVar(&configFile, "config", "", "The path to the configuration file.")
+	flag.BoolVar(&enableWehbookHTTP2, "enable-webhook-http2", false, "Enable HTTP/2 in the webhook server")
 
 	klog.InitFlags(flag.CommandLine)
 
@@ -99,6 +105,11 @@ func main() {
 	setupLogger.Info("Creating manager", "git commit", commit)
 
 	options := ctrl.Options{Scheme: scheme}
+
+	if !enableWehbookHTTP2 {
+		setupLogger.Info("Disabling HTTP/2 in the webhook server")
+		options.TLSOpts = []func(config *tls.Config){http.DisableHTTP2}
+	}
 
 	options, err = options.AndFrom(ctrl.ConfigFile().AtPath(configFile))
 	if err != nil {
