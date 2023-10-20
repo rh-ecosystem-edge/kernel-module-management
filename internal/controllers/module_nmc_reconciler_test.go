@@ -27,6 +27,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+const operatorNamespace = "operator-namespace"
+
 var _ = Describe("Reconcile", func() {
 	var (
 		ctrl            *gomock.Controller
@@ -191,7 +193,7 @@ var _ = Describe("getRequestedModule", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mnrh = newModuleNMCReconcilerHelper(clnt, nil, nil, nil, nil, scheme)
+		mnrh = newModuleNMCReconcilerHelper(clnt, nil, nil, nil, nil, operatorNamespace, scheme)
 	})
 
 	ctx := context.Background()
@@ -237,7 +239,7 @@ var _ = Describe("setFinalizerAndStatus", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
 		statusWriter = client.NewMockStatusWriter(ctrl)
-		mnrh = newModuleNMCReconcilerHelper(clnt, nil, nil, nil, nil, scheme)
+		mnrh = newModuleNMCReconcilerHelper(clnt, nil, nil, nil, nil, operatorNamespace, scheme)
 		mod = kmmv1beta1.Module{}
 		expectedMod = mod.DeepCopy()
 	})
@@ -288,7 +290,7 @@ var _ = Describe("getNodesListBySelector", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mnrh = newModuleNMCReconcilerHelper(clnt, nil, nil, nil, nil, scheme)
+		mnrh = newModuleNMCReconcilerHelper(clnt, nil, nil, nil, nil, operatorNamespace, scheme)
 	})
 
 	ctx := context.Background()
@@ -342,7 +344,7 @@ var _ = Describe("finalizeModule", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
 		helper = nmc.NewMockHelper(ctrl)
-		mnrh = newModuleNMCReconcilerHelper(clnt, nil, nil, helper, nil, scheme)
+		mnrh = newModuleNMCReconcilerHelper(clnt, nil, nil, helper, nil, operatorNamespace, scheme)
 		mod = &kmmv1beta1.Module{
 			ObjectMeta: metav1.ObjectMeta{Name: moduleName, Namespace: moduleNamespace},
 		}
@@ -452,7 +454,7 @@ var _ = Describe("getNMCsByModuleSet", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mnrh = newModuleNMCReconcilerHelper(clnt, nil, nil, nil, nil, scheme)
+		mnrh = newModuleNMCReconcilerHelper(clnt, nil, nil, nil, nil, operatorNamespace, scheme)
 	})
 
 	ctx := context.Background()
@@ -508,6 +510,8 @@ var _ = Describe("prepareSchedulingData", func() {
 		mnrh          moduleNMCReconcilerHelperAPI
 		node          v1.Node
 		targetedNodes []v1.Node
+		mod           kmmv1beta1.Module
+		mld           api.ModuleLoaderData
 	)
 
 	BeforeEach(func() {
@@ -515,7 +519,7 @@ var _ = Describe("prepareSchedulingData", func() {
 		clnt = client.NewMockClient(ctrl)
 		mockKernel = module.NewMockKernelMapper(ctrl)
 		mockHelper = nmc.NewMockHelper(ctrl)
-		mnrh = newModuleNMCReconcilerHelper(clnt, mockKernel, nil, mockHelper, nil, scheme)
+		mnrh = newModuleNMCReconcilerHelper(clnt, mockKernel, nil, mockHelper, nil, operatorNamespace, scheme)
 		node = v1.Node{
 			ObjectMeta: metav1.ObjectMeta{Name: nodeName},
 			Status: v1.NodeStatus{
@@ -523,11 +527,11 @@ var _ = Describe("prepareSchedulingData", func() {
 			},
 		}
 		targetedNodes = []v1.Node{node}
+		mod = kmmv1beta1.Module{}
+		mld = api.ModuleLoaderData{KernelVersion: "some version", Name: moduleName, Namespace: moduleNamespace}
 	})
 
 	ctx := context.Background()
-	mod := kmmv1beta1.Module{}
-	mld := api.ModuleLoaderData{KernelVersion: "some version", Name: moduleName, Namespace: moduleNamespace}
 
 	It("failed to determine mld", func() {
 		currentNMCs := sets.New[string](nodeName)
@@ -650,6 +654,29 @@ var _ = Describe("prepareSchedulingData", func() {
 		Expect(errs).To(BeEmpty())
 		Expect(scheduleData).To(HaveKeyWithValue(nodeName, schedulingData{action: actionDelete}))
 	})
+
+	DescribeTable(
+		"should set the right service account name in the ModuleLoaderData",
+		func(modSAName, modNamespace, expected string) {
+			mod.Namespace = namespace
+			mod.Spec.ModuleLoader.ServiceAccountName = modSAName
+
+			mld.ServiceAccountName = expected
+
+			currentNMCs := sets.New[string](nodeName)
+			mockKernel.EXPECT().GetModuleLoaderDataForKernel(&mod, kernelVersion).Return(&mld, nil)
+
+			scheduleData, errs := mnrh.prepareSchedulingData(ctx, &mod, targetedNodes, currentNMCs)
+
+			expectedScheduleData := map[string]schedulingData{nodeName: {action: actionAdd, mld: &mld, node: &node}}
+			Expect(errs).To(BeEmpty())
+			Expect(scheduleData).To(Equal(expectedScheduleData))
+		},
+		Entry("configured and not in the operator's namespace", "configured-sa", "some-ns", "configured-sa"),
+		Entry("configured and in the operator's namespace", "configured-sa", operatorNamespace, "configured-sa"),
+		Entry("not configured and not in the operator's namespace", "", "some-ns", ""),
+		Entry("not configured and in the operator's namespace", "", "some-ns", "kmm-operator-module-loader"),
+	)
 })
 
 var _ = Describe("enableModuleOnNode", func() {
@@ -678,7 +705,7 @@ var _ = Describe("enableModuleOnNode", func() {
 		helper = nmc.NewMockHelper(ctrl)
 		rgst = registry.NewMockRegistry(ctrl)
 		authFactory = auth.NewMockRegistryAuthGetterFactory(ctrl)
-		mnrh = newModuleNMCReconcilerHelper(clnt, nil, rgst, helper, authFactory, scheme)
+		mnrh = newModuleNMCReconcilerHelper(clnt, nil, rgst, helper, authFactory, operatorNamespace, scheme)
 		node = v1.Node{
 			ObjectMeta: metav1.ObjectMeta{Name: "nodeName"},
 		}
@@ -792,7 +819,7 @@ var _ = Describe("disableModuleOnNode", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
 		helper = nmc.NewMockHelper(ctrl)
-		mnrh = newModuleNMCReconcilerHelper(clnt, nil, nil, helper, nil, scheme)
+		mnrh = newModuleNMCReconcilerHelper(clnt, nil, nil, helper, nil, operatorNamespace, scheme)
 		nodeName = "node name"
 		moduleName = "moduleName"
 		moduleNamespace = "moduleNamespace"
