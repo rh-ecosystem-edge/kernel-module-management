@@ -187,6 +187,7 @@ func main() {
 		nmcHelper,
 		filterAPI,
 		authFactory,
+		operatorNamespace,
 		scheme,
 	)
 	if err = mnc.SetupWithManager(mgr); err != nil {
