@@ -111,7 +111,7 @@ func main() {
 		cmd.FatalError(setupLogger, err, "could not parse the configuration file", "path", configFile)
 	}
 
-	options := cfg.ManagerOptions()
+	options := cfg.ManagerOptions(setupLogger)
 	options.Scheme = scheme
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), *options)
