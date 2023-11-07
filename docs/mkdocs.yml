@@ -22,7 +22,9 @@ nav:
       - Day1 support: documentation/day1_limited_option.md
       - documentation/troubleshooting.md
       - documentation/uninstall.md
-  - Lab: lab.md
+  - Labs:
+      - lab.md
+      - labsv2.md 
   - Developer:
       - developer/index.md
       - developer/use_cases.md
