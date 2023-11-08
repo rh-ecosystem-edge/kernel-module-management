@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/hashicorp/go-multierror"
 	buildv1 "github.com/openshift/api/build/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
@@ -117,8 +116,8 @@ func (mnr *ModuleNMCReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	sdMap, prepareErrs := mnr.reconHelper.prepareSchedulingData(ctx, mod, targetedNodes, currentNMCs)
-	var sumErr *multierror.Error
-	sumErr = multierror.Append(sumErr, prepareErrs...)
+	errs := make([]error, 0, len(sdMap)+1)
+	errs = append(errs, prepareErrs...)
 
 	for nodeName, sd := range sdMap {
 		if sd.action == actionAdd {
@@ -127,13 +126,14 @@ func (mnr *ModuleNMCReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		if sd.action == actionDelete {
 			err = mnr.reconHelper.disableModuleOnNode(ctx, mod.Namespace, mod.Name, nodeName)
 		}
-		sumErr = multierror.Append(sumErr, err)
+
+		errs = append(errs, err)
 	}
 
 	err = mnr.reconHelper.moduleUpdateWorkerPodsStatus(ctx, mod, targetedNodes)
-	sumErr = multierror.Append(sumErr, err)
+	errs = append(errs, err)
 
-	err = sumErr.ErrorOrNil()
+	err = errors.Join(errs...)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to reconcile module %s/%s config: %v", mod.Namespace, mod.Name, err)
 	}
@@ -246,13 +246,13 @@ func (mnrh *moduleNMCReconcilerHelper) finalizeModule(ctx context.Context, mod *
 		return fmt.Errorf("failed to list NMCs with %s configured in the cluster: %v", modNSN, err)
 	}
 
-	var sumErr *multierror.Error
+	errs := make([]error, 0, len(nmcList.Items))
 	for _, nmc := range nmcList.Items {
 		err := mnrh.removeModuleFromNMC(ctx, &nmc, mod.Namespace, mod.Name)
-		sumErr = multierror.Append(sumErr, err)
+		errs = append(errs, err)
 	}
 
-	err := sumErr.ErrorOrNil()
+	err := errors.Join(errs...)
 	if err != nil {
 		return fmt.Errorf("failed to remove %s module from some of NMCs: %v", modNSN, err)
 	}

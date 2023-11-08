@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/hashicorp/go-multierror"
 	"github.com/mitchellh/hashstructure/v2"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/config"
@@ -120,9 +119,7 @@ func (r *NMCReconciler) Reconcile(ctx context.Context, req reconcile.Request) (r
 		statusMap[status.Namespace+"/"+status.Name] = &nmcObj.Status.Modules[i]
 	}
 
-	// TODO move to errors.Join() when we move to Go 1.20
-	// errs := make([]error, 0, len(nmcObj.Spec.Modules)+len(nmcObj.Status.Modules))
-	var errs *multierror.Error
+	errs := make([]error, 0, len(nmcObj.Spec.Modules)+len(nmcObj.Status.Modules))
 
 	for _, mod := range nmcObj.Spec.Modules {
 		moduleNameKey := mod.Namespace + "/" + mod.Name
@@ -130,7 +127,7 @@ func (r *NMCReconciler) Reconcile(ctx context.Context, req reconcile.Request) (r
 		logger := logger.WithValues("module", moduleNameKey)
 
 		if err := r.helper.ProcessModuleSpec(ctrl.LoggerInto(ctx, logger), &nmcObj, &mod, statusMap[moduleNameKey]); err != nil {
-			errs = multierror.Append(
+			errs = append(
 				errs,
 				fmt.Errorf("error processing Module %s: %v", moduleNameKey, err),
 			)
@@ -148,7 +145,7 @@ func (r *NMCReconciler) Reconcile(ctx context.Context, req reconcile.Request) (r
 		logger := logger.WithValues("status", statusNameKey)
 
 		if err := r.helper.ProcessUnconfiguredModuleStatus(ctrl.LoggerInto(ctx, logger), &nmcObj, status); err != nil {
-			errs = multierror.Append(
+			errs = append(
 				errs,
 				fmt.Errorf("erorr processing orphan status for Module %s: %v", statusNameKey, err),
 			)
@@ -156,14 +153,14 @@ func (r *NMCReconciler) Reconcile(ctx context.Context, req reconcile.Request) (r
 	}
 
 	if err := r.helper.GarbageCollectInUseLabels(ctx, &nmcObj); err != nil {
-		errs = multierror.Append(errs, fmt.Errorf("failed to GC in-use labels for NMC %s: %v", req.NamespacedName, err))
+		errs = append(errs, fmt.Errorf("failed to GC in-use labels for NMC %s: %v", req.NamespacedName, err))
 	}
 
 	if err := r.helper.UpdateNodeLabelsAndRecordEvents(ctx, &nmcObj); err != nil {
-		errs = multierror.Append(errs, fmt.Errorf("could not update node's labels for NMC %s: %v", req.NamespacedName, err))
+		errs = append(errs, fmt.Errorf("could not update node's labels for NMC %s: %v", req.NamespacedName, err))
 	}
 
-	return ctrl.Result{}, errs.ErrorOrNil()
+	return ctrl.Result{}, errors.Join(errs...)
 }
 
 func (r *NMCReconciler) SetupWithManager(ctx context.Context, mgr manager.Manager) error {
@@ -431,9 +428,7 @@ func (h *nmcReconcilerHelperImpl) RemovePodFinalizers(ctx context.Context, nodeN
 		return fmt.Errorf("could not delete orphan worker Pods on node %s: %v", nodeName, err)
 	}
 
-	// TODO move to errors.Join() when we move to Go 1.20
-	//errs := make([]error, 0, len(pods))
-	var errs *multierror.Error
+	errs := make([]error, 0, len(pods))
 
 	for i := 0; i < len(pods); i++ {
 		pod := &pods[i]
@@ -442,7 +437,7 @@ func (h *nmcReconcilerHelperImpl) RemovePodFinalizers(ctx context.Context, nodeN
 
 		if controllerutil.RemoveFinalizer(pod, nodeModulesConfigFinalizer) {
 			if err = h.client.Patch(ctx, pod, mergeFrom); err != nil {
-				errs = multierror.Append(
+				errs = append(
 					errs,
 					fmt.Errorf("could not patch Pod %s/%s: %v", pod.Namespace, pod.Name, err),
 				)
@@ -452,7 +447,7 @@ func (h *nmcReconcilerHelperImpl) RemovePodFinalizers(ctx context.Context, nodeN
 		}
 	}
 
-	return errs.ErrorOrNil()
+	return errors.Join(errs...)
 }
 
 func (h *nmcReconcilerHelperImpl) SyncStatus(ctx context.Context, nmcObj *kmmv1beta1.NodeModulesConfig) error {
@@ -478,8 +473,7 @@ func (h *nmcReconcilerHelperImpl) SyncStatus(ctx context.Context, nmcObj *kmmv1b
 	}
 
 	patchFrom := client.MergeFrom(nmcObj.DeepCopy())
-	// TODO move to errors.Join() when we move to Go 1.20
-	var errs *multierror.Error
+	errs := make([]error, 0, len(pods))
 	podsToDelete := make([]v1.Pod, 0, len(pods))
 
 	for _, p := range pods {
@@ -522,7 +516,7 @@ func (h *nmcReconcilerHelperImpl) SyncStatus(ctx context.Context, nmcObj *kmmv1b
 			}
 
 			if err = yaml.UnmarshalStrict([]byte(p.Annotations[configAnnotationKey]), &status.Config); err != nil {
-				errs = multierror.Append(
+				errs = append(
 					errs,
 					fmt.Errorf("%s: could not unmarshal the ModuleConfig from YAML: %v", podNSN, err),
 				)
@@ -554,8 +548,8 @@ func (h *nmcReconcilerHelperImpl) SyncStatus(ctx context.Context, nmcObj *kmmv1b
 	}
 
 	err = h.client.Status().Patch(ctx, nmcObj, patchFrom)
-	errs = multierror.Append(errs, err)
-	if err = errs.ErrorOrNil(); err != nil {
+	errs = append(errs, err)
+	if err = errors.Join(errs...); err != nil {
 		return fmt.Errorf("encountered errors while reconciling NMC %s status: %v", nmcObj.Name, err)
 	}
 
@@ -565,10 +559,10 @@ func (h *nmcReconcilerHelperImpl) SyncStatus(ctx context.Context, nmcObj *kmmv1b
 	// in the reconcile loop, and in that case we can always try to delete the pod manually, and after that the flow will be able to continue
 	for _, pod := range podsToDelete {
 		err = h.pm.DeletePod(ctx, &pod)
-		errs = multierror.Append(errs, err)
+		errs = append(errs, err)
 	}
 
-	return errs.ErrorOrNil()
+	return errors.Join(errs...)
 }
 
 func (h *nmcReconcilerHelperImpl) UpdateNodeLabelsAndRecordEvents(ctx context.Context, nmc *kmmv1beta1.NodeModulesConfig) error {

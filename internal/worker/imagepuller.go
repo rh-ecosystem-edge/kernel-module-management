@@ -3,6 +3,7 @@ package worker
 import (
 	"archive/tar"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,7 +13,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
-	"github.com/hashicorp/go-multierror"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 )
 
@@ -152,16 +152,13 @@ func (i *imagePuller) PullAndExtract(ctx context.Context, imageName string, inse
 	wg.Wait()
 	close(errs)
 
-	// TODO move to errors.Join() when we move to Go 1.20
-	var sumErr *multierror.Error
+	chErrs := make([]error, 0)
 
 	for chErr := range errs {
-		sumErr = multierror.Append(sumErr, chErr)
+		chErrs = append(chErrs, chErr)
 	}
 
-	err = sumErr.ErrorOrNil()
-
-	if err != nil {
+	if err = errors.Join(chErrs...); err != nil {
 		return res, fmt.Errorf("got one or more errors while writing the image: %v", err)
 	}
 
