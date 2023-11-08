@@ -12,8 +12,7 @@ import (
 	kmmcmd "github.com/rh-ecosystem-edge/kernel-module-management/internal/cmd"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/worker"
 	"github.com/spf13/cobra"
-	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 )
 
 var (
@@ -74,7 +73,9 @@ func main() {
 	kmodCmd.AddCommand(kmodLoadCmd, kmodUnloadCmd)
 
 	klogFlagSet := flag.NewFlagSet("klog", flag.ContinueOnError)
-	klog.InitFlags(klogFlagSet)
+
+	logConfig := textlogger.NewConfig()
+	logConfig.AddFlags(klogFlagSet)
 
 	rootCmd.PersistentFlags().AddGoFlagSet(klogFlagSet)
 
@@ -95,7 +96,7 @@ func main() {
 		"if set, this the value that firmware host path is mounted to")
 
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		logger = klogr.New().WithName("kmm-worker")
+		logger = textlogger.NewLogger(logConfig).WithName("kmm-worker")
 
 		logger.Info("Starting worker", "version", rootCmd.Version, "git commit", GitCommit)
 		logger.Info("Reading pull secrets", "base dir", worker.PullSecretsDir)
