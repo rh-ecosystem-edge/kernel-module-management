@@ -2,13 +2,13 @@ package worker
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os/exec"
 	"sync"
 
 	"github.com/go-logr/logr"
-	"github.com/hashicorp/go-multierror"
 )
 
 type CommandLogger struct {
@@ -50,14 +50,13 @@ func (cl *CommandLogger) Wait() error {
 	cl.wg.Wait()
 	close(errs)
 
-	// TODO move to errors.Join() when we move to Go 1.20
-	var err *multierror.Error
+	chErrs := make([]error, 0, goroutines)
 
-	for chErr := range errs {
-		err = multierror.Append(err, chErr)
+	for err := range errs {
+		chErrs = append(chErrs, err)
 	}
 
-	return err.ErrorOrNil()
+	return errors.Join(chErrs...)
 }
 
 func (cl *CommandLogger) write(r io.Reader, name string, errs chan<- error) {
