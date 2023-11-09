@@ -1,3 +1,4 @@
 exclude:
   global:
+    - requirements.txt
     - vendor/**
