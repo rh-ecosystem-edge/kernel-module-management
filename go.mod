@@ -16,7 +16,7 @@ require (
 	github.com/openshift/api v0.0.0-20230425161039-9a7a7c17dbf8
 	github.com/otiai10/copy v1.14.0
 	github.com/prometheus/client_golang v1.17.0
-	github.com/spf13/cobra v1.7.0
+	github.com/spf13/cobra v1.8.0
 	go.uber.org/mock v0.3.0
 	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63
 	golang.org/x/text v0.14.0
