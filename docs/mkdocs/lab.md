@@ -360,7 +360,7 @@ In addition to standard OpenShift tools such as [must-gather](https://docs.opens
 
 1. Operator logs:
 ```
-oc logs -fn openshift-kmm deployments/kmm-operator-controller-manager
+oc logs -fn openshift-kmm deployments/kmm-operator-controller
 ```
 2. Module pod logs:
 ```

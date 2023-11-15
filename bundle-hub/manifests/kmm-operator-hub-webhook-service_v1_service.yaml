@@ -21,6 +21,6 @@ spec:
     app.kubernetes.io/component: kmm-hub
     app.kubernetes.io/name: kmm-hub
     app.kubernetes.io/part-of: kmm
-    control-plane: controller-manager
+    control-plane: controller
 status:
   loadBalancer: {}

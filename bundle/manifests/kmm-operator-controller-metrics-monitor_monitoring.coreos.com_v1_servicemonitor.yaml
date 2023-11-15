@@ -5,8 +5,8 @@ metadata:
     app.kubernetes.io/component: kmm
     app.kubernetes.io/name: kmm
     app.kubernetes.io/part-of: kmm
-    control-plane: controller-manager
-  name: kmm-operator-controller-manager-metrics-monitor
+    control-plane: controller
+  name: kmm-operator-controller-metrics-monitor
 spec:
   endpoints:
   - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
@@ -17,4 +17,4 @@ spec:
       insecureSkipVerify: true
   selector:
     matchLabels:
-      control-plane: controller-manager
+      control-plane: controller
