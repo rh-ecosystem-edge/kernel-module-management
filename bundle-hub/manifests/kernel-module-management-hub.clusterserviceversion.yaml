@@ -32,8 +32,9 @@ metadata:
         }
       ]
     capabilities: Basic Install
+    createdAt: "2023-11-15T16:36:56Z"
     operatorframework.io/suggested-namespace: openshift-kmm-hub
-    operators.operatorframework.io/builder: operator-sdk-v1.25.2
+    operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
     repository: https://github.com/rh-ecosystem-edge/kernel-module-management
   name: kernel-module-management-hub.v0.0.1
