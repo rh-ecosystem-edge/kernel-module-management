@@ -16,7 +16,6 @@ var _ = Describe("ParseFile", func() {
 	It("should parse the file correctly", func() {
 		expected := &Config{
 			HealthProbeBindAddress: ":8081",
-			MetricsBindAddress:     "127.0.0.1:8080",
 			LeaderElection: LeaderElection{
 				Enabled:    true,
 				ResourceID: "some-resource-id",
@@ -24,6 +23,12 @@ var _ = Describe("ParseFile", func() {
 			Webhook: Webhook{
 				DisableHTTP2: true,
 				Port:         9443,
+			},
+			Metrics: Metrics{
+				BindAddress:      "0.0.0.0:8443",
+				DisableHTTP2:     true,
+				EnableAuthnAuthz: true,
+				SecureServing:    true,
 			},
 			Worker: Worker{
 				RunAsUser:            pointer.Int64(1234),
@@ -41,48 +46,82 @@ var _ = Describe("ParseFile", func() {
 })
 
 var _ = Describe("Config_ManagerOptions", func() {
+	It("should work as expected", func() {
+		const (
+			healthProbeBindAddress   = ":8081"
+			leaderElectionEnabled    = true
+			leaderElectionResourceID = "some-resource-id"
+			metricsBindAddress       = "127.0.0.1:8080"
+			webhookPort              = 1234
+		)
+
+		cfg := Config{
+			HealthProbeBindAddress: healthProbeBindAddress,
+			Metrics:                Metrics{BindAddress: metricsBindAddress},
+			LeaderElection: LeaderElection{
+				Enabled:    leaderElectionEnabled,
+				ResourceID: leaderElectionResourceID,
+			},
+			Webhook: Webhook{Port: webhookPort},
+			Worker:  Worker{},
+		}
+
+		opts := cfg.ManagerOptions(GinkgoLogr)
+
+		Expect(opts.HealthProbeBindAddress).To(Equal(healthProbeBindAddress))
+		Expect(opts.Metrics.BindAddress).To(Equal(metricsBindAddress))
+		Expect(opts.LeaderElection).To(Equal(leaderElectionEnabled))
+		Expect(opts.LeaderElectionID).To(Equal(leaderElectionResourceID))
+		Expect(opts.WebhookServer.(*webhook.DefaultServer).Options.Port).To(Equal(webhookPort))
+	})
+
 	DescribeTable(
-		"should work as expected",
-		func(disableHTTP2 bool) {
-			const (
-				healthProbeBindAddress   = ":8081"
-				metricsBindAddress       = "127.0.0.1:8080"
-				leaderElectionEnabled    = true
-				leaderElectionResourceID = "some-resource-id"
-				webhookPort              = 1234
-			)
-
+		"should enable or disable HTTP/2 in the webhook server",
+		func(disableHTTP2 bool, expectedTLSOptsLen int) {
 			cfg := Config{
-				HealthProbeBindAddress: healthProbeBindAddress,
-				MetricsBindAddress:     metricsBindAddress,
-				LeaderElection: LeaderElection{
-					Enabled:    leaderElectionEnabled,
-					ResourceID: leaderElectionResourceID,
-				},
-				Webhook: Webhook{
-					DisableHTTP2: disableHTTP2,
-					Port:         webhookPort,
-				},
-				Worker: Worker{},
+				Webhook: Webhook{DisableHTTP2: disableHTTP2},
 			}
 
-			opts := cfg.ManagerOptions(GinkgoLogr)
-
-			Expect(opts.HealthProbeBindAddress).To(Equal(healthProbeBindAddress))
-			Expect(opts.MetricsBindAddress).To(Equal(metricsBindAddress))
-			Expect(opts.LeaderElection).To(Equal(leaderElectionEnabled))
-			Expect(opts.LeaderElectionID).To(Equal(leaderElectionResourceID))
-
-			expectedTLSOptsLen := 0
-
-			if disableHTTP2 {
-				expectedTLSOptsLen = 1
-			}
-
-			Expect(opts.WebhookServer.(*webhook.DefaultServer).Options.TLSOpts).To(HaveLen(expectedTLSOptsLen))
-			Expect(opts.WebhookServer.(*webhook.DefaultServer).Options.Port).To(Equal(webhookPort))
+			Expect(cfg.ManagerOptions(GinkgoLogr).WebhookServer.(*webhook.DefaultServer).Options.TLSOpts).To(HaveLen(expectedTLSOptsLen))
 		},
-		Entry("HTTP/2 disabled", false),
-		Entry("HTTP/2 enabled", true),
+		Entry("HTTP/2 disabled", true, 1),
+		Entry("HTTP/2 enabled", false, 0),
+	)
+
+	DescribeTable(
+		"should enable or disable HTTP/2 in the metrics server",
+		func(secureServing, disableHTTP2 bool, expectedTLSOptsLen int) {
+			cfg := Config{
+				Metrics: Metrics{
+					DisableHTTP2:  disableHTTP2,
+					SecureServing: secureServing,
+				},
+			}
+
+			Expect(cfg.ManagerOptions(GinkgoLogr).Metrics.TLSOpts).To(HaveLen(expectedTLSOptsLen))
+		},
+		Entry("secure serving disabled, HTTP/2 disabled", false, true, 0),
+		Entry("secure serving enabled, HTTP/2 disabled", true, true, 1),
+		Entry("secure serving disabled, HTTP/2 enabled", false, false, 0),
+		Entry("secure serving enabled, HTTP/2 enabled", true, false, 0),
+	)
+
+	DescribeTable(
+		"should enable authn/authz if configured",
+		func(enabled bool) {
+			c := &Config{
+				Metrics: Metrics{EnableAuthnAuthz: enabled},
+			}
+
+			mo := c.ManagerOptions(GinkgoLogr)
+
+			if enabled {
+				Expect(mo.Metrics.FilterProvider).NotTo(BeNil())
+			} else {
+				Expect(mo.Metrics.FilterProvider).To(BeNil())
+			}
+		},
+		Entry(nil, false),
+		Entry(nil, true),
 	)
 })

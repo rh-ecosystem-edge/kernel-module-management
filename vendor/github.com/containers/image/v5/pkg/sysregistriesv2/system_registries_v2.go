@@ -2,10 +2,10 @@ package sysregistriesv2
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -14,9 +14,8 @@ import (
 	"github.com/containers/image/v5/docker/reference"
 	"github.com/containers/image/v5/types"
 	"github.com/containers/storage/pkg/homedir"
-	"github.com/containers/storage/pkg/regexp"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/exp/maps"
 )
 
 // systemRegistriesConfPath is the path to the system-wide registry
@@ -25,11 +24,19 @@ import (
 // -ldflags '-X github.com/containers/image/v5/sysregistries.systemRegistriesConfPath=$your_path'
 var systemRegistriesConfPath = builtinRegistriesConfPath
 
+// builtinRegistriesConfPath is the path to the registry configuration file.
+// DO NOT change this, instead see systemRegistriesConfPath above.
+const builtinRegistriesConfPath = "/etc/containers/registries.conf"
+
 // systemRegistriesConfDirPath is the path to the system-wide registry
 // configuration directory and is used to add/subtract potential registries for
 // obtaining images.  You can override this at build time with
 // -ldflags '-X github.com/containers/image/v5/sysregistries.systemRegistriesConfDirectoryPath=$your_path'
 var systemRegistriesConfDirPath = builtinRegistriesConfDirPath
+
+// builtinRegistriesConfDirPath is the path to the registry configuration directory.
+// DO NOT change this, instead see systemRegistriesConfDirectoryPath above.
+const builtinRegistriesConfDirPath = "/etc/containers/registries.conf.d"
 
 // AuthenticationFileHelper is a special key for credential helpers indicating
 // the usage of consulting containers-auth.json files instead of a credential
@@ -103,7 +110,7 @@ func (e *Endpoint) rewriteReference(ref reference.Named, prefix string) (referen
 	newNamedRef = e.Location + refString[prefixLen:]
 	newParsedRef, err := reference.ParseNamed(newNamedRef)
 	if err != nil {
-		return nil, fmt.Errorf("rewriting reference: %w", err)
+		return nil, errors.Wrapf(err, "rewriting reference")
 	}
 
 	return newParsedRef, nil
@@ -199,7 +206,6 @@ type V1RegistriesConf struct {
 }
 
 // Nonempty returns true if config contains at least one configuration entry.
-// Empty arrays are treated as missing entries.
 func (config *V1RegistriesConf) Nonempty() bool {
 	copy := *config // A shallow copy
 	if copy.V1TOMLConfig.Search.Registries != nil && len(copy.V1TOMLConfig.Search.Registries) == 0 {
@@ -211,15 +217,7 @@ func (config *V1RegistriesConf) Nonempty() bool {
 	if copy.V1TOMLConfig.Block.Registries != nil && len(copy.V1TOMLConfig.Block.Registries) == 0 {
 		copy.V1TOMLConfig.Block.Registries = nil
 	}
-	return copy.hasSetField()
-}
-
-// hasSetField returns true if config contains at least one configuration entry.
-// This is useful because of a subtlety of the behavior of the TOML decoder, where a missing array field
-// is not modified while unmarshaling (in our case remains to nil), while an [] is unmarshaled
-// as a non-nil []string{}.
-func (config *V1RegistriesConf) hasSetField() bool {
-	return !reflect.DeepEqual(*config, V1RegistriesConf{})
+	return !reflect.DeepEqual(copy, V1RegistriesConf{})
 }
 
 // V2RegistriesConf is the sysregistries v2 configuration format.
@@ -267,15 +265,7 @@ func (config *V2RegistriesConf) Nonempty() bool {
 	if !copy.shortNameAliasConf.nonempty() {
 		copy.shortNameAliasConf = shortNameAliasConf{}
 	}
-	return copy.hasSetField()
-}
-
-// hasSetField returns true if config contains at least one configuration entry.
-// This is useful because of a subtlety of the behavior of the TOML decoder, where a missing array field
-// is not modified while unmarshaling (in our case remains to nil), while an [] is unmarshaled
-// as a non-nil []string{}.
-func (config *V2RegistriesConf) hasSetField() bool {
-	return !reflect.DeepEqual(*config, V2RegistriesConf{})
+	return !reflect.DeepEqual(copy, V2RegistriesConf{})
 }
 
 // parsedConfig is the result of parsing, and possibly merging, configuration files;
@@ -385,7 +375,7 @@ func (config *V1RegistriesConf) ConvertToV2() (*V2RegistriesConf, error) {
 }
 
 // anchoredDomainRegexp is an internal implementation detail of postProcess, defining the valid values of elements of UnqualifiedSearchRegistries.
-var anchoredDomainRegexp = regexp.Delayed("^" + reference.DomainRegexp.String() + "$")
+var anchoredDomainRegexp = regexp.MustCompile("^" + reference.DomainRegexp.String() + "$")
 
 // postProcess checks the consistency of all the configuration, looks for conflicts,
 // and normalizes the configuration (e.g., sets the Prefix to Location if not set).
@@ -653,17 +643,17 @@ func dropInConfigs(wrapper configWrapper) ([]string, error) {
 		dirPaths = append(dirPaths, wrapper.userConfigDirPath)
 	}
 	for _, dirPath := range dirPaths {
-		err := filepath.WalkDir(dirPath,
+		err := filepath.Walk(dirPath,
 			// WalkFunc to read additional configs
-			func(path string, d fs.DirEntry, err error) error {
+			func(path string, info os.FileInfo, err error) error {
 				switch {
 				case err != nil:
 					// return error (could be a permission problem)
 					return err
-				case d == nil:
+				case info == nil:
 					// this should only happen when err != nil but let's be sure
 					return nil
-				case d.IsDir():
+				case info.IsDir():
 					if path != dirPath {
 						// make sure to not recurse into sub-directories
 						return filepath.SkipDir
@@ -683,7 +673,7 @@ func dropInConfigs(wrapper configWrapper) ([]string, error) {
 		if err != nil && !os.IsNotExist(err) {
 			// Ignore IsNotExist errors: most systems won't have a registries.conf.d
 			// directory.
-			return nil, fmt.Errorf("reading registries.conf.d: %w", err)
+			return nil, errors.Wrapf(err, "reading registries.conf.d")
 		}
 	}
 
@@ -725,7 +715,7 @@ func tryUpdatingCache(ctx *types.SystemContext, wrapper configWrapper) (*parsedC
 				return nil, err // Should never happen
 			}
 		} else {
-			return nil, fmt.Errorf("loading registries configuration %q: %w", wrapper.configPath, err)
+			return nil, errors.Wrapf(err, "loading registries configuration %q", wrapper.configPath)
 		}
 	}
 
@@ -738,7 +728,7 @@ func tryUpdatingCache(ctx *types.SystemContext, wrapper configWrapper) (*parsedC
 		// Enforce v2 format for drop-in-configs.
 		dropIn, err := loadConfigFile(path, true)
 		if err != nil {
-			return nil, fmt.Errorf("loading drop-in registries configuration %q: %w", path, err)
+			return nil, errors.Wrapf(err, "loading drop-in registries configuration %q", path)
 		}
 		config.updateWithConfigurationFrom(dropIn)
 	}
@@ -799,7 +789,7 @@ func parseShortNameMode(mode string) (types.ShortNameMode, error) {
 	case "permissive":
 		return types.ShortNameModePermissive, nil
 	default:
-		return types.ShortNameModeInvalid, fmt.Errorf("invalid short-name mode: %q", mode)
+		return types.ShortNameModeInvalid, errors.Errorf("invalid short-name mode: %q", mode)
 	}
 }
 
@@ -941,15 +931,15 @@ func loadConfigFile(path string, forceV2 bool) (*parsedConfig, error) {
 		logrus.Debugf("Failed to decode keys %q from %q", keys, path)
 	}
 
-	if combinedTOML.V1RegistriesConf.hasSetField() {
+	if combinedTOML.V1RegistriesConf.Nonempty() {
 		// Enforce the v2 format if requested.
 		if forceV2 {
 			return nil, &InvalidRegistries{s: "registry must be in v2 format but is in v1"}
 		}
 
 		// Convert a v1 config into a v2 config.
-		if combinedTOML.V2RegistriesConf.hasSetField() {
-			return nil, &InvalidRegistries{s: fmt.Sprintf("mixing sysregistry v1/v2 is not supported: %#v", combinedTOML)}
+		if combinedTOML.V2RegistriesConf.Nonempty() {
+			return nil, &InvalidRegistries{s: "mixing sysregistry v1/v2 is not supported"}
 		}
 		converted, err := combinedTOML.V1RegistriesConf.ConvertToV2()
 		if err != nil {
@@ -992,7 +982,7 @@ func loadConfigFile(path string, forceV2 bool) (*parsedConfig, error) {
 	// Parse and validate short-name aliases.
 	cache, err := newShortNameAliasCache(path, &res.partialV2.shortNameAliasConf)
 	if err != nil {
-		return nil, fmt.Errorf("validating short-name aliases: %w", err)
+		return nil, errors.Wrap(err, "validating short-name aliases")
 	}
 	res.aliasCache = cache
 	// Clear conf.partialV2.shortNameAliasConf to make it available for garbage collection and
@@ -1020,9 +1010,12 @@ func (c *parsedConfig) updateWithConfigurationFrom(updates *parsedConfig) {
 	// Go maps have a non-deterministic order when iterating the keys, so
 	// we dump them in a slice and sort it to enforce some order in
 	// Registries slice.  Some consumers of c/image (e.g., CRI-O) log the
-	// configuration where a non-deterministic order could easily cause
+	// the configuration where a non-deterministic order could easily cause
 	// confusion.
-	prefixes := maps.Keys(registryMap)
+	prefixes := []string{}
+	for prefix := range registryMap {
+		prefixes = append(prefixes, prefix)
+	}
 	sort.Strings(prefixes)
 
 	c.partialV2.Registries = []Registry{}
