@@ -301,14 +301,14 @@ spec:
           - subjectaccessreviews
           verbs:
           - create
-        serviceAccountName: kmm-operator-controller-manager
+        serviceAccountName: kmm-operator-controller
       deployments:
       - label:
           app.kubernetes.io/component: kmm
           app.kubernetes.io/name: kmm
           app.kubernetes.io/part-of: kmm
-          control-plane: controller-manager
-        name: kmm-operator-controller-manager
+          control-plane: controller
+        name: kmm-operator-controller
         spec:
           replicas: 1
           selector:
@@ -316,7 +316,7 @@ spec:
               app.kubernetes.io/component: kmm
               app.kubernetes.io/name: kmm
               app.kubernetes.io/part-of: kmm
-              control-plane: controller-manager
+              control-plane: controller
           strategy: {}
           template:
             metadata:
@@ -326,11 +326,11 @@ spec:
                 app.kubernetes.io/component: kmm
                 app.kubernetes.io/name: kmm
                 app.kubernetes.io/part-of: kmm
-                control-plane: controller-manager
+                control-plane: controller
             spec:
               containers:
               - args:
-                - --config=controller_manager_config.yaml
+                - --config=controller_config.yaml
                 command:
                 - /usr/local/bin/manager
                 env:
@@ -384,9 +384,9 @@ spec:
                 - mountPath: /etc/pki/ca-trust/extracted/pem
                   name: trusted-ca
                   readOnly: true
-                - mountPath: /controller_manager_config.yaml
+                - mountPath: /controller_config.yaml
                   name: manager-config
-                  subPath: controller_manager_config.yaml
+                  subPath: controller_config.yaml
               - args:
                 - --secure-listen-address=0.0.0.0:8443
                 - --upstream=http://127.0.0.1:8080/
@@ -416,7 +416,7 @@ spec:
                 runAsNonRoot: true
                 seccompProfile:
                   type: RuntimeDefault
-              serviceAccountName: kmm-operator-controller-manager
+              serviceAccountName: kmm-operator-controller
               terminationGracePeriodSeconds: 10
               tolerations:
               - effect: NoSchedule
@@ -469,7 +469,7 @@ spec:
           - update
           - patch
           - delete
-        serviceAccountName: kmm-operator-controller-manager
+        serviceAccountName: kmm-operator-controller
       - rules:
         - apiGroups:
           - security.openshift.io
@@ -518,7 +518,7 @@ spec:
   - admissionReviewVersions:
     - v1
     containerPort: 443
-    deploymentName: kmm-operator-controller-manager
+    deploymentName: kmm-operator-controller
     failurePolicy: Fail
     generateName: vmodule.kb.io
     rules:
