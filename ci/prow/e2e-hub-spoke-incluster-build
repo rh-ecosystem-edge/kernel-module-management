@@ -36,7 +36,7 @@ if [ "$SKIP_MAKE_DEPLOY_HUB" == true ]; then
 else
   echo "Deploy KMMO-Hub..."
   make deploy-hub KUSTOMIZE_CONFIG_HUB_DEFAULT=ci/install-ci-hub
-  oc wait --for=condition=Available --timeout=1m deployment/kmm-operator-hub-controller-manager -n ${OPERATOR_NAMESPACE}
+  oc wait --for=condition=Available --timeout=1m deployment/kmm-operator-hub-controller -n ${OPERATOR_NAMESPACE}
 fi
 
 if [ "$SKIP_MAKE_DEPLOY" == true ]; then
@@ -44,7 +44,7 @@ if [ "$SKIP_MAKE_DEPLOY" == true ]; then
 else
   echo "Deploy KMM..."
   make deploy KUSTOMIZE_CONFIG_DEFAULT=ci/install-ci-spoke
-  oc wait --for=condition=Available --timeout=1m deployment/kmm-operator-controller-manager -n ${OPERATOR_NAMESPACE}
+  oc wait --for=condition=Available --timeout=1m deployment/kmm-operator-controller -n ${OPERATOR_NAMESPACE}
 fi
 
 # Apply the ManagedClusterModule

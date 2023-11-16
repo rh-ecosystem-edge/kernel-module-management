@@ -17,7 +17,7 @@ images:
 
 configMapGenerator:
 - files:
-  - controller_manager_config.yaml
+  - controller_config.yaml
   name: manager-config
 
 generatorOptions:

@@ -116,6 +116,6 @@ volumes:
 Run the following commands:
 ```shell
 oc apply -f restricted-v2.yml
-oc adm policy add-scc-to-user restricted-v2 -z kmm-operator-controller-manager -n openshift-kmm
+oc adm policy add-scc-to-user restricted-v2 -z kmm-operator-controller -n openshift-kmm
 ```
 </details>
