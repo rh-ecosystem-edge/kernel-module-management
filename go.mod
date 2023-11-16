@@ -22,7 +22,7 @@ require (
 	golang.org/x/text v0.14.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.27.7
-	k8s.io/apimachinery v0.27.7
+	k8s.io/apimachinery v0.27.8
 	k8s.io/client-go v0.27.7
 	k8s.io/klog/v2 v2.110.1
 	k8s.io/kubectl v0.27.7
