@@ -29,7 +29,7 @@ collect() {
   oc adm inspect modules,nodemodulesconfigs,preflightvalidations,preflightvalidationsocp -A --dest-dir="$OUTPUT_DIR/inspect"
   oc adm inspect clusterclaims --dest-dir="$OUTPUT_DIR/inspect"
 
-  oc -n "$NS" logs "deployment/kmm-operator-controller-manager" > "${OUTPUT_DIR}/kmm-operator-controller-manager.log"
+  oc -n "$NS" logs "deployment/kmm-operator-controller" > "${OUTPUT_DIR}/kmm-operator-controller.log"
 
   for ns in $(oc get modules -A --no-headers -o custom-columns="NS:.metadata.namespace"); do
     echo "Collecting data in namespace ${ns}"
@@ -45,7 +45,7 @@ collect_hub() {
   oc adm inspect manifestworks -A --dest-dir="$OUTPUT_DIR/inspect"
   oc adm inspect "${BUILD_KINDS}" -n "${NS}" --dest-dir="$OUTPUT_DIR/inspect"
 
-  oc -n "$NS" logs "deployment.apps/kmm-operator-hub-controller-manager" > "${OUTPUT_DIR}/kmm-operator-hub-controller-manager.log"
+  oc -n "$NS" logs "deployment.apps/kmm-operator-hub-controller" > "${OUTPUT_DIR}/kmm-operator-hub-controller.log"
 }
 
 while getopts "hn:u" arg; do
