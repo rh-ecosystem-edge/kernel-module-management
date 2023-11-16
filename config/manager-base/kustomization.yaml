@@ -14,7 +14,7 @@ patches:
 images:
 - name: gcr.io/kubebuilder/kube-rbac-proxy
   newName: registry.redhat.io/openshift4/ose-kube-rbac-proxy
-  newTag: v4.13
+  newTag: v4.14
 - name: must-gather
   newName: quay.io/edge-infrastructure/kernel-module-management-must-gather
   newTag: latest
