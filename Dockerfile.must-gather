@@ -1,6 +1,6 @@
 FROM quay.io/openshift/origin-cli:4.14 as builder
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:9.2
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.3
 
 RUN microdnf update -y \
     && microdnf install -y tar rsync findutils gzip iproute util-linux shadow-utils \
