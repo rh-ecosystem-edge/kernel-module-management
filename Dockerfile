@@ -27,7 +27,7 @@ ARG TARGET
 RUN git config --global --add safe.directory ${PWD}
 RUN make ${TARGET}
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:9.2
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.3
 
 ARG TARGET
 
