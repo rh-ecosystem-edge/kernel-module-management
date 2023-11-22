@@ -48,7 +48,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2023-11-16T10:48:48Z"
+    createdAt: "2023-11-22T16:41:17Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -221,6 +221,7 @@ spec:
           - nodemodulesconfigs
           verbs:
           - create
+          - delete
           - get
           - list
           - patch
