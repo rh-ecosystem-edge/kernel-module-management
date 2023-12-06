@@ -1,20 +1,30 @@
 # Deploying kernel modules
 
-For each `Module`, KMM can create a number of `DaemonSets`:
+KMM watches `Node` and `Module` resources in the cluster to determine if a kernel module should be loaded on or unloaded
+from a node.  
+To be eligible for a `Module`, a `Node` must:
 
-- one ModuleLoader DaemonSet per compatible kernel version running in the cluster;
-- one device plugin DaemonSet, if configured.
+- have labels that match the `Module`'s `.spec.selector` field;
+- run a kernel version matching one of the items in the `Module`'s `.spec.moduleLoader.container.kernelMappings`;
+- if [ordered upgrade](ordered_upgrade.md) is configured in the `Module`, have a label that matches its
+  `.spec.moduleLoader.container.version` field.
 
-### ModuleLoader
+When KMM needs to reconcile nodes with the desired state as configured in the `Module` resource, it creates worker Pods
+on the target node(s) to run the necessary action.  
+The operator monitors the outcome of those Pods and records that information.
+It uses it to label `Node` objects when the module was successfully loaded, and to run the device plugin (if
+configured).
 
-The ModuleLoader DaemonSets run ModuleLoader images to load kernel modules.  
-A ModuleLoader image is an OCI image that contains the `.ko` files and both the `modprobe` and `sleep` binaries.
+### Worker Pods
 
-When the ModuleLoader pod is created, it will run `modprobe` to insert the specified module into the kernel.
-It will then `sleep` until it is terminated.
-When that happens, the `ExecPreStop` hook will run `modprobe -r` to unload the kernel module.
+Worker pods run the KMM `worker` binary that
 
-Learn more about [how to build a ModuleLoader image](module_loader_image.md).
+- pulls the kmod image configured in the `Module` resource;
+- extract it in the Pod's filesystem;
+- runs `modprobe` with the right arguments to perform the necessary action.
+
+kmod images are standard OCI images that contains `.ko` files.
+Learn more about [how to build a kmod image](kmod_image.md).
 
 ### Device plugin
 
@@ -23,12 +33,12 @@ DaemonSet in the cluster.
 That DaemonSet will target nodes:
 
 - that match the `Module`'s `.spec.selector`;
-- on which the kernel module is loaded (where the ModuleLoader pod has the `Ready` condition).
+- on which the kernel module is loaded.
 
 ## `Module` CRD
 
 The `Module` Custom Resource Definition represents a kernel module that should be loaded on all or select nodes in the
-cluster, through a ModuleLoader image.
+cluster, through a kmod image.
 A Module specifies one or more kernel versions it is compatible with, as well as a node selector.
 
 The compatible versions for a `Module` are listed under `.spec.moduleLoader.container.kernelMappings`.
@@ -41,14 +51,14 @@ The reconciliation loop for `Module` runs the following steps:
 3. for each kernel version:
     1. go through `.spec.moduleLoader.container.kernelMappings` and find the appropriate container image name.
        If the kernel mapping has `build` or `sign` defined and the container image does not already exist, run the build
-       and / or signing job as required;
-    2. create a ModuleLoader `DaemonSet` with the container image determined at the previous step;
+       and / or signing pod as required;
+    2. create a worker Pod pulling the container image determined at the previous step and running `modprobe`;
     3. if `.spec.devicePlugin` is defined, create a device plugin `DaemonSet` using the configuration specified under
        `.spec.devicePlugin.container`;
 4. garbage-collect:
-    1. existing `DaemonSets` targeting kernel versions that are not run by any node in the cluster;
-    2. successful build jobs;
-    3. successful signing jobs.
+    1. obsolete device plugin `DaemonSets` that do not target any node;
+    2. successful build pods;
+    3. successful signing pods.
 
 ### Soft dependencies between kernel modules
 
@@ -90,25 +100,15 @@ spec:
       inTreeModuleToRemove: mod_b
 ```
 
-The ModuleLoader pod will first try to unload the in-tree `mod_b` before loading `mod_a` from the ModuleLoader image.  
-When the ModuleLoader pod is terminated and `mod_a` is unloaded, `mod_b` will not be loaded again.
-
-### Image pull policy
-
-Many examples in this documentation use the kernel version as image tag for the ModuleLoader image name.  
-If that image tag is being overridden on the registry, the Kubernetes
-[default image pull policy](https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting) that KMM
-honors can lead to nodes not pulling the latest version of an image.  
-Use `.spec.moduleLoader.container.imagePullPolicy` to configure the right
-[image pull policy](https://kubernetes.io/docs/concepts/containers/images/#updating-images) for your ModuleLoader
-DaemonSets.
+The worker Pod will first try to unload the in-tree `mod_b` before loading `mod_a` from the kmod image.  
+When the worker Pod is terminated and `mod_a` is unloaded, `mod_b` will not be loaded again.
 
 ### Example resource
 
 Below is an annotated `Module` example with most options set.
 More information about specific features is available in the dedicated pages:
 
-- [in-cluster builds](module_loader_image.md#building-in-cluster)
+- [in-cluster builds](kmod_image.md#building-in-cluster)
 - [kernel module signing](secure_boot.md)
 
 ```yaml
@@ -204,7 +204,7 @@ spec:
 
     serviceAccountName: sa-device-plugin  # Optional
 
-  imageRepoSecret:  # Optional. Used to pull ModuleLoader and device plugin images
+  imageRepoSecret:  # Optional. Used to pull kmod and device plugin images
     name: secret-name
 
   selector:
@@ -222,12 +222,11 @@ The following `Module` fields support shell-like variable substitution:
 
 The following variables will be substituted:
 
-| Name                          | Description                            | Example                       |
-|-------------------------------|----------------------------------------|-------------------------------|
-| `KERNEL_FULL_VERSION`         | The kernel version we are building for | `5.14.0-70.58.1.el9_0.x86_64` |
-| `KERNEL_VERSION` (deprecated) | The kernel version we are building for | `5.14.0-70.58.1.el9_0.x86_64` |
-| `MOD_NAME`                    | The `Module`'s name                    | `my-mod`                      |
-| `MOD_NAMESPACE`               | The `Module`'s namespace               | `my-namespace`                |
+| Name                  | Description                            | Example                       |
+|-----------------------|----------------------------------------|-------------------------------|
+| `KERNEL_FULL_VERSION` | The kernel version we are building for | `5.14.0-70.58.1.el9_0.x86_64` |
+| `MOD_NAME`            | The `Module`'s name                    | `my-mod`                      |
+| `MOD_NAMESPACE`       | The `Module`'s namespace               | `my-namespace`                |
 
 ## Security and permissions
 
@@ -248,8 +247,8 @@ The authorization model depends on the `Module`'s namespace, as well as its spec
   always used;
 - if those fields are not set, then:
     - if the `Module` is created in the operator's namespace (`openshift-kmm` by default), then KMM will use its
-      default, powerful `ServiceAccounts` to run the DaemonSets;
-    - if the `Module` is created in any other namespace, then KMM will run the DaemonSets as the namespace's `default`
+      default, powerful `ServiceAccounts` to run the worker and device plugin Pods;
+    - if the `Module` is created in any other namespace, then KMM will run the Pods with the namespace's `default`
       `ServiceAccount`, which cannot run privileged workload unless you manually allow it to use the `privileged` SCC.
 
 !!! warning "`openshift-kmm` and some other namespaces that are part of the [cluster payload](https://docs.openshift.com/container-platform/4.12/authentication/understanding-and-managing-pod-security-admission.html#security-context-constraints-psa-opting_understanding-and-managing-pod-security-admission) are considered trusted namespaces"
@@ -258,8 +257,8 @@ The authorization model depends on the `Module`'s namespace, as well as its spec
     `openshift-kmm` namespace will result in KMM automatically running privileged workload on potentially all nodes in
     cluster.
 
-To allow any `ServiceAccount` to use the `privileged` SCC and hence to run ModuleLoader and / or device plugin pods,
-use the following command:
+To allow any `ServiceAccount` to use the `privileged` SCC and hence to run worker and / or device plugin Pods, use the
+following command:
 
 ```shell
 oc adm policy add-scc-to-user privileged -z "${serviceAccountName}" [ -n "${namespace}" ]

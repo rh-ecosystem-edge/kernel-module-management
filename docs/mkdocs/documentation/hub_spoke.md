@@ -17,7 +17,7 @@ To do that, [install the regular edition of KMM](./install.md).
 
 ### Installing KMM-Hub
 
-#### Using OLM (recommended)
+#### With OLM (recommended)
 
 KMM-Hub is available to install from the Red Hat catalog.
 
@@ -52,7 +52,7 @@ spec:
   sourceNamespace: openshift-marketplace
 ```
 
-#### Using `oc`
+#### With `oc`
 
 The command below installs the bleeding edge version of KMM-Hub.
 

@@ -306,7 +306,7 @@ In our case we'll use this example:
 oc label node my-node-1 kmm.node.kubernetes.io/version-module.labsv2.kmm-ci-a=0.9
 ```
 
-Then we can use a new build based on previous build example by just adapting the ModuleLoader (adding `version` and specific `containerImage` for that version) and reusing existing Configmap for build. Make sure you have deleted any Module object left from past examples and apply following Module:
+Then we can use a new build based on previous build example by just adapting the Module (adding `version` and specific `containerImage` for that version) and reusing existing Configmap for build. Make sure you have deleted any Module object left from past examples and apply following Module:
 
 `build_with_version.yaml`
 ```yaml
