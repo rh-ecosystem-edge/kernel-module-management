@@ -18,6 +18,9 @@ jobs:
 
     permissions:
       actions: write
+      contents: write
+      issues: write
+      pull-requests: write
 
     steps:
       # gcompat: glibc compatibility layer on alpine for Go
