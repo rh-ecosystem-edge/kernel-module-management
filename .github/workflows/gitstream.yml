@@ -16,6 +16,9 @@ jobs:
     container:
       image: ghcr.io/qbarrand/gitstream:main
 
+    permissions:
+      actions: write
+
     steps:
       # gcompat: glibc compatibility layer on alpine for Go
       # git: to check out the repos
