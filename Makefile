@@ -156,6 +156,9 @@ manager-hub: $(shell find -name "*.go") go.mod go.sum  ## Build manager-hub bina
 worker: $(shell find -name "*.go") go.mod go.sum  ## Build worker binary.
 	go build -ldflags="-X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT)" -o $@ ./cmd/worker
 
+day1-utility: $(shell find -name "*.go") go.mod go.sum  ## Build day1 binary
+	go build -ldflags="-X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT)" -o $@ ./cmd/day1-utility
+
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
