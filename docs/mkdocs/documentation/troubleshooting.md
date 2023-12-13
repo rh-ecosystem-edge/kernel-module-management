@@ -30,20 +30,37 @@ Use the `-n NAMESPACE` switch to specify a namespace if you installed KMM in a c
 | KMM       | `oc logs -fn openshift-kmm deployments/kmm-operator-controller`         |
 | KMM-Hub   | `oc logs -fn openshift-kmm-hub deployments/kmm-operator-hub-controller` |
 
-## Building and Signing work but the ModuelLoader isn't running.
+## Observing events
 
-In case the `ServiceAccount` used in the `Module` doesn't have enough permissions to run privileged workload,
-you may result in a case in which the build and sign jobs are running correctly but the ModuleLoader pod isn't
-scheduled.
+### Build & Sign
 
-In this case, you should be able to see a similar error describing the ModuleLoader's `DaemonSet`:
-```
-$ oc describe ds/<ds name> -n <namespace>
-...
+KMM publishes events whenever it starts a kmod image build or observes its outcome.  
+Those events are attached to `Module` objects and are available at the very end of `kubectl describe module`:
+
+```text
+$> kubectl describe modules.kmm.sigs.x-k8s.io kmm-ci-a
+[...]
 Events:
-  Type     Reason        Age                   From                  Message
-  ----     ------        ----                  ----                  -------
-  Warning  FailedCreate  15m (x50 over 3h38m)  daemonset-controller  Error creating: pods "kmm-ci-1a953734332dedbd-" is forbidden: unable to validate against any security context constraint: [provider "anyuid": Forbidden: not usable by user or serviceaccount, spec.volumes[0]: Invalid value: "hostPath": hostPath volumes are not allowed to be used, spec.containers[0].securityContext.runAsUser: Invalid value: 0: must be in the ranges: [1000700000, 1000709999], spec.containers[0].securityContext.seLinuxOptions.level: Invalid value: "": must be s0:c26,c25, spec.containers[0].securityContext.seLinuxOptions.type: Invalid value: "spc_t": must be , spec.containers[0].securityContext.capabilities.add: Invalid value: "SYS_MODULE": capability may not be added, provider "restricted": Forbidden: not usable by user or serviceaccount, provider "nonroot-v2": Forbidden: not usable by user or serviceaccount, provider "nonroot": Forbidden: not usable by user or serviceaccount, provider "hostmount-anyuid": Forbidden: not usable by user or serviceaccount, provider "machine-api-termination-handler": Forbidden: not usable by user or serviceaccount, provider "hostnetwork-v2": Forbidden: not usable by user or serviceaccount, provider "hostnetwork": Forbidden: not usable by user or serviceaccount, provider "hostaccess": Forbidden: not usable by user or serviceaccount, provider "node-exporter": Forbidden: not usable by user or serviceaccount, provider "privileged": Forbidden: not usable by user or serviceaccount]
+  Type    Reason          Age                From  Message
+  ----    ------          ----               ----  -------
+  Normal  BuildCreated    2m29s              kmm   Build created for kernel 6.6.2-201.fc39.x86_64
+  Normal  BuildSucceeded  63s                kmm   Build job succeeded for kernel 6.6.2-201.fc39.x86_64
+  Normal  SignCreated     64s (x2 over 64s)  kmm   Sign created for kernel 6.6.2-201.fc39.x86_64
+  Normal  SignSucceeded   57s                kmm   Sign job succeeded for kernel 6.6.2-201.fc39.x86_64
 ```
 
-In order to solve this issue, make sure to follow [`ServiceAccounts` and `SecurityContextConstraints`](deploy_kmod.md#serviceaccounts-and-securitycontextconstraints)
+### Module load or unload
+
+KMM publishes events whenever it successfully loads or unloads a kernel module on a node.  
+Those events are attached to `Node` objects and are available at the very end of `kubectl describe node`:
+
+```text
+$> kubectl describe node my-node
+[...]
+Events:
+  Type    Reason          Age    From  Message
+  ----    ------          ----   ----  -------
+[...]
+  Normal  ModuleLoaded    4m17s  kmm   Module default/kmm-ci-a loaded into the kernel
+  Normal  ModuleUnloaded  2s     kmm   Module default/kmm-ci-a unloaded from the kernel
+```

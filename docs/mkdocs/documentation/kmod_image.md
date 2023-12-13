@@ -1,15 +1,20 @@
-# Creating a ModuleLoader image
+# Creating a kmod image
 
-Kernel Module Management works with purpose-built ModuleLoader images.
-Those are standard OCI images that satisfy a few requirements:
+Kernel Module Management works with purpose-built kmod images, which are standard OCI images that contain `.ko` files.  
+The location of those files must match the following pattern:
+```
+<prefix>/lib/modules/[kernel-version]/
+```
 
-- `.ko` files must be located under `/opt/lib/modules/${KERNEL_VERSION}`
-- the `modprobe` and `sleep` binaries must be in the `$PATH`.
+Where:
+
+- `<prefix>` should be equal to `/opt` in most cases, as it is the `Module` CRD's default value;
+- `kernel-version` must be non-empty and equal to the kernel version the kernel modules were built for.
 
 ## `depmod`
 
 It is recommended to run `depmod` at the end of the build process to generate `modules.dep` and map files.
-This is especially useful if your ModuleLoader image contains several kernel modules and if one of the modules depend on
+This is especially useful if your kmod image contains several kernel modules and if one of the modules depend on
 another.
 To generate dependencies and map files for a specific kernel version, run `depmod -b /opt ${KERNEL_VERSION}`.
 
@@ -53,24 +58,23 @@ RUN depmod -b /opt ${KERNEL_VERSION}
 
 ## Building in cluster
 
-KMM is able to build ModuleLoader images in cluster.
+KMM is able to build kmod images in cluster.
 Build instructions must be provided using the `build` section of a kernel mapping.
 The `Dockerfile` for your container image should be copied into a `ConfigMap` object, under the `Dockerfile` key.
 The `ConfigMap` needs to be located in the same namespace as the `Module`.
 
 KMM will first check if the image name specified in the `containerImage` field exists.
 If it does, the build will be skipped.
-Otherwise, KMM creates a [`Build`](https://docs.openshift.com/container-platform/4.12/cicd/builds/build-configuration.html)
+Otherwise, KMM will create a [`Build`](https://docs.openshift.com/container-platform/4.12/cicd/builds/build-configuration.html)
 object to build your image.
 
 The following build arguments are automatically set by KMM:
 
-| Name                          | Description                            | Example                       |
-|-------------------------------|----------------------------------------|-------------------------------|
-| `KERNEL_FULL_VERSION`         | The kernel version we are building for | `5.14.0-70.58.1.el9_0.x86_64` |
-| `KERNEL_VERSION` (deprecated) | The kernel version we are building for | `5.14.0-70.58.1.el9_0.x86_64` |
-| `MOD_NAME`                    | The `Module`'s name                    | `my-mod`                      |
-| `MOD_NAMESPACE`               | The `Module`'s namespace               | `my-namespace`                |
+| Name                  | Description                            | Example                       |
+|-----------------------|----------------------------------------|-------------------------------|
+| `KERNEL_FULL_VERSION` | The kernel version we are building for | `5.14.0-70.58.1.el9_0.x86_64` |
+| `MOD_NAME`            | The `Module`'s name                    | `my-mod`                      |
+| `MOD_NAMESPACE`       | The `Module`'s namespace               | `my-namespace`                |
 
 Once the image is built, KMM proceeds with the `Module` reconciliation.
 
@@ -104,7 +108,7 @@ Once the image is built, KMM proceeds with the `Module` reconciliation.
 
 !!! warning "OpenShift's internal container registry is not enabled by default on bare metal clusters"
 
-    A common pattern is to push ModuleLoader images to OpenShift's internal image registry once they are built.
+    A common pattern is to push kmod images to OpenShift's internal image registry once they are built.
     That registry is not enabled by default on bare metal installations of OpenShift.
     Refer to [Configuring the registry for bare metal](https://docs.openshift.com/container-platform/4.13/registry/configuring_registry_storage/configuring-registry-storage-baremetal.html)
     to enable it.
@@ -112,8 +116,8 @@ Once the image is built, KMM proceeds with the `Module` reconciliation.
 ### Using Driver Toolkit (DTK)
 
 [Driver Toolkit](https://docs.openshift.com/container-platform/4.12/hardware_enablement/psap-driver-toolkit.html) is a
-convenient base image that contains most tools and libraries required to build ModuleLoader images for the OpenShift
-version that is currently running in the cluster.
+convenient base image that contains most tools and libraries required to build kmod images for the OpenShift version
+that is currently running in the cluster.
 It is recommended to use DTK as the first stage of a multi-stage `Dockerfile` to build the kernel modules, and to copy
 the `.ko` files into a smaller end-user image such as [`ubi-minimal`](https://catalog.redhat.com/software/containers/ubi9/ubi-minimal).
 
