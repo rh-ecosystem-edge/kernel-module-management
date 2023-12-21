@@ -1,6 +1,7 @@
 package mcproducer
 
 import (
+	"fmt"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"os"
@@ -35,6 +36,10 @@ var _ = Describe("ProduceMachineConfig", func() {
 		Expect(err).ToNot(HaveOccurred())
 		expectedRes, err := os.ReadFile("testdata/machineconfig-test.yaml")
 		Expect(err).ToNot(HaveOccurred())
+		if string(expectedRes) != res {
+			fmt.Printf("<%s>\n", res)
+			fmt.Printf("<%s>\n", expectedRes)
+		}
 		Expect(res).To(Equal(string(expectedRes)))
 	})
 })

@@ -1,20 +1,15 @@
 #!/bin/bash
-echo "before checking podman images"
-if podman image exists quay.io/project/repo:some-tag12; then
-    echo "Image quay.io/project/repo:some-tag12 found in the local registry, removing in-tree kernel module"
-    podman run --privileged --entrypoint modprobe quay.io/project/repo:some-tag12 -rd /opt testKernelModuleName
+
+echo "before checking image tar file presence"
+if [ -e /var/lib/image_file_day1.tar ]; then
+    echo "Image file /var/lib/image_file_day1.tar found on the local file system, removing in-tree kernel module"
+    podman run --user=root --privileged -v /lib/modules:/lib/modules -v /etc/kmm-worker-day1/config.yaml:/etc/kmm-worker/config.yaml -v /var/lib/image_file_day1.tar:/var/lib/image_file_day1.tar quay.io/edge-infrastructure/kernel-module-management-worker:latest kmod load --tarball /etc/kmm-worker/config.yaml
     if [ $? -eq 0 ]; then
-            echo "Succesffully removed the in-tree kernel module testKernelModuleName"
+        echo "OOT kernel module testKernelModuleName is inserted"
+        rm -f /var/lib/image_file_day1.tar
     else
-            echo "failed to remove in-tree kernel module testKernelModuleName"
-    fi
-    echo "Running container image to insert the oot kernel module testKernelModuleName"
-    podman run --privileged --entrypoint modprobe quay.io/project/repo:some-tag12 -d /opt testKernelModuleName
-    if [ $? -eq 0 ]; then
-            echo "OOT kernel module testKernelModuleName is inserted"
-    else
-            echo "failed to insert OOT kernel module testKernelModuleName"
+        echo "failed to insert OOT kernel module testKernelModuleName"
     fi
 else
-   echo "Image quay.io/project/repo:some-tag12 is not present in local registry, will try after reboot"
+    echo "Image file /var/lib/image_file_day1.tar is not present in local registry, will try after reboot"
 fi

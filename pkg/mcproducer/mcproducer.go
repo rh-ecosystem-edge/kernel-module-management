@@ -10,6 +10,10 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 )
 
+const (
+	workerImage = "quay.io/edge-infrastructure/kernel-module-management-worker:latest"
+)
+
 var (
 	//go:embed templates
 	templateFS embed.FS
@@ -25,12 +29,16 @@ var (
 	scriptReplaceKmod = template.Must(
 		template.ParseFS(templateFS, "templates/replace-kernel-module.gotmpl"),
 	)
+
+	workerConfigMap = template.Must(
+		template.ParseFS(templateFS, "templates/worker-configmap.gotmpl"),
+	)
 )
 
 func ProduceMachineConfig(machineConfigName, machineConfigPoolRef, kernelModuleImage, kernelModuleName string) (string, error) {
-	err := verifyImageFormat(kernelModuleImage)
+	localFilePath, err := getLocalFileName(kernelModuleImage)
 	if err != nil {
-		return "", fmt.Errorf("image %s is in incorrect format: %v", kernelModuleImage, err)
+		return "", fmt.Errorf("failed to get local file name for image %s: %v", kernelModuleImage, err)
 	}
 
 	templateParams := map[string]any{
@@ -38,6 +46,8 @@ func ProduceMachineConfig(machineConfigName, machineConfigPoolRef, kernelModuleI
 		"KernelModule":         kernelModuleName,
 		"MachineConfigPoolRef": machineConfigPoolRef,
 		"MachineConfigName":    machineConfigName,
+		"LocalFilePath":        localFilePath,
+		"WorkerImage":          workerImage,
 	}
 
 	templateParams["ReplaceInTreeDriverContents"], err = executeIntoBase64(scriptReplaceKmod, templateParams)
@@ -46,6 +56,11 @@ func ProduceMachineConfig(machineConfigName, machineConfigPoolRef, kernelModuleI
 	}
 
 	templateParams["PullKernelModuleContents"], err = executeIntoBase64(scriptPullImage, templateParams)
+	if err != nil {
+		return "", err
+	}
+
+	templateParams["WorkerPodConfigContents"], err = executeIntoBase64(workerConfigMap, templateParams)
 	if err != nil {
 		return "", err
 	}
@@ -75,14 +90,11 @@ func executeIntoBase64(tmpl *template.Template, params map[string]any) (string, 
 	return buf.String(), nil
 }
 
-func verifyImageFormat(image string) error {
-	_, digestErr := name.NewDigest(image)
-	if digestErr == nil {
-		return nil
+func getLocalFileName(containerImage string) (string, error) {
+	_, err := name.ParseReference(containerImage)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse container image %s name: %v", containerImage, err)
 	}
-	_, tagErr := name.NewTag(image)
-	if tagErr == nil {
-		return nil
-	}
-	return fmt.Errorf("invalid image %s, input should be either in tag or digest format. Digest error %v, Tag error %v", image, digestErr, tagErr)
+
+	return "/var/lib/image_file_day1.tar", nil
 }

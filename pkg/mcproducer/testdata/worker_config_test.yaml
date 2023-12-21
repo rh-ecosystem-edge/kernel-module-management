@@ -1,0 +1,5 @@
+containerImage: /var/lib/image_file_day1.tar
+inTreeModuleToRemove: testKernelModuleName
+modprobe:
+  dirName: /opt
+  moduleName: testKernelModuleName
