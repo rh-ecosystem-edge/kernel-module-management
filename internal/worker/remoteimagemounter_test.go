@@ -18,6 +18,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"go.uber.org/mock/gomock"
 	"k8s.io/utils/pointer"
 )
 
@@ -52,7 +54,7 @@ func sameFiles(a, b string) (bool, error) {
 	return os.SameFile(fiA, fiB), nil
 }
 
-var _ = Describe("imagePuller_PullAndExtract", func() {
+var _ = Describe("imageMounter_mountImage", func() {
 	var (
 		expectedToken   *string
 		remoteImageName string
@@ -63,6 +65,10 @@ var _ = Describe("imagePuller_PullAndExtract", func() {
 	)
 
 	const imagePathAndTag = "/test/archive:tag"
+
+	modConfig := &kmmv1beta1.ModuleConfig{
+		InsecurePull: true,
+	}
 
 	BeforeEach(func() {
 		var err error
@@ -133,14 +139,13 @@ var _ = Describe("imagePuller_PullAndExtract", func() {
 				keyChain = &fakeKeyChainAndAuthenticator{token: *expectedToken}
 			}
 
-			ip := NewImagePuller(tmpDir, keyChain, GinkgoLogr)
+			rimh := newRemoteImageMounterHelper(tmpDir, keyChain, GinkgoLogr)
 
-			res, err := ip.PullAndExtract(context.Background(), remoteImageName, true)
+			res, err := rimh.mountImage(context.Background(), remoteImageName, modConfig)
 			Expect(err).NotTo(HaveOccurred())
 
 			imgRoot := filepath.Join(tmpDir, serverURL.Host, "test", "archive:tag", "fs")
-			Expect(res.fsDir).To(Equal(imgRoot))
-			Expect(res.pulled).To(BeTrue())
+			Expect(res).To(Equal(imgRoot))
 
 			Expect(imgRoot).To(BeADirectory())
 			Expect(filepath.Join(imgRoot, "subdir")).To(BeADirectory())
@@ -193,11 +198,62 @@ var _ = Describe("imagePuller_PullAndExtract", func() {
 			HaveOccurred(),
 		)
 
-		ip := NewImagePuller(tmpDir, authn.NewMultiKeychain(), GinkgoLogr)
+		rimh := newRemoteImageMounterHelper(tmpDir, authn.NewMultiKeychain(), GinkgoLogr)
 
-		res, err := ip.PullAndExtract(context.Background(), remoteImageName, true)
+		res, err := rimh.mountImage(context.Background(), remoteImageName, modConfig)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.fsDir).To(Equal(filepath.Join(dstDir, "fs")))
-		Expect(res.pulled).To(BeFalse())
+		Expect(res).To(Equal(filepath.Join(dstDir, "fs")))
+	})
+})
+
+var _ = Describe("imageMounter_MountImage", func() {
+	var (
+		helperMock *MockremoteImageMounterHelperAPI
+		rim        *remoteImageMounter
+		resMock    *MockMirrorResolver
+	)
+
+	BeforeEach(func() {
+		ctrl := gomock.NewController(GinkgoT())
+		helperMock = NewMockremoteImageMounterHelperAPI(ctrl)
+		resMock = NewMockMirrorResolver(ctrl)
+		rim = &remoteImageMounter{
+			helper: helperMock,
+			logger: GinkgoLogr,
+			res:    resMock,
+		}
+
+	})
+
+	ctx := context.Background()
+	cfg := &kmmv1beta1.ModuleConfig{}
+
+	It("GetAllReferences failed", func() {
+		resMock.EXPECT().GetAllReferences("imageName").Return(nil, fmt.Errorf("some error"))
+
+		fdDir, err := rim.MountImage(ctx, "imageName", cfg)
+
+		Expect(err).ToNot(BeNil())
+		Expect(fdDir).To(BeEmpty())
+	})
+
+	It("mirrowed image found, pulled and mounted", func() {
+		resMock.EXPECT().GetAllReferences("imageName").Return([]string{"mirroredImage"}, nil)
+		helperMock.EXPECT().mountImage(ctx, "mirroredImage", cfg).Return("mountDir", nil)
+
+		fdDir, err := rim.MountImage(ctx, "imageName", cfg)
+
+		Expect(err).To(BeNil())
+		Expect(fdDir).To(Equal("mountDir"))
+	})
+
+	It("mirrowed image found, but not pulled and mounted", func() {
+		resMock.EXPECT().GetAllReferences("imageName").Return([]string{"mirroredImage"}, nil)
+		helperMock.EXPECT().mountImage(ctx, "mirroredImage", cfg).Return("", fmt.Errorf("some error"))
+
+		fdDir, err := rim.MountImage(ctx, "imageName", cfg)
+
+		Expect(err).ToNot(BeNil())
+		Expect(fdDir).To(BeEmpty())
 	})
 })

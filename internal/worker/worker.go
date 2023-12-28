@@ -2,7 +2,6 @@ package worker
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,27 +21,25 @@ type Worker interface {
 }
 
 type worker struct {
-	ip     ImagePuller
+	im     ImageMounter
 	logger logr.Logger
 	mr     ModprobeRunner
-	res    MirrorResolver
 }
 
-func NewWorker(ip ImagePuller, mr ModprobeRunner, res MirrorResolver, logger logr.Logger) Worker {
+func NewWorker(im ImageMounter, mr ModprobeRunner, logger logr.Logger) Worker {
 	return &worker{
-		ip:     ip,
+		im:     im,
 		logger: logger,
 		mr:     mr,
-		res:    res,
 	}
 }
 
 func (w *worker) LoadKmod(ctx context.Context, cfg *kmmv1beta1.ModuleConfig, firmwareMountPath string) error {
 	imageName := cfg.ContainerImage
 
-	pr, err := w.pullImageOrMirror(ctx, imageName, cfg)
+	fsDir, err := w.im.MountImage(ctx, imageName, cfg)
 	if err != nil {
-		return fmt.Errorf("could not pull %s or any of its mirrors: %v", imageName, err)
+		return fmt.Errorf("failed to mount image %s: %v", imageName, err)
 	}
 
 	if inTree := cfg.InTreeModuleToRemove; inTree != "" {
@@ -55,7 +52,7 @@ func (w *worker) LoadKmod(ctx context.Context, cfg *kmmv1beta1.ModuleConfig, fir
 
 	// prepare firmware
 	if cfg.Modprobe.FirmwarePath != "" {
-		imageFirmwarePath := filepath.Join(pr.fsDir, cfg.Modprobe.FirmwarePath)
+		imageFirmwarePath := filepath.Join(fsDir, cfg.Modprobe.FirmwarePath)
 		w.logger.Info("preparing firmware for loading", "image directory", imageFirmwarePath, "host mount directory", firmwareMountPath)
 		options := cp.Options{
 			OnError: func(src, dest string, err error) error {
@@ -77,7 +74,7 @@ func (w *worker) LoadKmod(ctx context.Context, cfg *kmmv1beta1.ModuleConfig, fir
 	if cfg.Modprobe.RawArgs != nil {
 		args = cfg.Modprobe.RawArgs.Load
 	} else {
-		args = []string{"-vd", filepath.Join(pr.fsDir, cfg.Modprobe.DirName)}
+		args = []string{"-vd", filepath.Join(fsDir, cfg.Modprobe.DirName)}
 
 		if cfg.Modprobe.Args != nil {
 			args = append(args, cfg.Modprobe.Args.Load...)
@@ -117,9 +114,9 @@ func (w *worker) SetFirmwareClassPath(value string) error {
 func (w *worker) UnloadKmod(ctx context.Context, cfg *kmmv1beta1.ModuleConfig, firmwareMountPath string) error {
 	imageName := cfg.ContainerImage
 
-	pr, err := w.pullImageOrMirror(ctx, imageName, cfg)
+	fsDir, err := w.im.MountImage(ctx, imageName, cfg)
 	if err != nil {
-		return fmt.Errorf("could not pull %s or any of its mirrors: %v", imageName, err)
+		return fmt.Errorf("failed to mount image %s: %v", imageName, err)
 	}
 
 	moduleName := cfg.Modprobe.ModuleName
@@ -129,7 +126,7 @@ func (w *worker) UnloadKmod(ctx context.Context, cfg *kmmv1beta1.ModuleConfig, f
 	if cfg.Modprobe.RawArgs != nil {
 		args = cfg.Modprobe.RawArgs.Unload
 	} else {
-		args = []string{"-rvd", filepath.Join(pr.fsDir, cfg.Modprobe.DirName)}
+		args = []string{"-rvd", filepath.Join(fsDir, cfg.Modprobe.DirName)}
 
 		if cfg.Modprobe.Args != nil {
 			args = append(args, cfg.Modprobe.Args.Unload...)
@@ -146,7 +143,7 @@ func (w *worker) UnloadKmod(ctx context.Context, cfg *kmmv1beta1.ModuleConfig, f
 
 	//remove firmware files only (no directories)
 	if cfg.Modprobe.FirmwarePath != "" {
-		imageFirmwarePath := filepath.Join(pr.fsDir, cfg.Modprobe.FirmwarePath)
+		imageFirmwarePath := filepath.Join(fsDir, cfg.Modprobe.FirmwarePath)
 		err = filepath.Walk(imageFirmwarePath, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
@@ -172,37 +169,4 @@ func (w *worker) UnloadKmod(ctx context.Context, cfg *kmmv1beta1.ModuleConfig, f
 	}
 
 	return nil
-}
-
-func (w *worker) pullImageOrMirror(ctx context.Context, imageName string, cfg *kmmv1beta1.ModuleConfig) (PullResult, error) {
-	imageNames, err := w.res.GetAllReferences(imageName)
-	if err != nil {
-		return PullResult{}, fmt.Errorf("could not resolve all mirrored names for %q: %v", imageName, err)
-	}
-
-	var (
-		ok = false
-		pr = PullResult{}
-	)
-
-	for _, in := range imageNames {
-		logger := w.logger.WithValues("image name", in)
-		logger.Info("Pulling image")
-
-		pr, err = w.ip.PullAndExtract(ctx, in, cfg.InsecurePull)
-		if err != nil {
-			logger.Error(err, "Could not pull image")
-			continue
-		}
-
-		logger.Info("Image pulled successfully", "dir", pr.fsDir)
-		ok = true
-		break
-	}
-
-	if !ok {
-		return pr, errors.New("all mirrors tried")
-	}
-
-	return pr, nil
 }

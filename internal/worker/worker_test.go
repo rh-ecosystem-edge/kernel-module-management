@@ -14,9 +14,8 @@ import (
 
 var _ = Describe("worker_LoadKmod", func() {
 	var (
-		ip       *MockImagePuller
+		im       *MockImageMounter
 		mr       *MockModprobeRunner
-		res      *MockMirrorResolver
 		w        Worker
 		imageDir string
 		hostDir  string
@@ -24,10 +23,9 @@ var _ = Describe("worker_LoadKmod", func() {
 
 	BeforeEach(func() {
 		ctrl := gomock.NewController(GinkgoT())
-		ip = NewMockImagePuller(ctrl)
+		im = NewMockImageMounter(ctrl)
 		mr = NewMockModprobeRunner(ctrl)
-		res = NewMockMirrorResolver(ctrl)
-		w = NewWorker(ip, mr, res, GinkgoLogr)
+		w = NewWorker(im, mr, GinkgoLogr)
 
 		var err error
 		imageDir, err = os.MkdirTemp("", "imageDir")
@@ -52,16 +50,16 @@ var _ = Describe("worker_LoadKmod", func() {
 	)
 
 	It("should return an error if the image could not be pulled", func() {
-		gomock.InOrder(
-			res.EXPECT().GetAllReferences(imageName).Return([]string{imageName}, nil),
-			ip.
-				EXPECT().
-				PullAndExtract(ctx, imageName, false).
-				Return(PullResult{}, errors.New("random error")),
-		)
+		cfg := v1beta1.ModuleConfig{
+			ContainerImage: imageName,
+		}
+		im.
+			EXPECT().
+			MountImage(ctx, imageName, &cfg).
+			Return("", errors.New("random error"))
 
 		Expect(
-			w.LoadKmod(ctx, &v1beta1.ModuleConfig{ContainerImage: imageName}, ""),
+			w.LoadKmod(ctx, &cfg, ""),
 		).To(
 			HaveOccurred(),
 		)
@@ -77,8 +75,7 @@ var _ = Describe("worker_LoadKmod", func() {
 		}
 
 		gomock.InOrder(
-			res.EXPECT().GetAllReferences(imageName).Return([]string{imageName}, nil),
-			ip.EXPECT().PullAndExtract(ctx, imageName, false),
+			im.EXPECT().MountImage(ctx, imageName, &cfg),
 			mr.EXPECT().Run(ctx, "-vd", dirName, moduleName).Return(errors.New("random error")),
 		)
 
@@ -102,8 +99,7 @@ var _ = Describe("worker_LoadKmod", func() {
 		}
 
 		gomock.InOrder(
-			res.EXPECT().GetAllReferences(imageName).Return([]string{imageName}, nil),
-			ip.EXPECT().PullAndExtract(ctx, imageName, false),
+			im.EXPECT().MountImage(ctx, imageName, &cfg),
 			mr.EXPECT().Run(ctx, "-rv", inTreeModuleToRemove),
 			mr.EXPECT().Run(ctx, "-vd", dirName, moduleName),
 		)
@@ -133,8 +129,7 @@ var _ = Describe("worker_LoadKmod", func() {
 		Expect(err).Should(BeNil())
 
 		gomock.InOrder(
-			res.EXPECT().GetAllReferences(imageName).Return([]string{imageName}, nil),
-			ip.EXPECT().PullAndExtract(ctx, imageName, false).Return(PullResult{fsDir: imageDir}, nil),
+			im.EXPECT().MountImage(ctx, imageName, &cfg).Return(imageDir, nil),
 			mr.EXPECT().Run(ctx, "-vd", imageDir+dirName, moduleName),
 		)
 
@@ -162,8 +157,7 @@ var _ = Describe("worker_LoadKmod", func() {
 		}
 
 		gomock.InOrder(
-			res.EXPECT().GetAllReferences(imageName).Return([]string{imageName}, nil),
-			ip.EXPECT().PullAndExtract(ctx, imageName, false),
+			im.EXPECT().MountImage(ctx, imageName, &cfg),
 			mr.EXPECT().Run(ctx, ToInterfaceSlice(rawArgs)...),
 		)
 
@@ -186,8 +180,7 @@ var _ = Describe("worker_LoadKmod", func() {
 		}
 
 		gomock.InOrder(
-			res.EXPECT().GetAllReferences(imageName).Return([]string{imageName}, nil),
-			ip.EXPECT().PullAndExtract(ctx, imageName, false),
+			im.EXPECT().MountImage(ctx, imageName, &cfg),
 			mr.
 				EXPECT().
 				Run(ctx, "-vd", dirName, "a", "b", "c", moduleName, "key0=value0", "key1=value1"),
@@ -202,7 +195,7 @@ var _ = Describe("worker_LoadKmod", func() {
 })
 
 var _ = Describe("worker_SetFirmwareClassPath", func() {
-	w := NewWorker(nil, nil, nil, GinkgoLogr)
+	w := NewWorker(nil, nil, GinkgoLogr)
 
 	AfterEach(func() {
 		firmwareClassPathLocation = FirmwareClassPathLocation
@@ -250,9 +243,8 @@ var _ = Describe("worker_SetFirmwareClassPath", func() {
 
 var _ = Describe("worker_UnloadKmod", func() {
 	var (
-		ip       *MockImagePuller
+		im       *MockImageMounter
 		mr       *MockModprobeRunner
-		res      *MockMirrorResolver
 		w        Worker
 		imageDir string
 		hostDir  string
@@ -260,10 +252,9 @@ var _ = Describe("worker_UnloadKmod", func() {
 
 	BeforeEach(func() {
 		ctrl := gomock.NewController(GinkgoT())
-		ip = NewMockImagePuller(ctrl)
+		im = NewMockImageMounter(ctrl)
 		mr = NewMockModprobeRunner(ctrl)
-		res = NewMockMirrorResolver(ctrl)
-		w = NewWorker(ip, mr, res, GinkgoLogr)
+		w = NewWorker(im, mr, GinkgoLogr)
 		var err error
 		imageDir, err = os.MkdirTemp("", "imageDir")
 		Expect(err).Should(BeNil())
@@ -287,16 +278,17 @@ var _ = Describe("worker_UnloadKmod", func() {
 	)
 
 	It("should return an error if the image could not be pulled", func() {
-		gomock.InOrder(
-			res.EXPECT().GetAllReferences(imageName).Return([]string{imageName}, nil),
-			ip.
-				EXPECT().
-				PullAndExtract(ctx, imageName, false).
-				Return(PullResult{}, errors.New("random error")),
-		)
+		cfg := v1beta1.ModuleConfig{
+			ContainerImage: imageName,
+		}
+
+		im.
+			EXPECT().
+			MountImage(ctx, imageName, &cfg).
+			Return("", errors.New("random error"))
 
 		Expect(
-			w.UnloadKmod(ctx, &v1beta1.ModuleConfig{ContainerImage: imageName}, ""),
+			w.UnloadKmod(ctx, &cfg, ""),
 		).To(
 			HaveOccurred(),
 		)
@@ -312,8 +304,7 @@ var _ = Describe("worker_UnloadKmod", func() {
 		}
 
 		gomock.InOrder(
-			res.EXPECT().GetAllReferences(imageName).Return([]string{imageName}, nil),
-			ip.EXPECT().PullAndExtract(ctx, imageName, false),
+			im.EXPECT().MountImage(ctx, imageName, &cfg),
 			mr.EXPECT().Run(ctx, "-rvd", dirName, moduleName).Return(errors.New("random error")),
 		)
 
@@ -335,8 +326,7 @@ var _ = Describe("worker_UnloadKmod", func() {
 		}
 
 		gomock.InOrder(
-			res.EXPECT().GetAllReferences(imageName).Return([]string{imageName}, nil),
-			ip.EXPECT().PullAndExtract(ctx, imageName, false),
+			im.EXPECT().MountImage(ctx, imageName, &cfg),
 			mr.EXPECT().Run(ctx, ToInterfaceSlice(rawArgs)...),
 		)
 
@@ -358,8 +348,7 @@ var _ = Describe("worker_UnloadKmod", func() {
 		}
 
 		gomock.InOrder(
-			res.EXPECT().GetAllReferences(imageName).Return([]string{imageName}, nil),
-			ip.EXPECT().PullAndExtract(ctx, imageName, false),
+			im.EXPECT().MountImage(ctx, imageName, &cfg),
 			mr.
 				EXPECT().
 				Run(ctx, "-rvd", dirName, "a", "b", "c", moduleName),
@@ -399,8 +388,7 @@ var _ = Describe("worker_UnloadKmod", func() {
 		Expect(err).Should(BeNil())
 
 		gomock.InOrder(
-			res.EXPECT().GetAllReferences(imageName).Return([]string{imageName}, nil),
-			ip.EXPECT().PullAndExtract(ctx, imageName, false).Return(PullResult{fsDir: imageDir}, nil),
+			im.EXPECT().MountImage(ctx, imageName, &cfg).Return(imageDir, nil),
 			mr.
 				EXPECT().
 				Run(ctx, "-rvd", imageDir+dirName, moduleName),
