@@ -4,16 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
-	"sync"
 
-	"github.com/docker/docker/pkg/idtools"
 	"github.com/go-logr/logr"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
-	"github.com/moby/moby/pkg/archive"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 )
@@ -63,16 +59,19 @@ type remoteImageMounterHelperAPI interface {
 }
 
 type remoteImageMounterHelper struct {
-	baseDir  string
-	keyChain authn.Keychain
-	logger   logr.Logger
+	ociImageHelper ociImageMounterHelperAPI
+	baseDir        string
+	keyChain       authn.Keychain
+	logger         logr.Logger
 }
 
 func newRemoteImageMounterHelper(baseDir string, keyChain authn.Keychain, logger logr.Logger) remoteImageMounterHelperAPI {
+	ociImageHelper := newOCIImageMounterHelper(logger)
 	return &remoteImageMounterHelper{
-		baseDir:  baseDir,
-		keyChain: keyChain,
-		logger:   logger,
+		ociImageHelper: ociImageHelper,
+		baseDir:        baseDir,
+		keyChain:       keyChain,
+		logger:         logger,
 	}
 }
 
@@ -148,54 +147,9 @@ func (rimh *remoteImageMounterHelper) mountImage(ctx context.Context, imageName 
 		return "", fmt.Errorf("could not pull %s: %v", imageName, err)
 	}
 
-	errs := make(chan error, 2)
-
-	wg := sync.WaitGroup{}
-	wg.Add(2)
-
-	rd, wr := io.Pipe()
-
-	go func() {
-		defer wg.Done()
-		defer wr.Close()
-
-		logger.V(1).Info("Starting to export image")
-
-		if err := crane.Export(img, wr); err != nil {
-			errs <- err
-			return
-		}
-
-		logger.V(1).Info("Done exporting image")
-	}()
-
-	go func() {
-		defer wg.Done()
-		defer rd.Close()
-
-		id := idtools.CurrentIdentity()
-
-		tarOpts := &archive.TarOptions{ChownOpts: &id}
-
-		if err := archive.Untar(rd, dstDirFS, tarOpts); err != nil {
-			errs <- err
-			return
-		}
-
-		logger.V(1).Info("Done writing tar archive")
-	}()
-
-	wg.Wait()
-	close(errs)
-
-	chErrs := make([]error, 0)
-
-	for chErr := range errs {
-		chErrs = append(chErrs, chErr)
-	}
-
-	if err = errors.Join(chErrs...); err != nil {
-		return "", fmt.Errorf("got one or more errors while writing the image: %v", err)
+	err = rimh.ociImageHelper.mountOCIImage(img, dstDirFS)
+	if err != nil {
+		return "", fmt.Errorf("failed mounting oci image: %v", err)
 	}
 
 	if err = ctx.Err(); err != nil {

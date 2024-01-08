@@ -40,22 +40,9 @@ func (f *fakeKeyChainAndAuthenticator) Authorization() (*authn.AuthConfig, error
 	return &authn.AuthConfig{Auth: f.token}, nil
 }
 
-func sameFiles(a, b string) (bool, error) {
-	fiA, err := os.Stat(a)
-	if err != nil {
-		return false, fmt.Errorf("could not stat() the first file: %v", err)
-	}
-
-	fiB, err := os.Stat(b)
-	if err != nil {
-		return false, fmt.Errorf("could not stat() the second file: %v", err)
-	}
-
-	return os.SameFile(fiA, fiB), nil
-}
-
 var _ = Describe("imageMounter_mountImage", func() {
 	var (
+		oimh            *MockociImageMounterHelperAPI
 		expectedToken   *string
 		remoteImageName string
 		srcImg          v1.Image
@@ -71,6 +58,8 @@ var _ = Describe("imageMounter_mountImage", func() {
 	}
 
 	BeforeEach(func() {
+		ctrl := gomock.NewController(GinkgoT())
+		oimh = NewMockociImageMounterHelperAPI(ctrl)
 		var err error
 
 		srcImg, err = crane.Append(empty.Image, "testdata/archive.tar")
@@ -139,7 +128,13 @@ var _ = Describe("imageMounter_mountImage", func() {
 				keyChain = &fakeKeyChainAndAuthenticator{token: *expectedToken}
 			}
 
-			rimh := newRemoteImageMounterHelper(tmpDir, keyChain, GinkgoLogr)
+			rimh := &remoteImageMounterHelper{
+				ociImageHelper: oimh,
+				baseDir:        tmpDir,
+				keyChain:       keyChain,
+				logger:         GinkgoLogr,
+			}
+			oimh.EXPECT().mountOCIImage(gomock.Any(), gomock.Any()).Return(nil)
 
 			res, err := rimh.mountImage(context.Background(), remoteImageName, modConfig)
 			Expect(err).NotTo(HaveOccurred())
@@ -148,33 +143,7 @@ var _ = Describe("imageMounter_mountImage", func() {
 			Expect(res).To(Equal(imgRoot))
 
 			Expect(imgRoot).To(BeADirectory())
-			Expect(filepath.Join(imgRoot, "subdir")).To(BeADirectory())
-			Expect(filepath.Join(imgRoot, "subdir", "subsubdir")).To(BeADirectory())
-
-			Expect(filepath.Join(imgRoot, "a")).To(BeARegularFile())
-			Expect(filepath.Join(imgRoot, "subdir", "b")).To(BeARegularFile())
-			Expect(filepath.Join(imgRoot, "subdir", "subsubdir", "c")).To(BeARegularFile())
-
-			Expect(
-				os.Readlink(filepath.Join(imgRoot, "lib-modules-symlink")),
-			).To(
-				Equal("/lib/modules"),
-			)
-
-			Expect(
-				os.Readlink(filepath.Join(imgRoot, "symlink")),
-			).To(
-				Equal("a"),
-			)
-
-			Expect(
-				sameFiles(filepath.Join(imgRoot, "link"), filepath.Join(imgRoot, "a")),
-			).To(
-				BeTrue(),
-			)
-
 			digestFilePath := filepath.Join(tmpDir, serverURL.Host, "test", "archive:tag", "digest")
-
 			Expect(os.ReadFile(digestFilePath)).To(Equal([]byte(srcDigest.String())))
 		},
 		Entry("without authentication", ""),
