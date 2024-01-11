@@ -60,6 +60,8 @@ The command below installs the bleeding edge version of KMM-Hub.
 oc apply -k https://github.com/rh-ecosystem-edge/kernel-module-management/config/default-hub
 ```
 
+This installs the operator in the `kmm-operator-system` namespace.
+
 ### The `ManagedClusterModule` CRD
 
 The `ManagedClusterModule` CRD is used to configure the deployment of kernel modules on Spoke clusters.
