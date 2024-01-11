@@ -14,7 +14,6 @@ func rootFuncPreRunE(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get appropriate ImageMounter: %v", err)
 	}
-
 	mr := worker.NewModprobeRunner(logger)
 	w = worker.NewWorker(im, mr, logger)
 
@@ -71,13 +70,30 @@ func setCommandsFlags() {
 		"",
 		"if set, this the value that firmware host path is mounted to")
 
+	kmodLoadCmd.Flags().Bool(
+		"tarball",
+		false,
+		"If true, extract the image from a tarball image instead of pulling from the registry",
+	)
+
 	kmodUnloadCmd.Flags().String(
 		worker.FlagFirmwareMountPath,
 		"",
 		"if set, this the value that firmware host path is mounted to")
+
+	kmodUnloadCmd.Flags().Bool(
+		"tarball",
+		false,
+		"If true, extract the image from a tarball image instead of pulling from the registry",
+	)
 }
 
 func getImageMounter(cmd *cobra.Command) (worker.ImageMounter, error) {
+	flag := cmd.Flags().Lookup("tarball")
+	if flag.Changed {
+		return worker.NewTarImageMounter(worker.ImagesDir, logger), nil
+	}
+
 	logger.Info("Reading pull secrets", "base dir", worker.PullSecretsDir)
 	keyChain, err := worker.ReadKubernetesSecrets(cmd.Context(), worker.PullSecretsDir, logger)
 	if err != nil {
