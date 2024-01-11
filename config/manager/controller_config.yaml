@@ -1,5 +1,4 @@
 healthProbeBindAddress: :8081
-metricsBindAddress: 127.0.0.1:8080
 leaderElection:
   enabled: true
   resourceID: kmm.sigs.x-k8s.io
