@@ -62,31 +62,9 @@ KMM will watch for `MachineConfig`s in the cluster containing the
 `machineconfiguration.openshift.io/kmm-managed: "true"` label and create a new
 `ModuleDay0` CR in the cluster for each one of them.
 We will have a different controller for this new CRD in KMM.
-**There should be no more than 1 `ModuleDay0` targeting a `MachineConfigPool`
-(masters/workers).
-If multiple kmods are required they should all be backed in the same image**
-
-Since MCO can only apply `MachineConfig`s changes to an entire `MachineConfigPool`,
-we must require that a `ModuleDay0` will target a `MachineConfigPool` as well.
-MCO ties between the `machineconfiguration.openshift.io/role: worker` label on
-the `MachineConfig` and the `node-role.kubernetes.io/worker: ""` label on the
-node.
-
-A customer can always create his own `MachineConfigPool` and add only 1 worker
-to it but I don't think this should be one of our primary concerns ATM for the
-following reasons
-  * assisted-installer will generate the same ISO for all nodes in the cluster
-    anyway so there is no benefit of having finer grained node selector for
-    `ModuleDay0` when assisted doesn't support such resolution on its own.
-  * if a user wishes to have only some worker nodes modified, he will need to
-    create is own `MachineConfigPool` post cluster installation and then update
-    the `machineconfiguration.openshift.io/role: worker` label of the
-    `MachineConfig` to target the new `MachineConfigPool`.
-    This will make MCO role back the nodes that shouldn't be updated to the
-    payload OS.
-    Using layering for only some of the workers will result in a cluster upgrade
-    that only upgrade the nodes that aren't layered which may cause some
-    inconsistency and confusion
+**There should be no more than 1 `ModuleDay0` per `MachineConfig`.
+If multiple kmods are required they should all be backed in the same image and
+used in the same `MachineConfig` by the user**
 
 After the `ModuleDay0` was create by KMM, all KMM's features will be used by the
 official KMM's API which is the `ModuleDay0` objects in the cluster.
@@ -106,8 +84,7 @@ spec:
   osMapping:
     literal: "Red Hat Enterprise Linux CoreOS 414.92.202312311229-0 (Plow)"
     containerImage: quay.io/ybettan/rhcos:414.92.202312311229-0
-  machineConfigPoolSelector:
-    node-role.kubernetes.io/worker: ""
+  machineConfigName: 99-ybettan-external-image
 ```
 
 * The `containerImage` here must be a full RHCOS image built by correct tools
@@ -149,8 +126,7 @@ spec:
         - name: build-secret
       dockerfileConfigMap:
         name: kmm-kmod-dockerfile
-  machineConfigPoolSelector:
-    node-role.kubernetes.io/worker: ""
+  machineConfigName: 99-ybettan-external-image
 ```
 
 The build will trigger if all the following conditions are met
@@ -212,8 +188,7 @@ spec:
         name: kmm-kmod-signing-key
       filesToSign:
         - /opt/lib/modules/${KERNEL_FULL_VERSION}/kmm_ci_a.ko
-  machineConfigPoolSelector:
-    node-role.kubernetes.io/worker: ""
+  machineConfigName: 99-ybettan-external-image
 ```
 
 The sign will trigger if all the following conditions are met
@@ -273,8 +248,7 @@ spec:
     literal: "Red Hat Enterprise Linux CoreOS 414.92.202312311229-0 (Plow)"
     containerImage: quay.io/ybettan/rhcos:414.92.202312311229-0
     clusterUpgradeTriggerNodeUpgrade: true
-  machineConfigPoolSelector:
-    node-role.kubernetes.io/worker: ""
+  machineConfigName: 99-ybettan-external-image
 ```
 
 ### Hub&Spoke
