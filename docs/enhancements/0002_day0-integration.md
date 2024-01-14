@@ -202,8 +202,9 @@ with the new image.
 ### Firmware
 
 No much to do here, the user can put his firmware files directly in
-`/var/lib/firmware` on the nodes in the custom container image so the firmware
-feature of KMM is a bit useless here.
+`/lib/firmware` on the nodes in the custom container image or set
+`firmware_class.path` in their image's `sysctl.conf` so the firmware feature of
+KMM is a bit useless here.
 
 ### Preflight
 
