@@ -63,7 +63,7 @@ KMM will watch for `MachineConfig`s in the cluster containing the
 `ModuleDay0` CR in the cluster for each one of them.
 We will have a different controller for this new CRD in KMM.
 **There should be no more than 1 `ModuleDay0` per `MachineConfig`.
-If multiple kmods are required they should all be backed in the same image and
+If multiple kmods are required they should all be baked in the same image and
 used in the same `MachineConfig` by the user**
 
 After the `ModuleDay0` was create by KMM, all KMM's features will be used by the
