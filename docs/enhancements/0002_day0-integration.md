@@ -10,9 +10,9 @@ day-0 kmods.
 
 Day-0 kmod are complex as they need to be present in the system at boot time,
 even before OCP is fully installed and certainly before KMM is deployed to the
-cluster, therefore, there is not much that KMM can do to help deploy those kmods but
-it can manage their lifecycle once a customer has installed a cluster with his
-day-0 kmods in it - this is what this enhancement is about.
+cluster, therefore, there is not much that KMM can do to help deploy those kmods
+but it can manage their lifecycle once a customer has installed a cluster with
+his day-0 kmods in it - this is what this enhancement is about.
 
 ### Day-0 cluster background
 
@@ -26,7 +26,7 @@ to install the cluster and the container image will be used to notify
 [MCO](https://docs.openshift.com/container-platform/4.14/post_installation_configuration/machine-configuration-tasks.html#understanding-the-machine-config-operator)
 that the image on the nodes is a custom image.
 
-When a customers has installed a "day-0 cluster" as mentioned above, we can
+When a customer has installed a "day-0 cluster" as mentioned above, we can
 assume that there is a `MachineConfig` in the cluster that looks something like
 ```
 apiVersion: machineconfiguration.openshift.io/v1
@@ -48,13 +48,13 @@ and reboot - we are going to leverage this mechanism for the integration with
 KMM.
 
 In a day-0-cluster scenario, the user has applied this `MachineConfig` to tell
-MCO he has modified the OS on the nodes and that it shoudn't override it with
+MCO he has modified the OS on the nodes and that it shouldn't override it with
 the RHCOS image from the payload.
 
 ### Setting up the integration
 
 A user that wishes to hand over the management of his day-0 kmod to KMM will
-first need to make sure the `MachineConfig` can be reconize by KMM, therefore,
+first need to make sure the `MachineConfig` can be recognize by KMM, therefore,
 he would add a `machineconfiguration.openshift.io/kmm-managed: "true"` label to
 it.
 
@@ -81,15 +81,18 @@ roll-back to the RHCOS image from the payload (without the kmods).
 apiVersion: kmm.sigs.x-k8s.io/v1beta1
 kind: ModuleDay0
 spec:
-  osMapping:
-    literal: "Red Hat Enterprise Linux CoreOS 414.92.202312311229-0 (Plow)"
-    containerImage: quay.io/ybettan/rhcos:414.92.202312311229-0
   machineConfigName: 99-ybettan-external-image
+  containerImage: quay.io/ybettan/rhcos:414.92.202312311229-0
 ```
 
 * The `containerImage` here must be a full RHCOS image built by correct tools
   or a container image based on an RHCOS container image and not an image based
   on UBI.
+
+When KMM create the `ModuleDay0` upon discovering a new `MachineConfig`, it will
+need to get each piece of information from somewhere
+  * `machineConfigName`: will be taken from the `MachineConfig` that its discover has led to the creation of the `ModuleDay0`
+  * `containerImage`: will be taken from `spec.osImageURL` in the `MachineConfig`
 
 ### Modifying day-0 kmods
 
@@ -100,15 +103,14 @@ it will load the new kmod on the node.
 
 In day0 modules, we will take a pro-active approach - we will modify the nodes
 instead of waiting for them to get updated by an external process.
-We will have a single `osMapping` which its output artifcats should exist
-**before** we modify the node.
+The `ModuleDay0`'s output artifacts should exist **before** we modify the node.
 
-If the `osMapping` in the `ModuleDay0` is different than the
-`node.status.nodeInfo.osImage` then we override `mc.osImageURL` with the image
-from `moduleday0.spec.osMapping.containerimage`.
+If the `spec.containerImage` in the `ModuleDay0` is different than the
+`spec.osImageURL` in the `MachineConfig` then KMM will override `spec.osImageURL`
+in the `MachineConfig` with the image from the `ModuleDay0`.
 
-MCO will then override the node with the new content and potentialy reboot the
-node.
+MCO will then override the node with the new content and potentially reboot the
+nodes.
 
 ### Building
 
@@ -118,23 +120,21 @@ in the `ModuleDay0` as follow
 apiVersion: kmm.sigs.x-k8s.io/v1beta1
 kind: ModuleDay0
 spec:
-  osMapping:
-    literal: "Red Hat Enterprise Linux CoreOS 414.92.202312311229-0 (Plow)"
-    containerImage: quay.io/ybettan/rhcos:414.92.202312311229-0
-    build:
-      secrets:
-        - name: build-secret
-      dockerfileConfigMap:
-        name: kmm-kmod-dockerfile
   machineConfigName: 99-ybettan-external-image
+  containerImage: quay.io/ybettan/rhcos:414.92.202312311229-0
+  build:
+    secrets:
+      - name: build-secret
+    dockerfileConfigMap:
+      name: kmm-kmod-dockerfile
 ```
 
-The build will trigger if all the following conditions are met
-  * `quay.io/ybettan/rhcos:414.92.202312311229-0` is different from `spec.osImageURL` in the `MachineConfig`;
+The build will be triggered if all the following conditions are met
+  * `quay.io/ybettan/rhcos:414.92.202312311229-0` is different from `spec.osImageURL` in the `MachineConfig`
   * `quay.io/ybettan/rhcos:414.92.202312311229-0` doesn't exist
-  * A `build` section exists in the `osMapping`
+  * A `build` section exists in the `ModuleDay0`
 
-Once built, KMM will modify the `mc.osImageURL` with the new image.
+Once built, KMM will modify the `spec.osImageURL` in the `MachineConfig` with the new image.
 
 The `ConfigMap` should be in the following format
 ```
@@ -169,35 +169,43 @@ The DTK `ImageStream` on the cluster will contain the DTK image that fits the
 release-payload and not the running OS on the nodes (which may have a different
 kernel), therefore, `DTK_AUTO` should only be used if `OS_AUTO` is used.
 
+EXAMPLE using `OS_AUTO` and `DTK_AUTO`:
+A user wants us to rebuild `kmm-kmod` for him using the Dockerfile mentioned
+above.
+  * KMM will fetch the `rhel-coreos` image ref from the release payload of the
+    running cluster and use it to override `OS_AUTO`.
+  * KMM will get the DTK image ref from `imagestream/driver-toolkit` in the
+    `openshift` namespace (from the `latest` tag) and use it to override `DTK_AUTO`.
+  * Finally, KMM will build the new image.
+
+
 ### Signing
 
-If a customer wishes KMM to re-build his kmods, they should add a `build` section
+If a customer wishes KMM to re-build his kmods, they should add a `sign` section
 in the `ModuleDay0` as follow
 ```
 apiVersion: kmm.sigs.x-k8s.io/v1beta1
 kind: ModuleDay0
 spec:
-  osMapping:
-    literal: "Red Hat Enterprise Linux CoreOS 414.92.202312311229-0 (Plow)"
-    containerImage: quay.io/ybettan/rhcos:414.92.202312311229-0
-    sign:
-      unsignedImage: quay.io/ybettan/rhcos:414.92.202312311229-0-unsigned
-      certSecret:
-        name: kmm-kmod-signing-cert
-      keySecret:
-        name: kmm-kmod-signing-key
-      filesToSign:
-        - /opt/lib/modules/${KERNEL_FULL_VERSION}/kmm_ci_a.ko
   machineConfigName: 99-ybettan-external-image
+  containerImage: quay.io/ybettan/rhcos:414.92.202312311229-0
+  sign:
+    unsignedImage: quay.io/ybettan/rhcos:414.92.202312311229-0-unsigned
+    certSecret:
+      name: kmm-kmod-signing-cert
+    keySecret:
+      name: kmm-kmod-signing-key
+    filesToSign:
+      - /opt/lib/modules/<kernel version>/kmm_ci_a.ko
 ```
 
-The sign will trigger if all the following conditions are met
-  * `quay.io/ybettan/rhcos:414.92.202312311229-0` is different from `spec.osImageURL` in the `MachineConfig`;
+The signing will be triggered if all the following conditions are met
+  * `quay.io/ybettan/rhcos:414.92.202312311229-0` is different from `spec.osImageURL` in the `MachineConfig`
   * `quay.io/ybettan/rhcos:414.92.202312311229-0-unsigned` exist (or a `build` section exists)
-  * A `sign` section exists in the `osMapping`
+  * A `sign` section exists in the `ModuleDay0`
 
 Once signed and pushed, KMM will modify the `MachineConfig`'s `spec.osImageURL`
-with the new image.
+with the signed image.
 
 ### Firmware
 
@@ -232,11 +240,11 @@ cluster upgrade is still upgrading the nodes.
 
 The way we can achieve that for new OCP y-streams is as follows:
 
-We check `clusterversion.status.desired.version` and `node.status.nodeInfo.osImage`
-and see if the y-stream in both versions differ.
+We check `clusterversion/version`'s `.status.desired.version` and
+`node.status.nodeInfo.osImage` and see if the y-stream in both versions differ.
 
 If they do, we can rebuild the container image (if the user has supplied the
-dockerfile) and using `DTK_AUTO` build-arg to find the DTK image and `OS_AUTO`
+Dockerfile) and using `DTK_AUTO` build-arg to find the DTK image and `OS_AUTO`
 to get the final base image for the OS to contain the kmods.
 
 Since this is not the expected behavior when image-layering is used, a user
@@ -245,11 +253,11 @@ that want such behavior will have to set it explicitly in the `ModuleDay0`
 apiVersion: kmm.sigs.x-k8s.io/v1beta1
 kind: ModuleDay0
 spec:
-  osMapping:
-    literal: "Red Hat Enterprise Linux CoreOS 414.92.202312311229-0 (Plow)"
-    containerImage: quay.io/ybettan/rhcos:414.92.202312311229-0
-    clusterUpgradeTriggerNodeUpgrade: true
   machineConfigName: 99-ybettan-external-image
+  containerImage: quay.io/ybettan/rhcos:414.92.202312311229-0
+  clusterUpgradeTriggerNodeUpgrade: true
+  build:
+  ...
 ```
 
 ### Hub&Spoke
