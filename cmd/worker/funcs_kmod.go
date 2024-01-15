@@ -7,22 +7,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func kmodFuncPreRunE(cmd *cobra.Command, args []string) error {
-	err := cmd.Parent().PersistentPreRunE(cmd.Parent(), args)
+func rootFuncPreRunE(cmd *cobra.Command, args []string) error {
+	logger.Info("Starting worker", "version", Version, "git commit", GitCommit)
+
+	im, err := getImageMounter(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to call root command pre-run: %v", err)
+		return fmt.Errorf("failed to get appropriate ImageMounter: %v", err)
 	}
 
-	logger.Info("Reading pull secrets", "base dir", worker.PullSecretsDir)
-	keyChain, err := worker.ReadKubernetesSecrets(cmd.Context(), worker.PullSecretsDir, logger)
-	if err != nil {
-		return fmt.Errorf("could not read pull secrets: %v", err)
-	}
-
-	res := worker.NewMirrorResolver(logger)
-	ip := worker.NewRemoteImageMounter(worker.ImagesDir, res, keyChain, logger)
 	mr := worker.NewModprobeRunner(logger)
-	w = worker.NewWorker(ip, mr, logger)
+	w = worker.NewWorker(im, mr, logger)
 
 	return nil
 }
@@ -63,4 +57,32 @@ func kmodUnloadFunc(cmd *cobra.Command, args []string) error {
 	mountPathFlag := cmd.Flags().Lookup(worker.FlagFirmwareMountPath)
 
 	return w.UnloadKmod(cmd.Context(), cfg, mountPathFlag.Value.String())
+}
+
+func setCommandsFlags() {
+	kmodLoadCmd.Flags().String(
+		worker.FlagFirmwareClassPath,
+		"",
+		"if set, this value will be written to "+worker.FirmwareClassPathLocation,
+	)
+
+	kmodLoadCmd.Flags().String(
+		worker.FlagFirmwareMountPath,
+		"",
+		"if set, this the value that firmware host path is mounted to")
+
+	kmodUnloadCmd.Flags().String(
+		worker.FlagFirmwareMountPath,
+		"",
+		"if set, this the value that firmware host path is mounted to")
+}
+
+func getImageMounter(cmd *cobra.Command) (worker.ImageMounter, error) {
+	logger.Info("Reading pull secrets", "base dir", worker.PullSecretsDir)
+	keyChain, err := worker.ReadKubernetesSecrets(cmd.Context(), worker.PullSecretsDir, logger)
+	if err != nil {
+		return nil, fmt.Errorf("could not read pull secrets: %v", err)
+	}
+	res := worker.NewMirrorResolver(logger)
+	return worker.NewRemoteImageMounter(worker.ImagesDir, res, keyChain, logger), nil
 }
