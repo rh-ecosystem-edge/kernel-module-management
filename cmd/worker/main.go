@@ -29,12 +29,12 @@ var rootCmd = &cobra.Command{
 	SilenceErrors:     true,
 	Use:               "worker",
 	Version:           Version,
+	PersistentPreRunE: rootFuncPreRunE,
 }
 
 var kmodCmd = &cobra.Command{
-	Use:               "kmod",
-	Short:             "Manage kernel modules",
-	PersistentPreRunE: kmodFuncPreRunE,
+	Use:   "kmod",
+	Short: "Manage kernel modules",
 }
 
 var kmodLoadCmd = &cobra.Command{
@@ -59,37 +59,20 @@ func main() {
 
 	kmodCmd.AddCommand(kmodLoadCmd, kmodUnloadCmd)
 
-	klogFlagSet := flag.NewFlagSet("klog", flag.ContinueOnError)
+	setCommandsFlags()
 
-	logConfig := textlogger.NewConfig()
-	logConfig.AddFlags(klogFlagSet)
-
-	rootCmd.PersistentFlags().AddGoFlagSet(klogFlagSet)
-
-	kmodLoadCmd.Flags().String(
-		worker.FlagFirmwareClassPath,
-		"",
-		"if set, this value will be written to "+worker.FirmwareClassPathLocation,
-	)
-
-	kmodLoadCmd.Flags().String(
-		worker.FlagFirmwareMountPath,
-		"",
-		"if set, this the value that firmware host path is mounted to")
-
-	kmodUnloadCmd.Flags().String(
-		worker.FlagFirmwareMountPath,
-		"",
-		"if set, this the value that firmware host path is mounted to")
-
-	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		logger = textlogger.NewLogger(logConfig).WithName("kmm-worker")
-		logger.Info("Starting worker", "version", rootCmd.Version, "git commit", GitCommit)
-		return nil
-	}
+	configureLogging()
 
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		kmmcmd.FatalError(logger, err, "Fatal error")
 		os.Exit(1)
 	}
+}
+
+func configureLogging() {
+	klogFlagSet := flag.NewFlagSet("klog", flag.ContinueOnError)
+	logConfig := textlogger.NewConfig()
+	logConfig.AddFlags(klogFlagSet)
+	logger = textlogger.NewLogger(logConfig).WithName("kmm-worker")
+	rootCmd.PersistentFlags().AddGoFlagSet(klogFlagSet)
 }
