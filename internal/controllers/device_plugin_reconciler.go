@@ -176,7 +176,7 @@ func (dprh *devicePluginReconcilerHelper) getModuleDevicePluginDaemonSets(ctx co
 	devicePluginsList := make([]appsv1.DaemonSet, 0, len(dsList.Items))
 	// remove the older version module loader daemonsets
 	for _, ds := range dsList.Items {
-		if ds.GetLabels()[constants.DaemonSetRole] != constants.ModuleLoaderRoleLabelValue {
+		if _, ok := ds.GetLabels()[constants.KernelLabel]; !ok {
 			devicePluginsList = append(devicePluginsList, ds)
 		}
 	}

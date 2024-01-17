@@ -904,7 +904,7 @@ var _ = Describe("DevicePluginReconciler_getModuleDevicePluginDaemonSets", func(
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: map[string]string{
 					constants.ModuleNameLabel: "some name",
-					constants.DaemonSetRole:   constants.ModuleLoaderRoleLabelValue,
+					constants.KernelLabel:     "some kernel",
 				},
 			},
 		}
@@ -912,7 +912,6 @@ var _ = Describe("DevicePluginReconciler_getModuleDevicePluginDaemonSets", func(
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: map[string]string{
 					constants.ModuleNameLabel: "some name",
-					constants.DaemonSetRole:   "some role",
 				},
 			},
 		}
