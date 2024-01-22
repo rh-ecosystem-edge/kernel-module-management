@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+set -euxo pipefail
+
+make operator-sdk
+oc create namespace openshift-kmm
+
+# Set the pull secret in Docker's auth file so operator-sdk can pull the current bundle image
+mkdir -p ~/.docker
+oc get secret/pull-secret -n openshift-config -o json | jq -r '.data[".dockerconfigjson"]' | base64 --decode | jq > ~/.docker/config.json
+
+# Get the latest bundle image published
+latest_published_bundle=$(grpcurl -d '{"pkgName": "kernel-module-management", "channelName": "stable"}' -plaintext redhat-operators.openshift-marketplace.svc:50051 api.Registry/GetBundleForChannel | jq -r '.bundlePath')
+
+# Deploy the current bundle
+./bin/operator-sdk run bundle ${latest_published_bundle} \
+    --namespace openshift-kmm \
+    --use-http \
+    --timeout 5m0s
+oc wait --for=condition=Available -n openshift-kmm --timeout=1m deployment/kmm-operator-controller
+
+# Upgrade to the new bundle
+./bin/operator-sdk run bundle-upgrade "$OO_BUNDLE" \
+    --namespace openshift-kmm \
+    --timeout 5m0s
+oc wait --for=condition=Available -n openshift-kmm --timeout=1m deployment/kmm-operator-controller
