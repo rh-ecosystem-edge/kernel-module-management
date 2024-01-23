@@ -65,3 +65,10 @@ spec:
             name: "root"
           contents:
             source: "data:text/plain;base64,{{.PullKernelModuleContents}}"
+        - path: "/etc/kmm-worker-day1/config.yaml"
+          mode: 420
+          overwrite: true
+          user:
+            name: "root"
+          contents:
+            source: "data:text/plain;base64,{{.WorkerPodConfigContents}}"
