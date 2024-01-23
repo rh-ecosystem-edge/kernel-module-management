@@ -37,11 +37,14 @@ spec:
   - supported: false
     type: AllNamespaces
   keywords:
-  - oot
-  - out-of-tree
+  - hub
   - kernel
+  - kmm
+  - kmm-hub
   - module
   - modules
+  - oot
+  - out-of-tree
   maintainers:
   - email: edge-kmm@redhat.com
     name: Red Hat Ecosystem - Partner Accelerators Team

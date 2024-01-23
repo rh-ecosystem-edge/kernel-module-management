@@ -48,11 +48,12 @@ spec:
   - supported: true
     type: AllNamespaces
   keywords:
-  - kernel-module-management
-  - out-of-tree
   - kernel
+  - kmm
   - module
   - modules
+  - oot
+  - out-of-tree
   maintainers:
   - email: edge-kmm@redhat.com
     name: Red Hat Ecosystem - Partner Accelerators Team
