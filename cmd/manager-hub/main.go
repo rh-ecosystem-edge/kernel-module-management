@@ -143,7 +143,7 @@ func main() {
 
 	signAPI := signocpbuild.NewManager(
 		client,
-		signocpbuild.NewMaker(client, cmd.GetEnvOrFatalError("RELATED_IMAGES_SIGN", setupLogger), scheme),
+		signocpbuild.NewMaker(client, cmd.GetEnvOrFatalError("RELATED_IMAGE_SIGN", setupLogger), scheme),
 		ocpbuildutils.NewOCPBuildsHelper(client, signocpbuild.BuildType),
 		authFactory,
 		registryAPI,
