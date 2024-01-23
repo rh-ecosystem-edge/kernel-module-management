@@ -96,7 +96,7 @@ func main() {
 	setupLogger.Info("Creating manager", "version", Version, "git commit", GitCommit)
 
 	operatorNamespace := cmd.GetEnvOrFatalError(constants.OperatorNamespaceEnvVar, setupLogger)
-	workerImage := cmd.GetEnvOrFatalError("RELATED_IMAGES_WORKER", setupLogger)
+	workerImage := cmd.GetEnvOrFatalError("RELATED_IMAGE_WORKER", setupLogger)
 
 	managed, err := GetBoolEnv("KMM_MANAGED")
 	if err != nil {
@@ -146,7 +146,7 @@ func main() {
 
 	signAPI := signocpbuild.NewManager(
 		client,
-		signocpbuild.NewMaker(client, cmd.GetEnvOrFatalError("RELATED_IMAGES_SIGN", setupLogger), scheme),
+		signocpbuild.NewMaker(client, cmd.GetEnvOrFatalError("RELATED_IMAGE_SIGN", setupLogger), scheme),
 		ocpbuildutils.NewOCPBuildsHelper(client, signocpbuild.BuildType),
 		authFactory,
 		registryAPI,
