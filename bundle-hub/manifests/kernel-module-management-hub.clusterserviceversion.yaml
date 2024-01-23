@@ -32,7 +32,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2023-11-22T16:41:19Z"
+    createdAt: "2024-01-23T16:19:49Z"
     operatorframework.io/suggested-namespace: openshift-kmm-hub
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -206,9 +206,9 @@ spec:
                   valueFrom:
                     fieldRef:
                       fieldPath: metadata.namespace
-                - name: RELATED_IMAGES_MUST_GATHER
+                - name: RELATED_IMAGE_MUST_GATHER
                   value: quay.io/edge-infrastructure/kernel-module-management-must-gather:latest
-                - name: RELATED_IMAGES_SIGN
+                - name: RELATED_IMAGE_SIGN
                   value: quay.io/edge-infrastructure/kernel-module-management-signimage:latest
                 image: quay.io/edge-infrastructure/kernel-module-management-operator-hub:latest
                 imagePullPolicy: Always
@@ -337,6 +337,11 @@ spec:
   provider:
     name: Red Hat
     url: https://www.redhat.com
+  relatedImages:
+  - image: quay.io/edge-infrastructure/kernel-module-management-must-gather:latest
+    name: must-gather
+  - image: quay.io/edge-infrastructure/kernel-module-management-signimage:latest
+    name: sign
   version: 0.0.1
   webhookdefinitions:
   - admissionReviewVersions:

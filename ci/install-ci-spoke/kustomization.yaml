@@ -19,5 +19,5 @@ patchesStrategicMerge:
               env:
                 - name: KMM_MANAGED
                   value: "1"
-                - name: RELATED_IMAGES_WORKER
+                - name: RELATED_IMAGE_WORKER
                   value: kernel-module-management-worker
