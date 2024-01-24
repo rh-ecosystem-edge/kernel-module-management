@@ -4,4 +4,4 @@ kind: Kustomization
 namespace: openshift-kmm
 
 resources:
-  - ../../config/default-hub
+- ../../config/default-hub
