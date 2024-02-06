@@ -32,7 +32,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2024-01-23T16:19:49Z"
+    createdAt: "2024-02-06T14:50:33Z"
     operatorframework.io/suggested-namespace: openshift-kmm-hub
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -325,11 +325,14 @@ spec:
   - supported: false
     type: AllNamespaces
   keywords:
-  - oot
-  - out-of-tree
+  - hub
   - kernel
+  - kmm
+  - kmm-hub
   - module
   - modules
+  - oot
+  - out-of-tree
   maintainers:
   - email: edge-kmm@redhat.com
     name: Red Hat Ecosystem - Partner Accelerators Team
