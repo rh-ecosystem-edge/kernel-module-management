@@ -149,6 +149,15 @@ spec:
         - apiGroups:
           - ""
           resources:
+          - namespaces
+          verbs:
+          - get
+          - list
+          - patch
+          - watch
+        - apiGroups:
+          - ""
+          resources:
           - nodes
           verbs:
           - get
@@ -524,6 +533,25 @@ spec:
     name: sign
   version: 0.0.1
   webhookdefinitions:
+  - admissionReviewVersions:
+    - v1
+    containerPort: 443
+    deploymentName: kmm-operator-controller
+    failurePolicy: Fail
+    generateName: namespace-deletion.kmm.sigs.k8s.io
+    rules:
+    - apiGroups:
+      - ""
+      apiVersions:
+      - v1
+      operations:
+      - DELETE
+      resources:
+      - namespaces
+    sideEffects: None
+    targetPort: 9443
+    type: ValidatingAdmissionWebhook
+    webhookPath: /validate--v1-namespace
   - admissionReviewVersions:
     - v1
     containerPort: 443
