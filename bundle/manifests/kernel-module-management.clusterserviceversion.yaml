@@ -48,7 +48,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2024-01-23T16:19:48Z"
+    createdAt: "2024-02-06T14:50:31Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -143,6 +143,15 @@ spec:
           verbs:
           - create
           - delete
+          - get
+          - list
+          - patch
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - namespaces
+          verbs:
           - get
           - list
           - patch
@@ -483,11 +492,12 @@ spec:
   - supported: true
     type: AllNamespaces
   keywords:
-  - kernel-module-management
-  - out-of-tree
   - kernel
+  - kmm
   - module
   - modules
+  - oot
+  - out-of-tree
   maintainers:
   - email: edge-kmm@redhat.com
     name: Red Hat Ecosystem - Partner Accelerators Team
@@ -504,6 +514,25 @@ spec:
     name: sign
   version: 0.0.1
   webhookdefinitions:
+  - admissionReviewVersions:
+    - v1
+    containerPort: 443
+    deploymentName: kmm-operator-controller
+    failurePolicy: Fail
+    generateName: namespace-deletion.kmm.sigs.k8s.io
+    rules:
+    - apiGroups:
+      - ""
+      apiVersions:
+      - v1
+      operations:
+      - DELETE
+      resources:
+      - namespaces
+    sideEffects: None
+    targetPort: 9443
+    type: ValidatingAdmissionWebhook
+    webhookPath: /validate--v1-namespace
   - admissionReviewVersions:
     - v1
     containerPort: 443
