@@ -21,6 +21,7 @@ nav:
       - Ordered upgrade: documentation/ordered_upgrade.md
       - documentation/hub_spoke.md
       - Day1 support: documentation/day1_limited_option.md
+      - Managing day-0/day-1 kmods: documentation/day0_day1_handover.md
       - documentation/troubleshooting.md
       - documentation/uninstall.md
   - Labs:
