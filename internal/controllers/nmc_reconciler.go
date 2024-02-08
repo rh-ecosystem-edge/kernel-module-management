@@ -54,6 +54,7 @@ const (
 	nodeModulesConfigFinalizer = "kmm.node.kubernetes.io/nodemodulesconfig-reconciler"
 	volumeNameConfig           = "config"
 	workerContainerName        = "worker"
+	globalPullSecretName       = "global-pull-secret"
 )
 
 //+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=nodemodulesconfigs,verbs=get;list;watch
@@ -903,6 +904,7 @@ func (p *podManagerImpl) baseWorkerPod(
 	)
 
 	hostPathDirectory := v1.HostPathDirectory
+	hostPathFile := v1.HostPathFile
 
 	psv, psvm, err := p.psh.VolumesAndVolumeMounts(ctx, item)
 	if err != nil {
@@ -993,6 +995,15 @@ func (p *podManagerImpl) baseWorkerPod(
 				},
 			},
 		},
+		{
+			Name: globalPullSecretName,
+			VolumeSource: v1.VolumeSource{
+				HostPath: &v1.HostPathVolumeSource{
+					Path: worker.GlobalPullSecretPath,
+					Type: &hostPathFile,
+				},
+			},
+		},
 	}
 
 	volumeMounts := []v1.VolumeMount{
@@ -1021,6 +1032,11 @@ func (p *podManagerImpl) baseWorkerPod(
 			Name:      trustedCAVolumeName,
 			ReadOnly:  true,
 			MountPath: "/etc/pki/tls/certs", // Read by the Go runtime by default
+		},
+		{
+			Name:      globalPullSecretName,
+			ReadOnly:  true,
+			MountPath: filepath.Join(worker.PullSecretsDir, globalPullSecretName),
 		},
 	}
 
