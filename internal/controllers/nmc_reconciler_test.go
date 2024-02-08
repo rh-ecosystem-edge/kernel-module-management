@@ -1662,6 +1662,7 @@ func getBaseWorkerPod(subcommand string, action WorkerAction, owner ctrlclient.O
 		volNameModulesOrder   = "modules-order"
 	)
 
+	hostPathFile := v1.HostPathFile
 	hostPathDirectory := v1.HostPathDirectory
 	hostPathDirectoryOrCreate := v1.HostPathDirectoryOrCreate
 
@@ -1745,6 +1746,11 @@ softdep b pre: c
 							Name:      trustedCAVolumeName,
 							ReadOnly:  true,
 							MountPath: "/etc/pki/tls/certs",
+						},
+						{
+							Name:      globalPullSecretName,
+							ReadOnly:  true,
+							MountPath: filepath.Join(worker.PullSecretsDir, globalPullSecretName),
 						},
 						{
 							Name:      volNameModulesOrder,
@@ -1832,6 +1838,15 @@ softdep b pre: c
 					},
 				},
 				{
+					Name: globalPullSecretName,
+					VolumeSource: v1.VolumeSource{
+						HostPath: &v1.HostPathVolumeSource{
+							Path: worker.GlobalPullSecretPath,
+							Type: &hostPathFile,
+						},
+					},
+				},
+				{
 					Name: volNameModulesOrder,
 					VolumeSource: v1.VolumeSource{
 						DownwardAPI: &v1.DownwardAPIVolumeSource{
@@ -1868,7 +1883,6 @@ softdep b pre: c
 			},
 		}
 		pod.Spec.Volumes = append(pod.Spec.Volumes, fwVol)
-
 	}
 
 	Expect(
