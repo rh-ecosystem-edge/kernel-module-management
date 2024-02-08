@@ -23,6 +23,7 @@ import (
 	"strconv"
 
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ocp/ca"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/webhook"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -263,6 +264,10 @@ func main() {
 		scheme).SetupWithManager(mgr); err != nil {
 		setupLogger.Error(err, "unable to create controller", "controller", "PreflightOCP")
 		os.Exit(1)
+	}
+
+	if err = (&webhook.NamespaceDeletion{}).SetupWebhookWithManager(mgr); err != nil {
+		cmd.FatalError(setupLogger, err, "unable to create webhook", "webhook", "Namespace")
 	}
 
 	if err = (&kmmv1beta1.Module{}).SetupWebhookWithManager(mgr); err != nil {
