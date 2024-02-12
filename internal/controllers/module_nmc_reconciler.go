@@ -375,14 +375,18 @@ func (mnrh *moduleNMCReconcilerHelper) prepareSchedulingData(ctx context.Context
 
 func (mnrh *moduleNMCReconcilerHelper) enableModuleOnNode(ctx context.Context, mld *api.ModuleLoaderData, node *v1.Node) error {
 	logger := log.FromContext(ctx)
-	exists, err := module.ImageExists(ctx, mnrh.authFactory, mnrh.registryAPI, mld, mld.ContainerImage)
-	if err != nil {
-		return fmt.Errorf("failed to verify is image %s exists: %v", mld.ContainerImage, err)
+	if module.ShouldBeBuilt(mld) || module.ShouldBeSigned(mld) {
+		exists, err := module.ImageExists(ctx, mnrh.authFactory, mnrh.registryAPI, mld, mld.ContainerImage)
+		if err != nil {
+			return fmt.Errorf("failed to verify that image %s exists: %v", mld.ContainerImage, err)
+		}
+		if !exists {
+			// skip updating NMC, reconciliation will kick in once the build pod is completed
+			logger.V(1).Info("Image does not exist, not adding to NMC", "nmc name", node.Name, "container image", mld.ContainerImage)
+			return nil
+		}
 	}
-	if !exists {
-		// skip updating NMC, reconciliation will kick in once the build job is completed
-		return nil
-	}
+
 	moduleConfig := kmmv1beta1.ModuleConfig{
 		KernelVersion:        mld.KernelVersion,
 		ContainerImage:       mld.ContainerImage,
@@ -399,8 +403,7 @@ func (mnrh *moduleNMCReconcilerHelper) enableModuleOnNode(ctx context.Context, m
 	}
 
 	opRes, err := controllerutil.CreateOrPatch(ctx, mnrh.client, nmcObj, func() error {
-		err = mnrh.nmcHelper.SetModuleConfig(nmcObj, mld, &moduleConfig)
-		if err != nil {
+		if err := mnrh.nmcHelper.SetModuleConfig(nmcObj, mld, &moduleConfig); err != nil {
 			return err
 		}
 
