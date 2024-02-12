@@ -741,6 +741,7 @@ var _ = Describe("enableModuleOnNode", func() {
 		clnt                 *client.MockClient
 		rgst                 *registry.MockRegistry
 		authFactory          *auth.MockRegistryAuthGetterFactory
+		authGetter           *auth.MockRegistryAuthGetter
 		mnrh                 moduleNMCReconcilerHelperAPI
 		helper               *nmc.MockHelper
 		mld                  *api.ModuleLoaderData
@@ -755,6 +756,7 @@ var _ = Describe("enableModuleOnNode", func() {
 		helper = nmc.NewMockHelper(ctrl)
 		rgst = registry.NewMockRegistry(ctrl)
 		authFactory = auth.NewMockRegistryAuthGetterFactory(ctrl)
+		authGetter = &auth.MockRegistryAuthGetter{}
 		mnrh = newModuleNMCReconcilerHelper(clnt, nil, rgst, helper, authFactory, operatorNamespace, scheme)
 		node = v1.Node{
 			ObjectMeta: metav1.ObjectMeta{Name: "nodeName"},
@@ -777,8 +779,8 @@ var _ = Describe("enableModuleOnNode", func() {
 		}
 	})
 
-	It("Image does not exists", func() {
-		authGetter := &auth.MockRegistryAuthGetter{}
+	It("Build configured and image does not exist", func() {
+		mld.Build = &kmmv1beta1.Build{}
 		gomock.InOrder(
 			authFactory.EXPECT().NewRegistryAuthGetterFrom(mld).Return(authGetter),
 			rgst.EXPECT().ImageExists(ctx, mld.ContainerImage, gomock.Any(), authGetter).Return(false, nil),
@@ -787,8 +789,8 @@ var _ = Describe("enableModuleOnNode", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("Failed to check if image exists", func() {
-		authGetter := &auth.MockRegistryAuthGetter{}
+	It("Sign configured and image does not exist", func() {
+		mld.Sign = &kmmv1beta1.Sign{}
 		gomock.InOrder(
 			authFactory.EXPECT().NewRegistryAuthGetterFrom(mld).Return(authGetter),
 			rgst.EXPECT().ImageExists(ctx, mld.ContainerImage, gomock.Any(), authGetter).Return(false, fmt.Errorf("some error")),
@@ -797,15 +799,22 @@ var _ = Describe("enableModuleOnNode", func() {
 		Expect(err).To(HaveOccurred())
 	})
 
-	It("NMC does not exists", func() {
+	It("Build configured and failed to check if image exists", func() {
+		mld.Build = &kmmv1beta1.Build{}
+		gomock.InOrder(
+			authFactory.EXPECT().NewRegistryAuthGetterFrom(mld).Return(authGetter),
+			rgst.EXPECT().ImageExists(ctx, mld.ContainerImage, gomock.Any(), authGetter).Return(false, fmt.Errorf("some error")),
+		)
+		err := mnrh.enableModuleOnNode(ctx, mld, &node)
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("NMC does not exist", func() {
 		nmc := &kmmv1beta1.NodeModulesConfig{
 			ObjectMeta: metav1.ObjectMeta{Name: node.Name},
 		}
 
-		authGetter := &auth.MockRegistryAuthGetter{}
 		gomock.InOrder(
-			authFactory.EXPECT().NewRegistryAuthGetterFrom(mld).Return(authGetter),
-			rgst.EXPECT().ImageExists(ctx, mld.ContainerImage, gomock.Any(), authGetter).Return(true, nil),
 			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).Return(apierrors.NewNotFound(schema.GroupResource{}, "whatever")),
 			helper.EXPECT().SetModuleConfig(nmc, mld, expectedModuleConfig).Return(nil),
 			clnt.EXPECT().Create(ctx, gomock.Any()).Return(nil),
@@ -820,8 +829,6 @@ var _ = Describe("enableModuleOnNode", func() {
 			ObjectMeta: metav1.ObjectMeta{Name: node.Name},
 		}
 
-		authGetter := &auth.MockRegistryAuthGetter{}
-
 		nmcWithLabels := *nmcObj
 		nmcWithLabels.SetLabels(map[string]string{
 			nmc.ModuleConfiguredLabel(moduleNamespace, moduleName): "",
@@ -835,8 +842,6 @@ var _ = Describe("enableModuleOnNode", func() {
 		)
 
 		gomock.InOrder(
-			authFactory.EXPECT().NewRegistryAuthGetterFrom(mld).Return(authGetter),
-			rgst.EXPECT().ImageExists(ctx, mld.ContainerImage, gomock.Any(), authGetter).Return(true, nil),
 			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, nmc *kmmv1beta1.NodeModulesConfig, _ ...ctrlclient.GetOption) error {
 					nmc.SetName(node.Name)
