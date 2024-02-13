@@ -3,7 +3,7 @@ package config
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
@@ -31,9 +31,9 @@ var _ = Describe("ParseFile", func() {
 				SecureServing:    true,
 			},
 			Worker: Worker{
-				RunAsUser:            pointer.Int64(1234),
+				RunAsUser:            ptr.To[int64](1234),
 				SELinuxType:          "mySELinuxType",
-				SetFirmwareClassPath: pointer.String("/some/path"),
+				SetFirmwareClassPath: ptr.To("/some/path"),
 			},
 		}
 

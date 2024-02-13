@@ -21,7 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -762,8 +762,8 @@ var _ = Describe("DevicePluginReconciler_setDevicePluginAsDesired", func() {
 				OwnerReferences: []metav1.OwnerReference{
 					{
 						APIVersion:         mod.APIVersion,
-						BlockOwnerDeletion: pointer.Bool(true),
-						Controller:         pointer.Bool(true),
+						BlockOwnerDeletion: ptr.To(true),
+						Controller:         ptr.To(true),
 						Kind:               mod.Kind,
 						Name:               moduleName,
 						UID:                mod.UID,
@@ -788,7 +788,7 @@ var _ = Describe("DevicePluginReconciler_setDevicePluginAsDesired", func() {
 								Name:            "device-plugin",
 								Resources:       resources,
 								SecurityContext: &v1.SecurityContext{
-									Privileged: pointer.Bool(true),
+									Privileged: ptr.To(true),
 								},
 								VolumeMounts: []v1.VolumeMount{
 									dpVolMount,

@@ -15,7 +15,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
@@ -121,8 +121,8 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 						APIVersion:         "kmm.sigs.x-k8s.io/v1beta1",
 						Kind:               "Module",
 						Name:               moduleName,
-						Controller:         pointer.Bool(true),
-						BlockOwnerDeletion: pointer.Bool(true),
+						Controller:         ptr.To(true),
+						BlockOwnerDeletion: ptr.To(true),
 					},
 				},
 				Finalizers: []string{constants.JobEventFinalizer},
@@ -131,7 +131,7 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 				CommonSpec: buildv1.CommonSpec{
 					ServiceAccount: "builder",
 					Source: buildv1.BuildSource{
-						Dockerfile: pointer.String(dockerFile),
+						Dockerfile: ptr.To(dockerFile),
 						Type:       buildv1.BuildSourceDockerfile,
 					},
 					Strategy: buildv1.BuildStrategy{
@@ -155,7 +155,7 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 						PushSecret: &irs,
 					},
 					NodeSelector:   nodeSelector,
-					MountTrustedCA: pointer.Bool(true),
+					MountTrustedCA: ptr.To(true),
 				},
 			},
 		}
@@ -334,7 +334,7 @@ var _ = Describe("buildVolumesFromBuildSecrets", func() {
 					Type: buildv1.BuildVolumeSourceTypeSecret,
 					Secret: &v1.SecretVolumeSource{
 						SecretName: "secret-1",
-						Optional:   pointer.Bool(false),
+						Optional:   ptr.To(false),
 					},
 				},
 				Mounts: []buildv1.BuildVolumeMount{
@@ -347,7 +347,7 @@ var _ = Describe("buildVolumesFromBuildSecrets", func() {
 					Type: buildv1.BuildVolumeSourceTypeSecret,
 					Secret: &v1.SecretVolumeSource{
 						SecretName: "secret-2",
-						Optional:   pointer.Bool(false),
+						Optional:   ptr.To(false),
 					},
 				},
 				Mounts: []buildv1.BuildVolumeMount{

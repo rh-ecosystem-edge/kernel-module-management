@@ -19,7 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -159,7 +159,7 @@ func (m *maker) MakeBuildTemplate(
 				},
 				Output:         buildTarget,
 				NodeSelector:   selector,
-				MountTrustedCA: pointer.Bool(true),
+				MountTrustedCA: ptr.To(true),
 			},
 		},
 	}
@@ -213,7 +213,7 @@ func buildVolumesFromBuildSecrets(secrets []v1.LocalObjectReference) []buildv1.B
 				Type: buildv1.BuildVolumeSourceTypeSecret,
 				Secret: &v1.SecretVolumeSource{
 					SecretName: s.Name,
-					Optional:   pointer.Bool(false),
+					Optional:   ptr.To(false),
 				},
 			},
 			Mounts: []buildv1.BuildVolumeMount{
