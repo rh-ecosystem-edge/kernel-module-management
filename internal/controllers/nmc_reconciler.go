@@ -1030,7 +1030,7 @@ func (p *podManagerImpl) baseWorkerPod(
 		{
 			Name:      globalPullSecretName,
 			ReadOnly:  true,
-			MountPath: filepath.Join(worker.PullSecretsDir, globalPullSecretName),
+			MountPath: filepath.Join(worker.PullSecretsDir, "_global", v1.DockerConfigJsonKey),
 		},
 	}
 
