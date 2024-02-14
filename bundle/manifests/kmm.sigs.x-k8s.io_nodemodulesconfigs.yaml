@@ -94,7 +94,8 @@ spec:
                               type: string
                             moduleName:
                               description: ModuleName is the name of the Module to
-                                be loaded.
+                                be loaded. This field can only be unset if rawArgs
+                                is set.
                               type: string
                             modulesLoadingOrder:
                               description: 'ModulesLoadingOrder defines the dependency
@@ -140,8 +141,6 @@ spec:
                                   minItems: 1
                                   type: array
                               type: object
-                          required:
-                          - moduleName
                           type: object
                       required:
                       - containerImage
@@ -230,7 +229,8 @@ spec:
                               type: string
                             moduleName:
                               description: ModuleName is the name of the Module to
-                                be loaded.
+                                be loaded. This field can only be unset if rawArgs
+                                is set.
                               type: string
                             modulesLoadingOrder:
                               description: 'ModulesLoadingOrder defines the dependency
@@ -276,8 +276,6 @@ spec:
                                   minItems: 1
                                   type: array
                               type: object
-                          required:
-                          - moduleName
                           type: object
                       required:
                       - containerImage

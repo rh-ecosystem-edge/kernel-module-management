@@ -2367,7 +2367,8 @@ spec:
                                 type: string
                               moduleName:
                                 description: ModuleName is the name of the Module
-                                  to be loaded.
+                                  to be loaded. This field can only be unset if rawArgs
+                                  is set.
                                 type: string
                               modulesLoadingOrder:
                                 description: 'ModulesLoadingOrder defines the dependency
@@ -2413,8 +2414,6 @@ spec:
                                     minItems: 1
                                     type: array
                                 type: object
-                            required:
-                            - moduleName
                             type: object
                           registryTLS:
                             description: RegistryTLS set the TLS configs for accessing
@@ -2525,6 +2524,7 @@ spec:
                 type: string
             required:
             - selector
+            - spokeNamespace
             type: object
           status:
             description: ManagedClusterModuleStatus defines the observed state of
