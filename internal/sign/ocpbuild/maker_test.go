@@ -13,7 +13,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
@@ -104,8 +104,8 @@ COPY --from=signimage /signroot/modules/simple-kmod.ko:/modules/simple-procfs-km
 						APIVersion:         "kmm.sigs.x-k8s.io/v1beta1",
 						Kind:               "Module",
 						Name:               moduleName,
-						Controller:         pointer.Bool(true),
-						BlockOwnerDeletion: pointer.Bool(true),
+						Controller:         ptr.To(true),
+						BlockOwnerDeletion: ptr.To(true),
 					},
 				},
 				Finalizers: []string{constants.JobEventFinalizer},
@@ -114,7 +114,7 @@ COPY --from=signimage /signroot/modules/simple-kmod.ko:/modules/simple-procfs-km
 				CommonSpec: buildv1.CommonSpec{
 					ServiceAccount: constants.OCPBuilderServiceAccountName,
 					Source: buildv1.BuildSource{
-						Dockerfile: pointer.String(dockerfile),
+						Dockerfile: ptr.To(dockerfile),
 						Type:       buildv1.BuildSourceDockerfile,
 					},
 					Strategy: buildv1.BuildStrategy{
@@ -127,7 +127,7 @@ COPY --from=signimage /signroot/modules/simple-kmod.ko:/modules/simple-procfs-km
 										Type: buildv1.BuildVolumeSourceTypeSecret,
 										Secret: &v1.SecretVolumeSource{
 											SecretName: keySecretName,
-											Optional:   pointer.Bool(false),
+											Optional:   ptr.To(false),
 										},
 									},
 									Mounts: []buildv1.BuildVolumeMount{
@@ -140,7 +140,7 @@ COPY --from=signimage /signroot/modules/simple-kmod.ko:/modules/simple-procfs-km
 										Type: buildv1.BuildVolumeSourceTypeSecret,
 										Secret: &v1.SecretVolumeSource{
 											SecretName: certSecretName,
-											Optional:   pointer.Bool(false),
+											Optional:   ptr.To(false),
 										},
 									},
 									Mounts: []buildv1.BuildVolumeMount{
@@ -157,7 +157,7 @@ COPY --from=signimage /signroot/modules/simple-kmod.ko:/modules/simple-procfs-km
 						},
 					},
 					NodeSelector:   nodeSelector,
-					MountTrustedCA: pointer.Bool(true),
+					MountTrustedCA: ptr.To(true),
 				},
 			},
 			Status: buildv1.BuildStatus{},

@@ -20,7 +20,7 @@ import (
 	. "github.com/onsi/gomega"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"go.uber.org/mock/gomock"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -121,7 +121,7 @@ var _ = Describe("imageMounter_mountImage", func() {
 			keyChain := authn.NewMultiKeychain()
 
 			if token != "" {
-				expectedToken = pointer.String(
+				expectedToken = ptr.To(
 					base64.StdEncoding.EncodeToString([]byte(username + ":" + password)),
 				)
 
