@@ -55,7 +55,7 @@ oc apply -f ci/managedclustermodule-kmm-ci-build-sign.yaml
 # Wait for the build build to be created and completed
 timeout 1m bash -c 'until oc -n ${OPERATOR_NAMESPACE} get builds -o json | jq -er ".items[].metadata.name | select(.? | match(\"build\"))"; do sleep 1; done'
 export build_build=$(oc -n ${OPERATOR_NAMESPACE} get builds -o json | jq -r '.items[].metadata.name | select(.? | match("build"))')
-oc -n ${OPERATOR_NAMESPACE} wait --for=condition=complete --timeout=1m build/${build_build}
+oc -n ${OPERATOR_NAMESPACE} wait --for=condition=complete --timeout=3m build/${build_build}
 
 # Wait for the sign build to be created and completed
 timeout 1m bash -c 'until oc -n ${OPERATOR_NAMESPACE} get builds -o json | jq -er ".items[].metadata.name | select(.? | match(\"sign\"))"; do sleep 1; done'
