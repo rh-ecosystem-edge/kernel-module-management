@@ -26,11 +26,20 @@ resources:
 - ../prometheus
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in crd/kustomization.yaml
 - ../webhook
+- ../webhook-server
 
-# [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in crd/kustomization.yaml
 patches:
-- path: manager_webhook_patch.yaml
 - path: webhookcainjection_patch.yaml
+- target:
+    kind: Deployment
+    name: webhook-server
+  patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: --enable-module
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: --enable-namespace
 
 configurations:
 - kustomizeconfig.yaml

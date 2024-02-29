@@ -48,7 +48,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2024-02-14T14:32:13Z"
+    createdAt: "2024-02-29T13:23:08Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -367,9 +367,6 @@ spec:
                   periodSeconds: 20
                 name: manager
                 ports:
-                - containerPort: 9443
-                  name: webhook-server
-                  protocol: TCP
                 - containerPort: 8443
                   name: metrics
                   protocol: TCP
@@ -392,9 +389,6 @@ spec:
                     drop:
                     - ALL
                 volumeMounts:
-                - mountPath: /tmp/k8s-webhook-server/serving-certs
-                  name: cert
-                  readOnly: true
                 - mountPath: /etc/pki/ca-trust/extracted/pem
                   name: trusted-ca
                   readOnly: true
@@ -414,10 +408,6 @@ spec:
                 key: node-role.kubernetes.io/master
                 operator: Equal
               volumes:
-              - name: cert
-                secret:
-                  defaultMode: 420
-                  secretName: kmm-operator-webhook-server-cert
               - name: trusted-ca
                 projected:
                   sources:
@@ -431,6 +421,103 @@ spec:
                       - key: service-ca.crt
                         path: ocp-service-ca-bundle.pem
                       name: kmm-operator-service-ca
+              - configMap:
+                  name: kmm-operator-manager-config
+                name: manager-config
+      - label:
+          app.kubernetes.io/component: kmm
+          app.kubernetes.io/name: kmm
+          app.kubernetes.io/part-of: kmm
+          control-plane: webhook-server
+        name: kmm-operator-webhook-server
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app.kubernetes.io/component: kmm
+              app.kubernetes.io/name: kmm
+              app.kubernetes.io/part-of: kmm
+              control-plane: webhook-server
+          strategy: {}
+          template:
+            metadata:
+              annotations:
+                kubectl.kubernetes.io/default-container: webhook-server
+              labels:
+                app.kubernetes.io/component: kmm
+                app.kubernetes.io/name: kmm
+                app.kubernetes.io/part-of: kmm
+                control-plane: webhook-server
+            spec:
+              affinity:
+                nodeAffinity:
+                  requiredDuringSchedulingIgnoredDuringExecution:
+                    nodeSelectorTerms:
+                    - matchExpressions:
+                      - key: node-role.kubernetes.io/control-plane
+                        operator: Exists
+                    - matchExpressions:
+                      - key: node-role.kubernetes.io/master
+                        operator: Exists
+                    - matchExpressions:
+                      - key: kmm.node.kubernetes.io/control-plane
+                        operator: Exists
+              containers:
+              - args:
+                - --config=controller_config.yaml
+                - --enable-module
+                - --enable-namespace
+                image: quay.io/edge-infrastructure/kernel-module-management-webhook-server:latest
+                imagePullPolicy: Always
+                livenessProbe:
+                  httpGet:
+                    path: /healthz
+                    port: 8081
+                  initialDelaySeconds: 15
+                  periodSeconds: 20
+                name: webhook-server
+                ports:
+                - containerPort: 9443
+                  name: webhook-server
+                  protocol: TCP
+                readinessProbe:
+                  httpGet:
+                    path: /readyz
+                    port: 8081
+                  initialDelaySeconds: 5
+                  periodSeconds: 10
+                resources:
+                  limits:
+                    cpu: 500m
+                    memory: 384Mi
+                  requests:
+                    cpu: 10m
+                    memory: 64Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+                volumeMounts:
+                - mountPath: /tmp/k8s-webhook-server/serving-certs
+                  name: cert
+                  readOnly: true
+                - mountPath: /controller_config.yaml
+                  name: manager-config
+                  subPath: controller_config.yaml
+              securityContext:
+                runAsNonRoot: true
+              serviceAccountName: kmm-operator-controller
+              terminationGracePeriodSeconds: 10
+              tolerations:
+              - effect: NoSchedule
+                key: node-role.kubernetes.io/master
+                operator: Equal
+              - effect: NoSchedule
+                key: node-role.kubernetes.io/control-plane
+                operator: Equal
+              volumes:
+              - name: cert
+                secret:
+                  defaultMode: 420
+                  secretName: kmm-operator-webhook-server-cert
               - configMap:
                   name: kmm-operator-manager-config
                 name: manager-config
@@ -517,7 +604,7 @@ spec:
   - admissionReviewVersions:
     - v1
     containerPort: 443
-    deploymentName: kmm-operator-controller
+    deploymentName: kmm-operator-webhook-server
     failurePolicy: Fail
     generateName: namespace-deletion.kmm.sigs.k8s.io
     rules:
@@ -536,7 +623,7 @@ spec:
   - admissionReviewVersions:
     - v1
     containerPort: 443
-    deploymentName: kmm-operator-controller
+    deploymentName: kmm-operator-webhook-server
     failurePolicy: Fail
     generateName: vmodule.kb.io
     rules:

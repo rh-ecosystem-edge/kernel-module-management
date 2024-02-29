@@ -22,8 +22,6 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ocp/ca"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/webhook"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -53,6 +51,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ocp/ca"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/preflight"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
@@ -264,14 +263,6 @@ func main() {
 		scheme).SetupWithManager(mgr); err != nil {
 		setupLogger.Error(err, "unable to create controller", "controller", "PreflightOCP")
 		os.Exit(1)
-	}
-
-	if err = (&webhook.NamespaceValidator{}).SetupWebhookWithManager(mgr); err != nil {
-		cmd.FatalError(setupLogger, err, "unable to create webhook", "webhook", "NamespaceValidator")
-	}
-
-	if err = webhook.NewModuleValidator(logger).SetupWebhookWithManager(mgr); err != nil {
-		cmd.FatalError(setupLogger, err, "unable to create webhook", "webhook", "ModuleValidator")
 	}
 
 	//+kubebuilder:scaffold:builder

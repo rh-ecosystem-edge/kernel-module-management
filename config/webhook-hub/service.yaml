@@ -18,4 +18,4 @@ spec:
       protocol: TCP
       targetPort: 9443
   selector:
-    control-plane: controller
+    control-plane: webhook-server
