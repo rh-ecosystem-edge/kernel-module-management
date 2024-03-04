@@ -179,7 +179,7 @@ metadata:
 spec:
   spokeNamespace: openshift-kmm
   selector:
-    cluster.open-cluster-management.io/clusterset: default
+    name: local-cluster
   moduleSpec:
     moduleLoader:
       container:

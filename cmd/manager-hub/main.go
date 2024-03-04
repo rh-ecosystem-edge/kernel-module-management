@@ -60,7 +60,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
-	webhookhub "github.com/rh-ecosystem-edge/kernel-module-management/internal/webhook/hub"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -189,10 +188,6 @@ func main() {
 
 	if err = controllers.NewBuildSignEventsReconciler(client, jobEventReconcilerHelper, eventRecorder).SetupWithManager(mgr); err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.BuildSignEventsReconcilerName)
-	}
-
-	if err = webhookhub.NewManagedClusterModuleValidator(logger).SetupWebhookWithManager(mgr); err != nil {
-		cmd.FatalError(setupLogger, err, "unable to create webhook", "webhook", "ManagedClusterModuleValidator")
 	}
 
 	//+kubebuilder:scaffold:builder
