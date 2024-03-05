@@ -16,7 +16,7 @@ Where:
 It is recommended to run `depmod` at the end of the build process to generate `modules.dep` and map files.
 This is especially useful if your kmod image contains several kernel modules and if one of the modules depend on
 another.
-To generate dependencies and map files for a specific kernel version, run `depmod -b /opt ${KERNEL_VERSION}`.
+To generate dependencies and map files for a specific kernel version, run `depmod -b /opt ${KERNEL_FULL_VERSION}`.
 
 ## Example `Dockerfile`
 
@@ -28,12 +28,12 @@ entitled build](https://cloud.redhat.com/blog/how-to-use-entitled-image-builds-t
 ```dockerfile
 FROM registry.redhat.io/ubi9/ubi as builder
 
-ARG KERNEL_VERSION
+ARG KERNEL_FULL_VERSION
 
 RUN dnf install -y \
     gcc \
     git \
-    kernel-devel-${KERNEL_VERSION} \
+    kernel-devel-${KERNEL_FULL_VERSION} \
     make
 
 WORKDIR /usr/src
@@ -42,18 +42,18 @@ RUN ["git", "clone", "https://github.com/rh-ecosystem-edge/kernel-module-managem
 
 WORKDIR /usr/src/kernel-module-management/ci/kmm-kmod
 
-RUN KERNEL_SRC_DIR=/lib/modules/${KERNEL_VERSION}/build make all
+RUN KERNEL_SRC_DIR=/lib/modules/${KERNEL_FULL_VERSION}/build make all
 
 FROM registry.redhat.io/ubi9/ubi-minimal
 
-ARG KERNEL_VERSION
+ARG KERNEL_FULL_VERSION
 
 RUN ["microdnf", "install", "-y", "kmod"]
 
-COPY --from=builder /usr/src/kernel-module-management/ci/kmm-kmod/kmm_ci_a.ko /opt/lib/modules/${KERNEL_VERSION}/
-COPY --from=builder /usr/src/kernel-module-management/ci/kmm-kmod/kmm_ci_b.ko /opt/lib/modules/${KERNEL_VERSION}/
+COPY --from=builder /usr/src/kernel-module-management/ci/kmm-kmod/kmm_ci_a.ko /opt/lib/modules/${KERNEL_FULL_VERSION}/
+COPY --from=builder /usr/src/kernel-module-management/ci/kmm-kmod/kmm_ci_b.ko /opt/lib/modules/${KERNEL_FULL_VERSION}/
 
-RUN depmod -b /opt ${KERNEL_VERSION}
+RUN depmod -b /opt ${KERNEL_FULL_VERSION}
 ```
 
 ## Building in cluster
@@ -129,7 +129,7 @@ ARG DTK_AUTO
 
 FROM ${DTK_AUTO} as builder
 
-ARG KERNEL_VERSION
+ARG KERNEL_FULL_VERSION
 
 WORKDIR /usr/src
 
@@ -137,16 +137,61 @@ RUN ["git", "clone", "https://github.com/rh-ecosystem-edge/kernel-module-managem
 
 WORKDIR /usr/src/kernel-module-management/ci/kmm-kmod
 
-RUN KERNEL_SRC_DIR=/lib/modules/${KERNEL_VERSION}/build make all
+RUN KERNEL_SRC_DIR=/lib/modules/${KERNEL_FULL_VERSION}/build make all
 
-FROM registry.redhat.io/ubi9/ubi-minimal
+FROM ubi9/ubi-minimal
 
-ARG KERNEL_VERSION
+ARG KERNEL_FULL_VERSION
 
 RUN ["microdnf", "install", "-y", "kmod"]
 
-COPY --from=builder /usr/src/kernel-module-management/ci/kmm-kmod/kmm_ci_a.ko /opt/lib/modules/${KERNEL_VERSION}/
-COPY --from=builder /usr/src/kernel-module-management/ci/kmm-kmod/kmm_ci_b.ko /opt/lib/modules/${KERNEL_VERSION}/
+COPY --from=builder /usr/src/kernel-module-management/ci/kmm-kmod/kmm_ci_a.ko /opt/lib/modules/${KERNEL_FULL_VERSION}/
+COPY --from=builder /usr/src/kernel-module-management/ci/kmm-kmod/kmm_ci_b.ko /opt/lib/modules/${KERNEL_FULL_VERSION}/
 
-RUN depmod -b /opt ${KERNEL_VERSION}
+RUN depmod -b /opt ${KERNEL_FULL_VERSION}
 ```
+
+### Depending on in-tree kernel modules
+
+Some kernel modules depend on other kernel modules shipped with the node's distribution.
+To avoid copying those dependencies into the kmod image, KMM mounts `/usr/lib/modules` into both the build and the
+worker Pod's filesystems.  
+By creating a symlink from `/opt/usr/lib/modules/[kernel-version]/[symlink-name]` to
+`/usr/lib/modules/[kernel-version]`, `depmod` can use the in-tree kmods on the building node's filesystem to resolve
+dependencies.
+At runtime, the worker Pod extracts the entire image, including the `[symlink-name]` symbolic link.
+That link points to `/usr/lib/modules/[kernel-version]` in the worker Pod, which is mounted from the node's filesystem.
+`modprobe` can then follow that link and load the in-tree dependencies as needed.
+
+In the example below, we use `host` as the symbolic link name under `/opt/usr/lib/modules/[kernel-version]`:
+
+```dockerfile
+ARG DTK_AUTO
+
+FROM ${DTK_AUTO} as builder
+
+#
+# Build steps
+#
+
+FROM ubi9/ubi
+
+ARG KERNEL_FULL_VERSION
+
+RUN dnf update && dnf install -y kmod
+
+COPY --from=builder /usr/src/kernel-module-management/ci/kmm-kmod/kmm_ci_a.ko /opt/lib/modules/${KERNEL_FULL_VERSION}/
+COPY --from=builder /usr/src/kernel-module-management/ci/kmm-kmod/kmm_ci_b.ko /opt/lib/modules/${KERNEL_FULL_VERSION}/
+
+# Create the symbolic link
+RUN ln -s /lib/modules/${KERNEL_FULL_VERSION} /opt/lib/modules/${KERNEL_FULL_VERSION}/host
+
+RUN depmod -b /opt ${KERNEL_FULL_VERSION}
+```
+
+!!! warning
+    `depmod` will generate dependency files based on the kernel modules present on the node that runs the kmod image
+    build.  
+    On the node on which KMM loads the kernel modules, `modprobe` will expect the files to be present under
+    `/usr/lib/modules/[kernel-version]`, and the same filesystem layout.  
+    It is highly recommended that the build and the target nodes share the same distribution and release.
