@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	workerImage = "quay.io/edge-infrastructure/kernel-module-management-worker:latest"
+	defaultWorkerImage = "quay.io/edge-infrastructure/kernel-module-management-worker:latest"
 )
 
 var (
@@ -35,10 +35,20 @@ var (
 	)
 )
 
-func ProduceMachineConfig(machineConfigName, machineConfigPoolRef, kernelModuleImage, kernelModuleName string) (string, error) {
+func ProduceMachineConfig(machineConfigName,
+	machineConfigPoolRef,
+	kernelModuleImage,
+	kernelModuleName,
+	inTreeModuleToRemove,
+	workerImage string) (string, error) {
 	localFilePath, err := getLocalFileName(kernelModuleImage)
 	if err != nil {
 		return "", fmt.Errorf("failed to get local file name for image %s: %v", kernelModuleImage, err)
+	}
+
+	workerImageToUse := defaultWorkerImage
+	if workerImage != "" {
+		workerImageToUse = workerImage
 	}
 
 	templateParams := map[string]any{
@@ -47,7 +57,8 @@ func ProduceMachineConfig(machineConfigName, machineConfigPoolRef, kernelModuleI
 		"MachineConfigPoolRef": machineConfigPoolRef,
 		"MachineConfigName":    machineConfigName,
 		"LocalFilePath":        localFilePath,
-		"WorkerImage":          workerImage,
+		"InTreeModuleToRemove": inTreeModuleToRemove,
+		"WorkerImage":          workerImageToUse,
 	}
 
 	templateParams["ReplaceInTreeDriverContents"], err = executeIntoBase64(scriptReplaceKmod, templateParams)
