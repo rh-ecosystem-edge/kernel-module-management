@@ -60,6 +60,10 @@ spec:
                           type: string
                         inTreeModuleToRemove:
                           type: string
+                        inTreeModulesToRemove:
+                          items:
+                            type: string
+                          type: array
                         insecurePull:
                           description: When InsecurePull is true, the container image
                             can be pulled without TLS.
@@ -199,6 +203,10 @@ spec:
                           type: string
                         inTreeModuleToRemove:
                           type: string
+                        inTreeModulesToRemove:
+                          items:
+                            type: string
+                          type: array
                         insecurePull:
                           description: When InsecurePull is true, the container image
                             can be pulled without TLS.
