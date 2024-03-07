@@ -3,6 +3,14 @@
 if [ -e {{.LocalFilePath}} ]; then
     echo "File {{.LocalFilePath}} found.Nothing to do"
 else
+    podman pull --authfile /var/lib/kubelet/config.json {{.WorkerImage}}
+    if [ $? -eq 0 ]; then
+        echo "Image {{.WorkerImage}} has been successfully pulled"
+    else
+        echo "Failed to pull image {{.WorkerImage}}"
+        exit 1
+    fi
+
     echo "File {{.LocalFilePath}} is not on the filesystem, pulling image {{.Image}}"
     podman pull --authfile /var/lib/kubelet/config.json {{.Image}}
     if [ $? -eq 0 ]; then

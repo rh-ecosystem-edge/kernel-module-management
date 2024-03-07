@@ -2,11 +2,10 @@
 
 echo "before checking image tar file presence"
 if [ -e /var/lib/image_file_day1.tar ]; then
-    echo "Image file /var/lib/image_file_day1.tar found on the local file system, removing in-tree kernel module"
+    echo "Image file /var/lib/image_file_day1.tar found on the local file system, running kernel-management worker image"
     podman run --user=root --privileged -v /lib/modules:/lib/modules -v /etc/kmm-worker-day1/config.yaml:/etc/kmm-worker/config.yaml -v /var/lib/image_file_day1.tar:/var/lib/image_file_day1.tar quay.io/edge-infrastructure/kernel-module-management-worker:latest kmod load --tarball /etc/kmm-worker/config.yaml
     if [ $? -eq 0 ]; then
         echo "OOT kernel module testKernelModuleName is inserted"
-        rm -f /var/lib/image_file_day1.tar
     else
         echo "failed to insert OOT kernel module testKernelModuleName"
     fi
