@@ -254,7 +254,7 @@ github.com/mitchellh/go-homedir
 # github.com/mitchellh/hashstructure/v2 v2.0.2
 ## explicit; go 1.14
 github.com/mitchellh/hashstructure/v2
-# github.com/moby/moby v25.0.3+incompatible
+# github.com/moby/moby v25.0.4+incompatible
 ## explicit
 github.com/moby/moby/pkg/archive
 # github.com/moby/patternmatcher v0.6.0
