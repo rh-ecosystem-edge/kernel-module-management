@@ -117,6 +117,7 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 		rbac:roleName=manager-role \
 		paths="./internal/controllers/hub" \
 		paths="internal/controllers/imagestream_reconciler.go" \
+		paths="internal/controllers/kernel_dtk_reconciler.go" \
 		output:rbac:artifacts:config=config/rbac-hub
 
 .PHONY: generate
