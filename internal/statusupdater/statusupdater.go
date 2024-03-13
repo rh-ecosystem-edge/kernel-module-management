@@ -2,13 +2,10 @@ package statusupdater
 
 import (
 	"context"
-	"fmt"
-	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
 	workv1 "open-cluster-management.io/api/work/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -32,15 +29,6 @@ type ManagedClusterModuleStatusUpdater interface {
 
 //go:generate mockgen -source=statusupdater.go -package=statusupdater -destination=mock_statusupdater.go
 
-type PreflightStatusUpdater interface {
-	PreflightPresetStatuses(ctx context.Context, pv *kmmv1beta1.PreflightValidation,
-		existingModules sets.Set[string], newModules []string) error
-	PreflightSetVerificationStatus(ctx context.Context, preflight *kmmv1beta1.PreflightValidation, moduleName string,
-		verificationStatus string, message string) error
-	PreflightSetVerificationStage(ctx context.Context, preflight *kmmv1beta1.PreflightValidation,
-		moduleName string, stage string) error
-}
-
 type PreflightOCPStatusUpdater interface {
 	PreflightOCPUpdateStatus(ctx context.Context, pvo *kmmv1beta1.PreflightValidationOCP, pv *kmmv1beta1.PreflightValidation) error
 }
@@ -50,10 +38,6 @@ type moduleStatusUpdater struct {
 }
 
 type managedClusterModuleStatusUpdater struct {
-	client client.Client
-}
-
-type preflightStatusUpdater struct {
 	client client.Client
 }
 
@@ -69,12 +53,6 @@ func NewModuleStatusUpdater(client client.Client) ModuleStatusUpdater {
 
 func NewManagedClusterModuleStatusUpdater(client client.Client) ManagedClusterModuleStatusUpdater {
 	return &managedClusterModuleStatusUpdater{
-		client: client,
-	}
-}
-
-func NewPreflightStatusUpdater(client client.Client) PreflightStatusUpdater {
-	return &preflightStatusUpdater{
 		client: client,
 	}
 }
@@ -138,46 +116,6 @@ func (m *managedClusterModuleStatusUpdater) ManagedClusterModuleUpdateStatus(ctx
 	mcm.Status.NumberDegraded = numDegraded
 
 	return m.client.Status().Patch(ctx, mcm, client.MergeFrom(unmodifiedMCM))
-}
-
-func (p *preflightStatusUpdater) PreflightPresetStatuses(ctx context.Context,
-	pv *kmmv1beta1.PreflightValidation, existingModules sets.Set[string], newModules []string) error {
-
-	modulesInStatus := sets.KeySet(pv.Status.CRStatuses)
-	modulesToDelete := modulesInStatus.Difference(existingModules).UnsortedList()
-	for _, moduleName := range modulesToDelete {
-		delete(pv.Status.CRStatuses, moduleName)
-	}
-
-	for _, moduleName := range newModules {
-		pv.Status.CRStatuses[moduleName] = &kmmv1beta1.CRStatus{
-			VerificationStatus: kmmv1beta1.VerificationFalse,
-			VerificationStage:  kmmv1beta1.VerificationStageImage,
-			LastTransitionTime: metav1.NewTime(time.Now()),
-		}
-	}
-	return p.client.Status().Update(ctx, pv)
-}
-
-func (p *preflightStatusUpdater) PreflightSetVerificationStatus(ctx context.Context, pv *kmmv1beta1.PreflightValidation, moduleName string,
-	verificationStatus string, message string) error {
-	if _, ok := pv.Status.CRStatuses[moduleName]; !ok {
-		return fmt.Errorf("failed to find module status %s in preflight %s", moduleName, pv.Name)
-	}
-	pv.Status.CRStatuses[moduleName].VerificationStatus = verificationStatus
-	pv.Status.CRStatuses[moduleName].StatusReason = message
-	pv.Status.CRStatuses[moduleName].LastTransitionTime = metav1.NewTime(time.Now())
-	return p.client.Status().Update(ctx, pv)
-}
-
-func (p *preflightStatusUpdater) PreflightSetVerificationStage(ctx context.Context, pv *kmmv1beta1.PreflightValidation,
-	moduleName string, stage string) error {
-	if _, ok := pv.Status.CRStatuses[moduleName]; !ok {
-		return fmt.Errorf("failed to find module status %s in preflight %s", moduleName, pv.Name)
-	}
-	pv.Status.CRStatuses[moduleName].VerificationStage = stage
-	pv.Status.CRStatuses[moduleName].LastTransitionTime = metav1.NewTime(time.Now())
-	return p.client.Status().Update(ctx, pv)
 }
 
 func (p *preflightOCPStatusUpdater) PreflightOCPUpdateStatus(ctx context.Context, pvo *kmmv1beta1.PreflightValidationOCP, pv *kmmv1beta1.PreflightValidation) error {

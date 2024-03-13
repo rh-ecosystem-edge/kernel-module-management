@@ -4,31 +4,29 @@ import (
 	"context"
 	"fmt"
 
-	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta2"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
+
+	"golang.org/x/exp/slices"
+	"k8s.io/apimachinery/pkg/types"
 	ctrlruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const (
-	VerificationStatusReasonBuildConfigPresent = "Verification successful, all driver-containers have paired BuildConfigs in the recipe"
-	VerificationStatusReasonNoDaemonSet        = "Verification successful, no driver-container present in the recipe"
-	VerificationStatusReasonUnknown            = "Verification has not started yet"
-	VerificationStatusReasonVerified           = "Verification successful (%s), this Module will not be verified again in this Preflight CR"
-)
+const VerificationStatusReasonVerified = "Verification successful (%s), this Module will not be verified again in this Preflight CR"
 
 //go:generate mockgen -source=preflight.go -package=preflight -destination=mock_preflight_api.go PreflightAPI, preflightHelperAPI
 
 type PreflightAPI interface {
-	PreflightUpgradeCheck(ctx context.Context, pv *kmmv1beta1.PreflightValidation, mod *kmmv1beta1.Module) (bool, string)
+	PreflightUpgradeCheck(ctx context.Context, pv *v1beta2.PreflightValidation, mod *v1beta1.Module) (bool, string)
 }
 
 func NewPreflightAPI(
@@ -37,7 +35,7 @@ func NewPreflightAPI(
 	signAPI sign.SignManager,
 	registryAPI registry.Registry,
 	kernelAPI module.KernelMapper,
-	statusUpdater statusupdater.PreflightStatusUpdater,
+	statusUpdater StatusUpdater,
 	authFactory auth.RegistryAuthGetterFactory) PreflightAPI {
 	helper := newPreflightHelper(client, buildAPI, signAPI, registryAPI, authFactory)
 	return &preflight{
@@ -49,11 +47,11 @@ func NewPreflightAPI(
 
 type preflight struct {
 	kernelAPI     module.KernelMapper
-	statusUpdater statusupdater.PreflightStatusUpdater
+	statusUpdater StatusUpdater
 	helper        preflightHelperAPI
 }
 
-func (p *preflight) PreflightUpgradeCheck(ctx context.Context, pv *kmmv1beta1.PreflightValidation, mod *kmmv1beta1.Module) (bool, string) {
+func (p *preflight) PreflightUpgradeCheck(ctx context.Context, pv *v1beta2.PreflightValidation, mod *v1beta1.Module) (bool, string) {
 	log := ctrlruntime.LoggerFrom(ctx)
 	kernelVersion := pv.Spec.KernelVersion
 	mld, err := p.kernelAPI.GetModuleLoaderDataForKernel(mod, kernelVersion)
@@ -61,9 +59,11 @@ func (p *preflight) PreflightUpgradeCheck(ctx context.Context, pv *kmmv1beta1.Pr
 		return false, fmt.Sprintf("failed to process kernel mapping in the module %s for kernel version %s", mod.Name, kernelVersion)
 	}
 
-	err = p.statusUpdater.PreflightSetVerificationStage(ctx, pv, mld.Name, kmmv1beta1.VerificationStageImage)
+	nsn := mld.NamespacedName()
+
+	err = p.statusUpdater.SetVerificationStage(ctx, pv, nsn, v1beta1.VerificationStageImage)
 	if err != nil {
-		log.Info(utils.WarnString("failed to update the stage of Module CR in preflight to image stage"), "module", mld.Name, "error", err)
+		log.Info(utils.WarnString("failed to update the stage of Module CR in preflight to image stage"), "module", nsn, "error", err)
 	}
 
 	verified, msg := p.helper.verifyImage(ctx, mld)
@@ -75,9 +75,9 @@ func (p *preflight) PreflightUpgradeCheck(ctx context.Context, pv *kmmv1beta1.Pr
 	shouldSign := module.ShouldBeSigned(mld)
 
 	if shouldBuild {
-		err = p.statusUpdater.PreflightSetVerificationStage(ctx, pv, mld.Name, kmmv1beta1.VerificationStageBuild)
+		err = p.statusUpdater.SetVerificationStage(ctx, pv, nsn, v1beta1.VerificationStageBuild)
 		if err != nil {
-			log.Info(utils.WarnString("failed to update the stage of Module CR in preflight to build stage"), "module", mld.Name, "error", err)
+			log.Info(utils.WarnString("failed to update the stage of Module CR in preflight to build stage"), "module", nsn, "error", err)
 		}
 
 		verified, msg = p.helper.verifyBuild(ctx, pv, mld)
@@ -87,9 +87,9 @@ func (p *preflight) PreflightUpgradeCheck(ctx context.Context, pv *kmmv1beta1.Pr
 	}
 
 	if shouldSign {
-		err = p.statusUpdater.PreflightSetVerificationStage(ctx, pv, mld.Name, kmmv1beta1.VerificationStageSign)
+		err = p.statusUpdater.SetVerificationStage(ctx, pv, nsn, v1beta1.VerificationStageSign)
 		if err != nil {
-			log.Info(utils.WarnString("failed to update the stage of Module CR in preflight to sign stage"), "module", mld.Name, "error", err)
+			log.Info(utils.WarnString("failed to update the stage of Module CR in preflight to sign stage"), "module", nsn, "error", err)
 		}
 		verified, msg = p.helper.verifySign(ctx, pv, mld)
 		if !verified {
@@ -101,8 +101,8 @@ func (p *preflight) PreflightUpgradeCheck(ctx context.Context, pv *kmmv1beta1.Pr
 
 type preflightHelperAPI interface {
 	verifyImage(ctx context.Context, mld *api.ModuleLoaderData) (bool, string)
-	verifyBuild(ctx context.Context, pv *kmmv1beta1.PreflightValidation, mld *api.ModuleLoaderData) (bool, string)
-	verifySign(ctx context.Context, pv *kmmv1beta1.PreflightValidation, mld *api.ModuleLoaderData) (bool, string)
+	verifyBuild(ctx context.Context, pv *v1beta2.PreflightValidation, mld *api.ModuleLoaderData) (bool, string)
+	verifySign(ctx context.Context, pv *v1beta2.PreflightValidation, mld *api.ModuleLoaderData) (bool, string)
 }
 
 type preflightHelper struct {
@@ -155,7 +155,7 @@ func (p *preflightHelper) verifyImage(ctx context.Context, mld *api.ModuleLoader
 	return false, fmt.Sprintf("image %s does not contain kernel module for kernel %s on any layer", image, kernelVersion)
 }
 
-func (p *preflightHelper) verifyBuild(ctx context.Context, pv *kmmv1beta1.PreflightValidation, mld *api.ModuleLoaderData) (bool, string) {
+func (p *preflightHelper) verifyBuild(ctx context.Context, pv *v1beta2.PreflightValidation, mld *api.ModuleLoaderData) (bool, string) {
 	log := ctrlruntime.LoggerFrom(ctx)
 	// at this stage we know that eiher mapping Build or Container build are defined
 	buildStatus, err := p.buildAPI.Sync(ctx, mld, pv.Spec.PushBuiltImage, pv)
@@ -174,7 +174,7 @@ func (p *preflightHelper) verifyBuild(ctx context.Context, pv *kmmv1beta1.Prefli
 	return false, "Waiting for build verification"
 }
 
-func (p *preflightHelper) verifySign(ctx context.Context, pv *kmmv1beta1.PreflightValidation, mld *api.ModuleLoaderData) (bool, string) {
+func (p *preflightHelper) verifySign(ctx context.Context, pv *v1beta2.PreflightValidation, mld *api.ModuleLoaderData) (bool, string) {
 	log := ctrlruntime.LoggerFrom(ctx)
 
 	previousImage := ""
@@ -197,4 +197,16 @@ func (p *preflightHelper) verifySign(ctx context.Context, pv *kmmv1beta1.Preflig
 		return true, fmt.Sprintf(VerificationStatusReasonVerified, msg)
 	}
 	return false, "Waiting for sign verification"
+}
+
+func FindModuleStatus(statuses []v1beta2.PreflightValidationModuleStatus, nsn types.NamespacedName) (*v1beta2.PreflightValidationModuleStatus, bool) {
+	i := slices.IndexFunc(statuses, func(status v1beta2.PreflightValidationModuleStatus) bool {
+		return status.Namespace == nsn.Namespace && status.Name == nsn.Name
+	})
+
+	if i != -1 {
+		return &statuses[i], true
+	}
+
+	return nil, false
 }

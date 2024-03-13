@@ -48,7 +48,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2024-03-07T10:42:23Z"
+    createdAt: "2024-03-18T10:09:59Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -73,6 +73,9 @@ spec:
       kind: PreflightValidation
       name: preflightvalidations.kmm.sigs.x-k8s.io
       version: v1beta1
+    - kind: PreflightValidation
+      name: preflightvalidations.kmm.sigs.x-k8s.io
+      version: v1beta2
     - description: PreflightValidationOCP initiates a preflight validations for all
         Modules on the current OCP cluster.
       displayName: Preflight Validation OCP
@@ -467,6 +470,7 @@ spec:
                 - --config=controller_config.yaml
                 - --enable-module
                 - --enable-namespace
+                - --enable-preflightvalidation
                 image: quay.io/edge-infrastructure/kernel-module-management-webhook-server:latest
                 imagePullPolicy: Always
                 livenessProbe:
@@ -601,6 +605,18 @@ spec:
     name: sign
   version: 0.0.1
   webhookdefinitions:
+  - admissionReviewVersions:
+    - v1beta2
+    - v1beta1
+    containerPort: 443
+    conversionCRDs:
+    - preflightvalidations.kmm.sigs.x-k8s.io
+    deploymentName: kmm-operator-webhook-server
+    generateName: cpreflightvalidations.kb.io
+    sideEffects: None
+    targetPort: 9443
+    type: ConversionWebhook
+    webhookPath: /convert
   - admissionReviewVersions:
     - v1
     containerPort: 443
