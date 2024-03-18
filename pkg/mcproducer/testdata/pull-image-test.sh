@@ -1,7 +1,8 @@
 #!/bin/bash
 
 if [ -e /var/lib/image_file_day1.tar ]; then
-    echo "File /var/lib/image_file_day1.tar found.Nothing to do"
+    echo "File /var/lib/image_file_day1.tar found.Nothing to do, the file was handled, removing it"
+    rm -f /var/lib/image_file_day1.tar
 else
     podman pull --authfile /var/lib/kubelet/config.json quay.io/edge-infrastructure/kernel-module-management-worker:latest
     if [ $? -eq 0 ]; then
