@@ -40,6 +40,9 @@ patches:
     - op: add
       path: /spec/template/spec/containers/0/args/-
       value: --enable-namespace
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: --enable-preflightvalidation
 
 configurations:
 - kustomizeconfig.yaml

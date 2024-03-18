@@ -8,7 +8,8 @@ import (
 	v1stream "github.com/google/go-containerregistry/pkg/v1/stream"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta2"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
@@ -16,10 +17,10 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	"go.uber.org/mock/gomock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 const (
@@ -29,31 +30,31 @@ const (
 )
 
 var (
-	mod *kmmv1beta1.Module
-	pv  *kmmv1beta1.PreflightValidation
+	mod *v1beta1.Module
+	pv  *v1beta2.PreflightValidation
 )
 
 func TestPreflight(t *testing.T) {
 	RegisterFailHandler(Fail)
 
 	BeforeEach(func() {
-		pv = &kmmv1beta1.PreflightValidation{
+		pv = &v1beta2.PreflightValidation{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "preflight-name",
 				Namespace: "preflight-namespace",
 			},
-			Spec: kmmv1beta1.PreflightValidationSpec{
+			Spec: v1beta2.PreflightValidationSpec{
 				KernelVersion: kernelVersion,
 			},
 		}
-		mod = &kmmv1beta1.Module{
+		mod = &v1beta1.Module{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: moduleName,
 			},
-			Spec: kmmv1beta1.ModuleSpec{
-				ModuleLoader: kmmv1beta1.ModuleLoaderSpec{
-					Container: kmmv1beta1.ModuleLoaderContainerSpec{
-						Modprobe: kmmv1beta1.ModprobeSpec{
+			Spec: v1beta1.ModuleSpec{
+				ModuleLoader: v1beta1.ModuleLoaderSpec{
+					Container: v1beta1.ModuleLoaderContainerSpec{
+						Modprobe: v1beta1.ModprobeSpec{
 							ModuleName: "simple-kmod",
 							DirName:    "/opt",
 						},
@@ -77,7 +78,7 @@ var _ = Describe("preflight_PreflightUpgradeCheck", func() {
 	var (
 		ctrl              *gomock.Controller
 		mockKernelAPI     *module.MockKernelMapper
-		mockStatusUpdater *statusupdater.MockPreflightStatusUpdater
+		mockStatusUpdater *MockStatusUpdater
 		preflightHelper   *MockpreflightHelperAPI
 		p                 *preflight
 	)
@@ -85,7 +86,7 @@ var _ = Describe("preflight_PreflightUpgradeCheck", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		mockKernelAPI = module.NewMockKernelMapper(ctrl)
-		mockStatusUpdater = statusupdater.NewMockPreflightStatusUpdater(ctrl)
+		mockStatusUpdater = NewMockStatusUpdater(ctrl)
 		preflightHelper = NewMockpreflightHelperAPI(ctrl)
 		p = &preflight{
 			kernelAPI:     mockKernelAPI,
@@ -100,7 +101,7 @@ var _ = Describe("preflight_PreflightUpgradeCheck", func() {
 	})
 
 	It("Failed to process mapping", func() {
-		mod.Spec.ModuleLoader.Container.KernelMappings = []kmmv1beta1.KernelMapping{}
+		mod.Spec.ModuleLoader.Container.KernelMappings = []v1beta1.KernelMapping{}
 		mockKernelAPI.EXPECT().GetModuleLoaderDataForKernel(mod, kernelVersion).Return(nil, fmt.Errorf("some error"))
 
 		res, message := p.PreflightUpgradeCheck(context.Background(), pv, mod)
@@ -120,29 +121,31 @@ var _ = Describe("preflight_PreflightUpgradeCheck", func() {
 			KernelVersion:  kernelVersion,
 		}
 		if buildExists {
-			mld.Build = &kmmv1beta1.Build{}
+			mld.Build = &v1beta1.Build{}
 		}
 		if signExists {
-			mld.Sign = &kmmv1beta1.Sign{}
+			mld.Sign = &v1beta1.Sign{}
 		}
 
+		nsn := types.NamespacedName{Name: mod.Name, Namespace: mod.Namespace}
+
 		mockKernelAPI.EXPECT().GetModuleLoaderDataForKernel(mod, kernelVersion).Return(&mld, nil)
-		mockStatusUpdater.EXPECT().PreflightSetVerificationStage(context.Background(), pv, mld.Name, kmmv1beta1.VerificationStageImage).Return(nil)
+		mockStatusUpdater.EXPECT().SetVerificationStage(ctx, pv, nsn, v1beta1.VerificationStageImage).Return(nil)
 		preflightHelper.EXPECT().verifyImage(ctx, &mld).Return(imageVerified, "image message")
 		if !imageVerified {
 			if buildExists {
-				mockStatusUpdater.EXPECT().PreflightSetVerificationStage(context.Background(), pv, mld.Name, kmmv1beta1.VerificationStageBuild).Return(nil)
+				mockStatusUpdater.EXPECT().SetVerificationStage(ctx, pv, nsn, v1beta1.VerificationStageBuild).Return(nil)
 				preflightHelper.EXPECT().verifyBuild(ctx, pv, &mld).Return(buildVerified, "build message")
 			}
 			if signExists {
 				if buildVerified || !buildExists {
-					mockStatusUpdater.EXPECT().PreflightSetVerificationStage(context.Background(), pv, mld.Name, kmmv1beta1.VerificationStageSign).Return(nil)
+					mockStatusUpdater.EXPECT().SetVerificationStage(ctx, pv, nsn, v1beta1.VerificationStageSign).Return(nil)
 					preflightHelper.EXPECT().verifySign(ctx, pv, &mld).Return(signVerified, "sign message")
 				}
 			}
 		}
 
-		res, msg := p.PreflightUpgradeCheck(context.Background(), pv, mod)
+		res, msg := p.PreflightUpgradeCheck(ctx, pv, mod)
 		Expect(res).To(Equal(returnedResult))
 		Expect(msg).To(Equal(returnedMessage))
 	},
@@ -334,7 +337,7 @@ var _ = Describe("preflightHelper_verifyBuild", func() {
 		mld := api.ModuleLoaderData{
 			Name:           mod.Name,
 			ContainerImage: containerImage,
-			Build:          &kmmv1beta1.Build{},
+			Build:          &v1beta1.Build{},
 			KernelVersion:  kernelVersion,
 		}
 
@@ -350,7 +353,7 @@ var _ = Describe("preflightHelper_verifyBuild", func() {
 		mld := api.ModuleLoaderData{
 			Name:           mod.Name,
 			ContainerImage: containerImage,
-			Build:          &kmmv1beta1.Build{},
+			Build:          &v1beta1.Build{},
 			KernelVersion:  kernelVersion,
 		}
 
@@ -366,7 +369,7 @@ var _ = Describe("preflightHelper_verifyBuild", func() {
 		mld := api.ModuleLoaderData{
 			Name:           mod.Name,
 			ContainerImage: containerImage,
-			Build:          &kmmv1beta1.Build{},
+			Build:          &v1beta1.Build{},
 			KernelVersion:  kernelVersion,
 		}
 
@@ -406,7 +409,7 @@ var _ = Describe("preflightHelper_verifySign", func() {
 		mld := api.ModuleLoaderData{
 			Name:           mod.Name,
 			ContainerImage: containerImage,
-			Sign:           &kmmv1beta1.Sign{},
+			Sign:           &v1beta1.Sign{},
 			KernelVersion:  kernelVersion,
 		}
 
@@ -424,7 +427,7 @@ var _ = Describe("preflightHelper_verifySign", func() {
 		mld := api.ModuleLoaderData{
 			Name:           mod.Name,
 			ContainerImage: containerImage,
-			Sign:           &kmmv1beta1.Sign{},
+			Sign:           &v1beta1.Sign{},
 			KernelVersion:  kernelVersion,
 		}
 
@@ -442,7 +445,7 @@ var _ = Describe("preflightHelper_verifySign", func() {
 		mld := api.ModuleLoaderData{
 			Name:           mod.Name,
 			ContainerImage: containerImage,
-			Sign:           &kmmv1beta1.Sign{},
+			Sign:           &v1beta1.Sign{},
 			KernelVersion:  kernelVersion,
 		}
 
@@ -454,5 +457,34 @@ var _ = Describe("preflightHelper_verifySign", func() {
 		res, msg := ph.verifySign(context.Background(), pv, &mld)
 		Expect(res).To(BeFalse())
 		Expect(msg).To(Equal("Waiting for sign verification"))
+	})
+})
+
+const namespace = "namespace"
+
+var _ = Describe("FindModuleStatus", func() {
+	It("should return false if the corresponding status is not found", func() {
+		statuses := []v1beta2.PreflightValidationModuleStatus{
+			{Name: "module-1", Namespace: namespace},
+			{Name: "module-2", Namespace: namespace},
+		}
+
+		_, ok := FindModuleStatus(statuses, types.NamespacedName{Name: "module-3", Namespace: namespace})
+		Expect(ok).To(BeFalse())
+	})
+
+	It("should return the status and true if the corresponding status is found", func() {
+		const moduleName = "module-1"
+
+		s := v1beta2.PreflightValidationModuleStatus{Name: moduleName, Namespace: namespace}
+
+		statuses := []v1beta2.PreflightValidationModuleStatus{
+			s,
+			{Name: "module-2", Namespace: namespace},
+		}
+
+		res, ok := FindModuleStatus(statuses, types.NamespacedName{Name: moduleName, Namespace: namespace})
+		Expect(*res).To(Equal(s))
+		Expect(ok).To(BeTrue())
 	})
 })
