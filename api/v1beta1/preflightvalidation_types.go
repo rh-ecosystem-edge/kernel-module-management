@@ -17,6 +17,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta2"
@@ -77,27 +78,11 @@ func (p *PreflightValidation) ConvertTo(dstRaw conversion.Hub) error {
 	dst.ObjectMeta = p.ObjectMeta
 	dst.Spec = p.Spec
 
-	dst.Status = v1beta2.PreflightValidationStatus{}
+	var err error
 
-	if count := len(p.Status.CRStatuses); count > 0 {
-		dst.Status.Modules = make([]v1beta2.PreflightValidationModuleStatus, 0, count)
-
-		for k, v := range p.Status.CRStatuses {
-			namespace, name, ok := strings.Cut(k, "/")
-
-			if !ok || v == nil {
-				// Elements whose key is not a namespace name or that are nil are invalid.
-				return nil
-			}
-
-			status := v1beta2.PreflightValidationModuleStatus{
-				CRBaseStatus: *v,
-				Namespace:    namespace,
-				Name:         name,
-			}
-
-			dst.Status.Modules = append(dst.Status.Modules, status)
-		}
+	dst.Status, err = v1beta2StatusFromV1beta1(p.Status)
+	if err != nil {
+		return fmt.Errorf("error while converting status: %v", err)
 	}
 
 	return nil
@@ -108,17 +93,7 @@ func (p *PreflightValidation) ConvertFrom(srcRaw conversion.Hub) error {
 
 	p.ObjectMeta = src.ObjectMeta
 	p.Spec = src.Spec
-
-	p.Status = PreflightValidationStatus{}
-
-	if count := len(src.Status.Modules); count > 0 {
-		p.Status.CRStatuses = make(map[string]*CRStatus, count)
-
-		for _, v := range src.Status.Modules {
-			v := v
-			p.Status.CRStatuses[v.Namespace+"/"+v.Name] = &v.CRBaseStatus
-		}
-	}
+	p.Status = v1beta1StatusFromV1beta2(src.Status)
 
 	return nil
 }
@@ -137,4 +112,46 @@ type PreflightValidationList struct {
 
 func init() {
 	SchemeBuilder.Register(&PreflightValidation{}, &PreflightValidationList{})
+}
+
+func v1beta1StatusFromV1beta2(s v1beta2.PreflightValidationStatus) PreflightValidationStatus {
+	res := PreflightValidationStatus{}
+
+	if count := len(s.Modules); count > 0 {
+		res.CRStatuses = make(map[string]*CRStatus, count)
+
+		for _, v := range s.Modules {
+			v := v
+			res.CRStatuses[v.Namespace+"/"+v.Name] = &v.CRBaseStatus
+		}
+	}
+
+	return res
+}
+
+func v1beta2StatusFromV1beta1(s PreflightValidationStatus) (v1beta2.PreflightValidationStatus, error) {
+	res := v1beta2.PreflightValidationStatus{}
+
+	if count := len(s.CRStatuses); count > 0 {
+		res.Modules = make([]v1beta2.PreflightValidationModuleStatus, 0, count)
+
+		for k, v := range s.CRStatuses {
+			namespace, name, ok := strings.Cut(k, "/")
+
+			if !ok || v == nil {
+				// Elements whose key is not a namespace name or that are nil are invalid.
+				return v1beta2.PreflightValidationStatus{}, nil
+			}
+
+			status := v1beta2.PreflightValidationModuleStatus{
+				CRBaseStatus: *v,
+				Namespace:    namespace,
+				Name:         name,
+			}
+
+			res.Modules = append(res.Modules, status)
+		}
+	}
+
+	return res, nil
 }

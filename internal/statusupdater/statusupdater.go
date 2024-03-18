@@ -27,21 +27,11 @@ type ManagedClusterModuleStatusUpdater interface {
 		ownedManifestWorks []workv1.ManifestWork) error
 }
 
-//go:generate mockgen -source=statusupdater.go -package=statusupdater -destination=mock_statusupdater.go
-
-type PreflightOCPStatusUpdater interface {
-	PreflightOCPUpdateStatus(ctx context.Context, pvo *kmmv1beta1.PreflightValidationOCP, pv *kmmv1beta1.PreflightValidation) error
-}
-
 type moduleStatusUpdater struct {
 	client client.Client
 }
 
 type managedClusterModuleStatusUpdater struct {
-	client client.Client
-}
-
-type preflightOCPStatusUpdater struct {
 	client client.Client
 }
 
@@ -53,12 +43,6 @@ func NewModuleStatusUpdater(client client.Client) ModuleStatusUpdater {
 
 func NewManagedClusterModuleStatusUpdater(client client.Client) ManagedClusterModuleStatusUpdater {
 	return &managedClusterModuleStatusUpdater{
-		client: client,
-	}
-}
-
-func NewPreflightOCPStatusUpdater(client client.Client) PreflightOCPStatusUpdater {
-	return &preflightOCPStatusUpdater{
 		client: client,
 	}
 }
@@ -116,9 +100,4 @@ func (m *managedClusterModuleStatusUpdater) ManagedClusterModuleUpdateStatus(ctx
 	mcm.Status.NumberDegraded = numDegraded
 
 	return m.client.Status().Patch(ctx, mcm, client.MergeFrom(unmodifiedMCM))
-}
-
-func (p *preflightOCPStatusUpdater) PreflightOCPUpdateStatus(ctx context.Context, pvo *kmmv1beta1.PreflightValidationOCP, pv *kmmv1beta1.PreflightValidation) error {
-	pv.Status.DeepCopyInto(&pvo.Status)
-	return p.client.Status().Update(ctx, pvo)
 }

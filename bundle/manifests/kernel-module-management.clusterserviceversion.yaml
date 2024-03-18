@@ -48,7 +48,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2024-03-18T10:09:59Z"
+    createdAt: "2024-03-18T12:12:03Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -82,6 +82,9 @@ spec:
       kind: PreflightValidationOCP
       name: preflightvalidationsocp.kmm.sigs.x-k8s.io
       version: v1beta1
+    - kind: PreflightValidationOCP
+      name: preflightvalidationsocp.kmm.sigs.x-k8s.io
+      version: v1beta2
   description: Kubernetes operator managing out of tree kernel modules
   displayName: Kernel Module Management
   icon:
@@ -611,8 +614,9 @@ spec:
     containerPort: 443
     conversionCRDs:
     - preflightvalidations.kmm.sigs.x-k8s.io
+    - preflightvalidationsocp.kmm.sigs.x-k8s.io
     deploymentName: kmm-operator-webhook-server
-    generateName: cpreflightvalidations.kb.io
+    generateName: cpreflightvalidationspreflightvalidationsocp.kb.io
     sideEffects: None
     targetPort: 9443
     type: ConversionWebhook

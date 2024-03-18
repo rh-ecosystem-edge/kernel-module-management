@@ -8,11 +8,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	openapivi "github.com/openshift/api/image/v1"
-	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta2"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/preflight"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
@@ -27,7 +27,7 @@ var _ = Describe("PreflightValidationOCPReconciler_getDTKFromImage", func() {
 	var (
 		ctrl            *gomock.Controller
 		clnt            *client.MockClient
-		mockSU          *statusupdater.MockPreflightOCPStatusUpdater
+		mockSU          *preflight.MockOCPStatusUpdater
 		mockRegistry    *registry.MockRegistry
 		mockAuthFactory *auth.MockRegistryAuthGetterFactory
 		mockAuth        *auth.MockRegistryAuthGetter
@@ -39,7 +39,7 @@ var _ = Describe("PreflightValidationOCPReconciler_getDTKFromImage", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mockSU = statusupdater.NewMockPreflightOCPStatusUpdater(ctrl)
+		mockSU = preflight.NewMockOCPStatusUpdater(ctrl)
 		mockRegistry = registry.NewMockRegistry(ctrl)
 		mockAuthFactory = auth.NewMockRegistryAuthGetterFactory(ctrl)
 		mockAuth = auth.NewMockRegistryAuthGetter(ctrl)
@@ -176,7 +176,7 @@ var _ = Describe("PreflightValidationOCPReconciler_getDTKFromImage", func() {
 		var (
 			releaseOCPData openapivi.ImageStream
 			dtkReleaseData dtkRelease
-			pvo            kmmv1beta1.PreflightValidationOCP
+			pvo            v1beta2.PreflightValidationOCP
 		)
 		BeforeEach(func() {
 			dtkReleaseData = dtkRelease{KernelVersion: "kernelVersion", RTKernelVersion: "rtKernelVersion", RHELVersion: "rhelVersion"}
@@ -194,12 +194,12 @@ var _ = Describe("PreflightValidationOCPReconciler_getDTKFromImage", func() {
 					},
 				},
 			}
-			pvo = kmmv1beta1.PreflightValidationOCP{
+			pvo = v1beta2.PreflightValidationOCP{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "pvo name",
 					Namespace: "pvo namespace",
 				},
-				Spec: kmmv1beta1.PreflightValidationOCPSpec{
+				Spec: v1beta2.PreflightValidationOCPSpec{
 					ReleaseImage:   "ocpReleaseImage",
 					PushBuiltImage: true,
 				},

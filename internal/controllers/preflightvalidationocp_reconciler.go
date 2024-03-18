@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/preflight"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,11 +33,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openapivi "github.com/openshift/api/image/v1"
-	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta2"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 )
 
@@ -59,7 +59,7 @@ type PreflightValidationOCPReconciler struct {
 	registry           registry.Registry
 	registryAuthGetter auth.RegistryAuthGetter
 	kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping
-	statusUpdater      statusupdater.PreflightOCPStatusUpdater
+	statusUpdater      preflight.OCPStatusUpdater
 	scheme             *runtime.Scheme
 }
 
@@ -69,7 +69,7 @@ func NewPreflightValidationOCPReconciler(
 	registry registry.Registry,
 	authFactory auth.RegistryAuthGetterFactory,
 	kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping,
-	statusUpdater statusupdater.PreflightOCPStatusUpdater,
+	statusUpdater preflight.OCPStatusUpdater,
 	scheme *runtime.Scheme) *PreflightValidationOCPReconciler {
 	registryAuthGetter := authFactory.NewClusterAuthGetter()
 	return &PreflightValidationOCPReconciler{
@@ -86,8 +86,8 @@ func NewPreflightValidationOCPReconciler(
 func (r *PreflightValidationOCPReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("preflightvalidationocp").
-		For(&kmmv1beta1.PreflightValidationOCP{}, builder.WithPredicates(filter.PreflightOCPReconcilerUpdatePredicate())).
-		Owns(&kmmv1beta1.PreflightValidation{}).
+		For(&v1beta2.PreflightValidationOCP{}, builder.WithPredicates(filter.PreflightOCPReconcilerUpdatePredicate())).
+		Owns(&v1beta2.PreflightValidation{}).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 1,
 		}).
@@ -106,7 +106,7 @@ func (r *PreflightValidationOCPReconciler) Reconcile(ctx context.Context, req ct
 	log := ctrl.LoggerFrom(ctx)
 	log.Info("Start PreflightValidationOCP Reconciliation")
 
-	pvo := kmmv1beta1.PreflightValidationOCP{}
+	pvo := v1beta2.PreflightValidationOCP{}
 	err := r.client.Get(ctx, req.NamespacedName, &pvo)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -125,12 +125,12 @@ func (r *PreflightValidationOCPReconciler) Reconcile(ctx context.Context, req ct
 	return ctrl.Result{}, nil
 }
 
-func (r *PreflightValidationOCPReconciler) runPreflightValidationOCP(ctx context.Context, pvo *kmmv1beta1.PreflightValidationOCP) error {
+func (r *PreflightValidationOCPReconciler) runPreflightValidationOCP(ctx context.Context, pvo *v1beta2.PreflightValidationOCP) error {
 	log := ctrl.LoggerFrom(ctx)
 
 	// get compatible PreflightValidation
 	nsn := types.NamespacedName{Name: pvo.Name, Namespace: pvo.Namespace}
-	pv := &kmmv1beta1.PreflightValidation{}
+	pv := &v1beta2.PreflightValidation{}
 	err := r.client.Get(ctx, nsn, pv)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -161,7 +161,7 @@ func (r *PreflightValidationOCPReconciler) runPreflightValidationOCP(ctx context
 }
 
 func (r *PreflightValidationOCPReconciler) preparePreflightValidation(ctx context.Context,
-	pvo *kmmv1beta1.PreflightValidationOCP) (*kmmv1beta1.PreflightValidation, error) {
+	pvo *v1beta2.PreflightValidationOCP) (*v1beta2.PreflightValidation, error) {
 	log := ctrl.LoggerFrom(ctx)
 	dtkImage, err := r.getDTKFromImage(ctx, pvo.Spec.ReleaseImage)
 	if err != nil {
@@ -191,12 +191,12 @@ func (r *PreflightValidationOCPReconciler) preparePreflightValidation(ctx contex
 		r.kernelOsDtkMapping.SetImageStreamInfo(osVersion, dtkImage)
 	}
 
-	pv := kmmv1beta1.PreflightValidation{
+	pv := v1beta2.PreflightValidation{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pvo.Name,
 			Namespace: pvo.Namespace,
 		},
-		Spec: kmmv1beta1.PreflightValidationSpec{
+		Spec: v1beta2.PreflightValidationSpec{
 			KernelVersion:  kernelVersion,
 			PushBuiltImage: pvo.Spec.PushBuiltImage,
 		},

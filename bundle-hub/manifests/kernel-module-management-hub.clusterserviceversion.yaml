@@ -32,7 +32,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2024-03-18T10:10:00Z"
+    createdAt: "2024-03-18T12:12:04Z"
     operatorframework.io/suggested-namespace: openshift-kmm-hub
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
