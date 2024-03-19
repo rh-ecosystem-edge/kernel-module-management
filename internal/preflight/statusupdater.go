@@ -114,3 +114,24 @@ func (p *statusUpdater) SetVerificationStage(
 
 	return p.client.Status().Update(ctx, pv)
 }
+
+//go:generate mockgen -source=statusupdater.go -package=preflight -destination=mock_statusupdater.go
+
+type OCPStatusUpdater interface {
+	PreflightOCPUpdateStatus(ctx context.Context, pvo *v1beta2.PreflightValidationOCP, pv *v1beta2.PreflightValidation) error
+}
+
+func NewOCPStatusUpdater(client client.Client) OCPStatusUpdater {
+	return &ocpStatusUpdater{
+		client: client,
+	}
+}
+
+type ocpStatusUpdater struct {
+	client client.Client
+}
+
+func (p *ocpStatusUpdater) PreflightOCPUpdateStatus(ctx context.Context, pvo *v1beta2.PreflightValidationOCP, pv *v1beta2.PreflightValidation) error {
+	pv.Status.DeepCopyInto(&pvo.Status)
+	return p.client.Status().Update(ctx, pvo)
+}

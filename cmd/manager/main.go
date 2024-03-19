@@ -57,7 +57,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
 	signocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/sign/ocpbuild"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	//+kubebuilder:scaffold:imports
@@ -219,7 +218,7 @@ func main() {
 	}
 
 	preflightStatusUpdaterAPI := preflight.NewStatusUpdater(client)
-	preflightOCPStatusUpdaterAPI := statusupdater.NewPreflightOCPStatusUpdater(client)
+	preflightOCPStatusUpdaterAPI := preflight.NewOCPStatusUpdater(client)
 	preflightAPI := preflight.NewPreflightAPI(client, buildAPI, signAPI, registryAPI, kernelAPI, preflightStatusUpdaterAPI, authFactory)
 
 	if err = controllers.NewPreflightValidationReconciler(client, filterAPI, metricsAPI, preflightStatusUpdaterAPI, preflightAPI).SetupWithManager(mgr); err != nil {
