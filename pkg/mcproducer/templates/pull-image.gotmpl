@@ -1,7 +1,8 @@
 #!/bin/bash
 
 if [ -e {{.LocalFilePath}} ]; then
-    echo "File {{.LocalFilePath}} found.Nothing to do"
+    echo "File {{.LocalFilePath}} found.Nothing to do, the file was handled, removing it"
+    rm -f {{.LocalFilePath}}
 else
     podman pull --authfile /var/lib/kubelet/config.json {{.WorkerImage}}
     if [ $? -eq 0 ]; then
