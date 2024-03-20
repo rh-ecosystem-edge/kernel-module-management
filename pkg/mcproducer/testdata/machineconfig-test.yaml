@@ -32,8 +32,9 @@ spec:
         - contents: |
             [Unit]
             Description=Pull oot kernel module image
+            ConditionPathExists=!/etc/systemd/system/on-prem-resolv-prepender.service
             After=network-online.target
-            Wants=network-online.target
+            Requires=network-online.target
             DefaultDependencies=no
             [Service]
             User=root
@@ -46,6 +47,25 @@ spec:
             WantedBy=multi-user.target
           enabled: true
           name: "pull-kernel-module-image.service"
+        - contents: |
+            [Unit]
+            Description=Pull oot kernel module image in on-prem OCP cluster
+            ConditionPathExists=/etc/systemd/system/on-prem-resolv-prepender.service
+            After=network-online.target
+            After=NetworkManager-dispatcher.service
+            DefaultDependencies=no
+            [Service]
+            User=root
+            Type=oneshot
+            ExecStartPre=/usr/local/bin/wait-for-dispatcher.sh
+            ExecStart=/usr/local/bin/pull-kernel-module-image.sh
+            PrivateTmp=yes
+            RemainAfterExit=no
+            TimeoutSec=900
+            [Install]
+            WantedBy=multi-user.target
+          enabled: true
+          name: "pull-kernel-module-image-on-prem.service"
         - enabled: false
           mask: true
           name: crio-wipe.service
@@ -65,6 +85,13 @@ spec:
             name: "root"
           contents:
             source: "data:text/plain;base64,IyEvYmluL2Jhc2gKCmlmIFsgLWUgL3Zhci9saWIvaW1hZ2VfZmlsZV9kYXkxLnRhciBdOyB0aGVuCiAgICBlY2hvICJGaWxlIC92YXIvbGliL2ltYWdlX2ZpbGVfZGF5MS50YXIgZm91bmQuTm90aGluZyB0byBkbywgdGhlIGZpbGUgd2FzIGhhbmRsZWQsIHJlbW92aW5nIGl0IgogICAgcm0gLWYgL3Zhci9saWIvaW1hZ2VfZmlsZV9kYXkxLnRhcgplbHNlCiAgICBwb2RtYW4gcHVsbCAtLWF1dGhmaWxlIC92YXIvbGliL2t1YmVsZXQvY29uZmlnLmpzb24gcXVheS5pby9lZGdlLWluZnJhc3RydWN0dXJlL2tlcm5lbC1tb2R1bGUtbWFuYWdlbWVudC13b3JrZXI6bGF0ZXN0CiAgICBpZiBbICQ/IC1lcSAwIF07IHRoZW4KICAgICAgICBlY2hvICJJbWFnZSBxdWF5LmlvL2VkZ2UtaW5mcmFzdHJ1Y3R1cmUva2VybmVsLW1vZHVsZS1tYW5hZ2VtZW50LXdvcmtlcjpsYXRlc3QgaGFzIGJlZW4gc3VjY2Vzc2Z1bGx5IHB1bGxlZCIKICAgIGVsc2UKICAgICAgICBlY2hvICJGYWlsZWQgdG8gcHVsbCBpbWFnZSBxdWF5LmlvL2VkZ2UtaW5mcmFzdHJ1Y3R1cmUva2VybmVsLW1vZHVsZS1tYW5hZ2VtZW50LXdvcmtlcjpsYXRlc3QiCiAgICAgICAgZXhpdCAxCiAgICBmaQoKICAgIGVjaG8gIkZpbGUgL3Zhci9saWIvaW1hZ2VfZmlsZV9kYXkxLnRhciBpcyBub3Qgb24gdGhlIGZpbGVzeXN0ZW0sIHB1bGxpbmcgaW1hZ2UgcXVheS5pby9wcm9qZWN0L3JlcG86c29tZS10YWcxMiIKICAgIHBvZG1hbiBwdWxsIC0tYXV0aGZpbGUgL3Zhci9saWIva3ViZWxldC9jb25maWcuanNvbiBxdWF5LmlvL3Byb2plY3QvcmVwbzpzb21lLXRhZzEyCiAgICBpZiBbICQ/IC1lcSAwIF07IHRoZW4KICAgICAgICBlY2hvICJJbWFnZSBxdWF5LmlvL3Byb2plY3QvcmVwbzpzb21lLXRhZzEyIGhhcyBiZWVuIHN1Y2Nlc3NmdWxseSBwdWxsZWQiCiAgICBlbHNlCiAgICAgICAgZWNobyAiRmFpbGVkIHRvIHB1bGwgaW1hZ2UgcXVheS5pby9wcm9qZWN0L3JlcG86c29tZS10YWcxMiIKICAgICAgICBleGl0IDEKICAgIGZpCiAgICBlY2hvICJTYXZpbmcgaW1hZ2UgcXVheS5pby9wcm9qZWN0L3JlcG86c29tZS10YWcxMiBpbnRvIGEgZmlsZSAvdmFyL2xpYi9pbWFnZV9maWxlX2RheTEudGFyIgogICAgcG9kbWFuIHNhdmUgLW8gL3Zhci9saWIvaW1hZ2VfZmlsZV9kYXkxLnRhciBxdWF5LmlvL3Byb2plY3QvcmVwbzpzb21lLXRhZzEyCiAgICBpZiBbICQ/IC1lcSAwIF07IHRoZW4KICAgICAgICBlY2hvICJJbWFnZSBxdWF5LmlvL3Byb2plY3QvcmVwbzpzb21lLXRhZzEyIGhhcyBiZWVuIHN1Y2Nlc3NmdWxseSBzYXZlIG9uIGZpbGUgL3Zhci9saWIvaW1hZ2VfZmlsZV9kYXkxLnRhciwgcmVib290aW5nLi4uIgogICAgICAgIHJlYm9vdAogICAgZWxzZQogICAgICAgIGVjaG8gIkZhaWxlZCB0byBzYXZlIGltYWdlIHF1YXkuaW8vcHJvamVjdC9yZXBvOnNvbWUtdGFnMTIgdG8gZmlsZSAvdmFyL2xpYi9pbWFnZV9maWxlX2RheTEudGFyIgogICAgZmkKZmkK"
+        - path: "/usr/local/bin/wait-for-dispatcher.sh"
+          mode: 493
+          overwrite: true
+          user:
+            name: "root"
+          contents:
+            source: "data:text/plain;base64,IyEvYmluL2Jhc2gKCnNlcnZpY2VfbmFtZT0iTmV0d29ya01hbmFnZXItZGlzcGF0Y2hlciIKZXhwZWN0ZWRfbG9hZF9zdGF0ZT0ibG9hZGVkIgpleHBlY3RlZF9yZXN1bHQ9InN1Y2Nlc3MiCmV4cGVjdGVkX2FjdGl2ZV9zdGF0ZT0iaW5hY3RpdmUiCgp3aGlsZSB0cnVlOyBkbwogICAgIyBHZXQgdGhlIGN1cnJlbnQgc3RhdGUgb2YgdGhlIHNlcnZpY2UKICAgIGxvYWRfc3RhdGU9JChzeXN0ZW1jdGwgc2hvdyAiJHNlcnZpY2VfbmFtZSIgLS1wcm9wZXJ0eT1Mb2FkU3RhdGUgfCBjdXQgLWQ9IC1mMikKICAgIHJ1bl9yZXN1bHQ9JChzeXN0ZW1jdGwgc2hvdyAiJHNlcnZpY2VfbmFtZSIgLS1wcm9wZXJ0eT1SZXN1bHQgfCBjdXQgLWQ9IC1mMikKICAgIGFjdGl2ZV9zdGF0ZT0kKHN5c3RlbWN0bCBzaG93ICIkc2VydmljZV9uYW1lIiAtLXByb3BlcnR5PUFjdGl2ZVN0YXRlIHwgY3V0IC1kPSAtZjIpCgogICAgaWYgWyAiJGxvYWRfc3RhdGUiID0gIiRleHBlY3RlZF9sb2FkX3N0YXRlIiBdICYmIFsgIiRydW5fcmVzdWx0IiA9ICIkZXhwZWN0ZWRfcmVzdWx0IiBdICAmJiBbICIkYWN0aXZlX3N0YXRlIiA9ICIkZXhwZWN0ZWRfYWN0aXZlX3N0YXRlIiBdOyB0aGVuCiAgICAgICAgZWNobyAiU2VydmljZSAkc2VydmljZV9uYW1lIGhhcyBmaW5pc2hlZCBzdWNjZXNzZnVseSIKCWJyZWFrCiAgICBlbHNlCgllY2hvICJTZXJ2aWNlICRzZXJ2aWNlX25hbWUgaGFzIG5vdCBmaW5pc2hlZCB5ZXQsIGxvYWQgc3RhdGUgJGxvYWRfc3RhdGUsIHJ1bl9yZXN1bHQgJHJ1bl9yZXN1bHQgYWN0aXZlX3N0YXRlICRhY3RpdmVfc3RhdGUiCglzbGVlcCAxCiAgICBmaQpkb25lCg=="
         - path: "/etc/kmm-worker-day1/config.yaml"
           mode: 420
           overwrite: true

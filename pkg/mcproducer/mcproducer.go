@@ -30,6 +30,10 @@ var (
 		template.ParseFS(templateFS, "templates/replace-kernel-module.gotmpl"),
 	)
 
+	scriptWaitForNetworkDispatcher = template.Must(
+		template.ParseFS(templateFS, "templates/wait-for-dispatcher.gotmpl"),
+	)
+
 	workerConfigMap = template.Must(
 		template.ParseFS(templateFS, "templates/worker-configmap.gotmpl"),
 	)
@@ -67,6 +71,11 @@ func ProduceMachineConfig(machineConfigName,
 	}
 
 	templateParams["PullKernelModuleContents"], err = executeIntoBase64(scriptPullImage, templateParams)
+	if err != nil {
+		return "", err
+	}
+
+	templateParams["WaitForNetworkDispatcherContents"], err = executeIntoBase64(scriptWaitForNetworkDispatcher, templateParams)
 	if err != nil {
 		return "", err
 	}
