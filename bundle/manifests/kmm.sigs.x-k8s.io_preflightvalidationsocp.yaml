@@ -20,7 +20,8 @@ spec:
           namespace: openshift-kmm
           path: /convert
       conversionReviewVersions:
-      - v1
+      - v1beta2
+      - v1beta1
   group: kmm.sigs.x-k8s.io
   names:
     kind: PreflightValidationOCP
