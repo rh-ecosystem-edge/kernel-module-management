@@ -32,7 +32,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2024-03-20T17:14:34Z"
+    createdAt: "2024-03-27T09:31:07Z"
     operatorframework.io/suggested-namespace: openshift-kmm-hub
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -356,9 +356,6 @@ spec:
                 securityContext:
                   allowPrivilegeEscalation: false
                 volumeMounts:
-                - mountPath: /tmp/k8s-webhook-server/serving-certs
-                  name: cert
-                  readOnly: true
                 - mountPath: /controller_config.yaml
                   name: manager-config
                   subPath: controller_config.yaml
@@ -374,10 +371,6 @@ spec:
                 key: node-role.kubernetes.io/control-plane
                 operator: Equal
               volumes:
-              - name: cert
-                secret:
-                  defaultMode: 420
-                  secretName: kmm-operator-hub-webhook-server-cert
               - configMap:
                   name: kmm-operator-hub-manager-config
                 name: manager-config
@@ -410,13 +403,13 @@ spec:
         serviceAccountName: kmm-operator-hub-controller
     strategy: deployment
   installModes:
-  - supported: true
+  - supported: false
     type: OwnNamespace
   - supported: false
     type: SingleNamespace
   - supported: false
     type: MultiNamespace
-  - supported: false
+  - supported: true
     type: AllNamespaces
   keywords:
   - hub

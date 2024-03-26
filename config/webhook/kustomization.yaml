@@ -5,8 +5,8 @@ resources:
 - service.yaml
 - manifests.yaml
 
-configurations:
-- kustomizeconfig.yaml
-
 patches:
 - path: manifests_namespace_selector_patch.yaml
+
+configurations:
+- kustomizeconfig.yaml

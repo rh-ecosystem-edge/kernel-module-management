@@ -6,4 +6,4 @@ resources:
 - manifests.yaml
 
 configurations:
-- kustomizeconfig.yaml
+  - kustomizeconfig.yaml

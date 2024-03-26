@@ -1,14 +1,15 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+resources:
+- ../deploy
+
+components:
+- ../webhook-cert
+
 # Adds namespace to all resources.
 namespace: openshift-kmm
 
-# Value of this field is prepended to the
-# names of all resources, e.g. a deployment named
-# "wordpress" becomes "alices-wordpress".
-# Note that it should also match with the prefix (text before '-') of the namespace
-# field above.
 namePrefix: kmm-operator-
 
 # Labels to add to all resources and selectors.
@@ -16,33 +17,6 @@ commonLabels:
   app.kubernetes.io/name: kmm
   app.kubernetes.io/component: kmm
   app.kubernetes.io/part-of: kmm
-
-# [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in crd/kustomization.yaml
-# [CERTMANAGER] To enable cert-manager, uncomment all sections with 'CERTMANAGER'. 'WEBHOOK' components are required.
-resources:
-- ../crd
-- ../rbac
-- ../manager
-- ../prometheus
-# [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in crd/kustomization.yaml
-- ../webhook
-- ../webhook-server
-
-patches:
-- path: webhookcainjection_patch.yaml
-- target:
-    kind: Deployment
-    name: webhook-server
-  patch: |-
-    - op: add
-      path: /spec/template/spec/containers/0/args/-
-      value: --enable-module
-    - op: add
-      path: /spec/template/spec/containers/0/args/-
-      value: --enable-namespace
-    - op: add
-      path: /spec/template/spec/containers/0/args/-
-      value: --enable-preflightvalidation
 
 configurations:
 - kustomizeconfig.yaml

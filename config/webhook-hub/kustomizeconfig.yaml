@@ -14,10 +14,5 @@ namespace:
   path: webhooks/clientConfig/service/namespace
   create: true
 
-varReference:
-- path: metadata/annotations
-
-namePrefix:
-- kind: Service
-  name: webhook-service
-  path: metadata/annotations/service.beta.openshift.io\/serving-cert-secret-name
+#varReference:
+#- path: metadata/annotations

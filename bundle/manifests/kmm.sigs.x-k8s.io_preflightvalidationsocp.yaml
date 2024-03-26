@@ -3,7 +3,6 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.14.0
-    service.beta.openshift.io/inject-cabundle: "true"
   creationTimestamp: null
   labels:
     app.kubernetes.io/component: kmm
@@ -17,7 +16,7 @@ spec:
       clientConfig:
         service:
           name: kmm-operator-webhook-service
-          namespace: openshift-kmm
+          namespace: system
           path: /convert
       conversionReviewVersions:
       - v1beta2
