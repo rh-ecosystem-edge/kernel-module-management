@@ -1,0 +1,51 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+patches:
+- patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: webhook-server
+      namespace: system
+    spec:
+      template:
+        spec:
+          containers:
+          - name: webhook-server
+            volumeMounts:
+            - mountPath: /tmp/k8s-webhook-server/serving-certs
+              name: cert
+              readOnly: true
+          volumes:
+          - name: cert
+            secret:
+              defaultMode: 420
+              secretName: webhook-server-cert
+- patch: |-
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: webhook-service
+      namespace: system
+      annotations:
+        service.beta.openshift.io/serving-cert-secret-name: webhook-server-cert
+- target:
+    kind: ValidatingWebhookConfiguration
+  patch: |-
+    kind: ValidatingWebhookConfiguration
+    metadata:
+      name: whatever
+      annotations:
+        service.beta.openshift.io/inject-cabundle: 'true'
+- target:
+    kind: CustomResourceDefinition
+  patch: |-
+    kind: CustomResourceDefinition
+    metadata:
+      name: whatever
+      annotations:
+        service.beta.openshift.io/inject-cabundle: 'true'
+
+configurations:
+- kustomizeconfig.yaml

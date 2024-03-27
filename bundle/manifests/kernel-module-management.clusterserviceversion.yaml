@@ -48,7 +48,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2024-03-20T17:14:33Z"
+    createdAt: "2024-03-27T09:31:06Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -503,9 +503,6 @@ spec:
                 securityContext:
                   allowPrivilegeEscalation: false
                 volumeMounts:
-                - mountPath: /tmp/k8s-webhook-server/serving-certs
-                  name: cert
-                  readOnly: true
                 - mountPath: /controller_config.yaml
                   name: manager-config
                   subPath: controller_config.yaml
@@ -521,10 +518,6 @@ spec:
                 key: node-role.kubernetes.io/control-plane
                 operator: Equal
               volumes:
-              - name: cert
-                secret:
-                  defaultMode: 420
-                  secretName: kmm-operator-webhook-server-cert
               - configMap:
                   name: kmm-operator-manager-config
                 name: manager-config
