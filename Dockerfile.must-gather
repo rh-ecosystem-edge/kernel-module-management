@@ -1,4 +1,4 @@
-FROM quay.io/openshift/origin-cli:4.15 as builder
+FROM quay.io/openshift/origin-cli:4.16 as builder
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.3
 
