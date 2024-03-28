@@ -123,6 +123,9 @@ func v1beta1StatusFromV1beta2(s v1beta2.PreflightValidationStatus) PreflightVali
 		for _, v := range s.Modules {
 			v := v
 			res.CRStatuses[v.Namespace+"/"+v.Name] = &v.CRBaseStatus
+
+			// This may lead to collisions, but at least we preserve backwards compatibility.
+			res.CRStatuses[v.Name] = &v.CRBaseStatus
 		}
 	}
 
