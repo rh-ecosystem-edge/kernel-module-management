@@ -14,7 +14,7 @@ require (
 	github.com/mitchellh/hashstructure/v2 v2.0.2
 	github.com/moby/moby v26.0.0+incompatible
 	github.com/onsi/ginkgo/v2 v2.17.1
-	github.com/onsi/gomega v1.31.1
+	github.com/onsi/gomega v1.32.0
 	github.com/openshift/api v0.0.0-20240206154754-8ec9b53f66b6
 	github.com/otiai10/copy v1.14.0
 	github.com/prometheus/client_golang v1.19.0
