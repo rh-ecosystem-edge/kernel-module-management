@@ -20,6 +20,11 @@ spec:
             User=root
             Type=oneshot
             TimeoutSec=10
+            Environment="IN_TREE_MODULE_TO_REMOVE=testInTreeKernelModuleName"
+            Environment="KERNEL_MODULE=testKernelModuleName"
+            Environment="KERNEL_MODULE_IMAGE_FILEPATH=/var/lib/image_file_day1.tar"
+            Environment="WORKER_CONFIG_FILEPATH=/var/lib/kmm_day1_config.yaml"
+            Environment="WORKER_IMAGE=quay.io/edge-infrastructure/kernel-module-management-worker:latest"
             ExecStartPre=ls /usr/local/bin
             ExecStart=/usr/local/bin/replace-kernel-module.sh
             PrivateTmp=yes
@@ -32,31 +37,15 @@ spec:
         - contents: |
             [Unit]
             Description=Pull oot kernel module image
-            ConditionPathExists=!/etc/systemd/system/on-prem-resolv-prepender.service
-            After=network-online.target
-            Requires=network-online.target
-            DefaultDependencies=no
-            [Service]
-            User=root
-            Type=oneshot
-            ExecStart=/usr/local/bin/pull-kernel-module-image.sh
-            PrivateTmp=yes
-            RemainAfterExit=no
-            TimeoutSec=900
-            [Install]
-            WantedBy=multi-user.target
-          enabled: true
-          name: "pull-kernel-module-image.service"
-        - contents: |
-            [Unit]
-            Description=Pull oot kernel module image in on-prem OCP cluster
-            ConditionPathExists=/etc/systemd/system/on-prem-resolv-prepender.service
             After=network-online.target
             After=NetworkManager-dispatcher.service
             DefaultDependencies=no
             [Service]
             User=root
             Type=oneshot
+            Environment="KERNEL_MODULE_IMAGE=quay.io/project/repo:some-tag12"
+            Environment="KERNEL_MODULE_IMAGE_FILEPATH=/var/lib/image_file_day1.tar"
+            Environment="WORKER_IMAGE=quay.io/edge-infrastructure/kernel-module-management-worker:latest"
             ExecStartPre=/usr/local/bin/wait-for-dispatcher.sh
             ExecStart=/usr/local/bin/pull-kernel-module-image.sh
             PrivateTmp=yes
@@ -65,7 +54,7 @@ spec:
             [Install]
             WantedBy=multi-user.target
           enabled: true
-          name: "pull-kernel-module-image-on-prem.service"
+          name: "pull-kernel-module-image.service"
         - enabled: false
           mask: true
           name: crio-wipe.service
@@ -77,14 +66,14 @@ spec:
           user:
             name: "root"
           contents:
-            source: "data:text/plain;base64,IyEvYmluL2Jhc2gKCmVjaG8gImJlZm9yZSBjaGVja2luZyBpbWFnZSB0YXIgZmlsZSBwcmVzZW5jZSIKaWYgWyAtZSAvdmFyL2xpYi9pbWFnZV9maWxlX2RheTEudGFyIF07IHRoZW4KICAgIGVjaG8gIkltYWdlIGZpbGUgL3Zhci9saWIvaW1hZ2VfZmlsZV9kYXkxLnRhciBmb3VuZCBvbiB0aGUgbG9jYWwgZmlsZSBzeXN0ZW0sIHJ1bm5pbmcga2VybmVsLW1hbmFnZW1lbnQgd29ya2VyIGltYWdlIgogICAgcG9kbWFuIHJ1biAtLXVzZXI9cm9vdCAtLXByaXZpbGVnZWQgLXYgL2xpYi9tb2R1bGVzOi9saWIvbW9kdWxlcyAtdiAvZXRjL2ttbS13b3JrZXItZGF5MS9jb25maWcueWFtbDovZXRjL2ttbS13b3JrZXIvY29uZmlnLnlhbWwgLXYgL3Zhci9saWIvaW1hZ2VfZmlsZV9kYXkxLnRhcjovdmFyL2xpYi9pbWFnZV9maWxlX2RheTEudGFyIHF1YXkuaW8vZWRnZS1pbmZyYXN0cnVjdHVyZS9rZXJuZWwtbW9kdWxlLW1hbmFnZW1lbnQtd29ya2VyOmxhdGVzdCBrbW9kIGxvYWQgLS10YXJiYWxsIC9ldGMva21tLXdvcmtlci9jb25maWcueWFtbAogICAgaWYgWyAkPyAtZXEgMCBdOyB0aGVuCiAgICAgICAgZWNobyAiT09UIGtlcm5lbCBtb2R1bGUgdGVzdEtlcm5lbE1vZHVsZU5hbWUgaXMgaW5zZXJ0ZWQiCiAgICBlbHNlCiAgICAgICAgZWNobyAiZmFpbGVkIHRvIGluc2VydCBPT1Qga2VybmVsIG1vZHVsZSB0ZXN0S2VybmVsTW9kdWxlTmFtZSIKICAgIGZpCmVsc2UKICAgIGVjaG8gIkltYWdlIGZpbGUgL3Zhci9saWIvaW1hZ2VfZmlsZV9kYXkxLnRhciBpcyBub3QgcHJlc2VudCBpbiBsb2NhbCByZWdpc3RyeSwgd2lsbCB0cnkgYWZ0ZXIgcmVib290IgpmaQo="
+            source: "data:text/plain;base64,IyEvYmluL2Jhc2gKCmttbV9jb25maWdfZmlsZV9maWxlcGF0aD0iJFdPUktFUl9DT05GSUdfRklMRVBBVEgiCmtlcm5lbF9tb2R1bGVfaW1hZ2VfZmlsZXBhdGg9IiRLRVJORUxfTU9EVUxFX0lNQUdFX0ZJTEVQQVRIIgppbl90cmVlX21vZHVsZV90b19yZW1vdmU9IiRJTl9UUkVFX01PRFVMRV9UT19SRU1PVkUiCmtlcm5lbF9tb2R1bGU9IiRLRVJORUxfTU9EVUxFIgp3b3JrZXJfaW1hZ2U9IiRXT1JLRVJfSU1BR0UiCgpjcmVhdGVfa21tX2NvbmZpZygpIHsKICAgICMgV3JpdGUgWUFNTCBjb250ZW50IHRvIHRoZSBmaWxlCiAgICBjYXQgPDxFT0YgPiAiJGttbV9jb25maWdfZmlsZV9maWxlcGF0aCIKY29udGFpbmVySW1hZ2U6ICRrZXJuZWxfbW9kdWxlX2ltYWdlX2ZpbGVwYXRoCmluVHJlZU1vZHVsZVRvUmVtb3ZlOiAkaW5fdHJlZV9tb2R1bGVfdG9fcmVtb3ZlCm1vZHByb2JlOgogIGRpck5hbWU6IC9vcHQKICBtb2R1bGVOYW1lOiAka2VybmVsX21vZHVsZQpFT0YKICAgIGVjaG8gImxvZ2dpbmcgY29udGVudHMgb2YgdGhlIHdvcmtlciBjb25maWcgZmlsZToiCiAgICBjYXQgIiRrbW1fY29uZmlnX2ZpbGVfZmlsZXBhdGgiCn0KCmVjaG8gImJlZm9yZSBjaGVja2luZyBpbWFnZSB0YXIgZmlsZSBwcmVzZW5jZSIKaWYgWyAtZSAka2VybmVsX21vZHVsZV9pbWFnZV9maWxlcGF0aCBdOyB0aGVuCiAgICBlY2hvICJJbWFnZSBmaWxlICRrZXJuZWxfbW9kdWxlX2ltYWdlX2ZpbGVwYXRoIGZvdW5kIG9uIHRoZSBsb2NhbCBmaWxlIHN5c3RlbSwgY3JlYXRpbmcga21tIGNvbmZpZyBmaWxlIgogICAgY3JlYXRlX2ttbV9jb25maWcKICAgIGVjaG8gInJ1bm5pbmcga2VybmVsLW1hbmFnZW1lbnQgd29ya2VyIGltYWdlIgogICAgcG9kbWFuIHJ1biAtLXVzZXI9cm9vdCAtLXByaXZpbGVnZWQgLXYgL2xpYi9tb2R1bGVzOi9saWIvbW9kdWxlcyAtdiAka21tX2NvbmZpZ19maWxlX2ZpbGVwYXRoOi9ldGMva21tLXdvcmtlci9jb25maWcueWFtbCAtdiAka2VybmVsX21vZHVsZV9pbWFnZV9maWxlcGF0aDoka2VybmVsX21vZHVsZV9pbWFnZV9maWxlcGF0aCAkd29ya2VyX2ltYWdlIGttb2QgbG9hZCAtLXRhcmJhbGwgL2V0Yy9rbW0td29ya2VyL2NvbmZpZy55YW1sCiAgICBpZiBbICQ/IC1lcSAwIF07IHRoZW4KICAgICAgICBlY2hvICJPT1Qga2VybmVsIG1vZHVsZSAka2VybmVsX21vZHVsZSBpcyBpbnNlcnRlZCIKICAgIGVsc2UKICAgICAgICBlY2hvICJmYWlsZWQgdG8gaW5zZXJ0IE9PVCBrZXJuZWwgbW9kdWxlICRrZXJuZWxfbW9kdWxlIgogICAgZmkKZWxzZQogICAgZWNobyAiSW1hZ2UgZmlsZSAka2VybmVsX21vZHVsZV9pbWFnZV9maWxlcGF0aCBpcyBub3QgcHJlc2VudCBpbiBsb2NhbCByZWdpc3RyeSwgd2lsbCB0cnkgYWZ0ZXIgcmVib290IgpmaQo="
         - path: "/usr/local/bin/pull-kernel-module-image.sh"
           mode: 493
           overwrite: true
           user:
             name: "root"
           contents:
-            source: "data:text/plain;base64,IyEvYmluL2Jhc2gKCmlmIFsgLWUgL3Zhci9saWIvaW1hZ2VfZmlsZV9kYXkxLnRhciBdOyB0aGVuCiAgICBlY2hvICJGaWxlIC92YXIvbGliL2ltYWdlX2ZpbGVfZGF5MS50YXIgZm91bmQuTm90aGluZyB0byBkbywgdGhlIGZpbGUgd2FzIGhhbmRsZWQsIHJlbW92aW5nIGl0IgogICAgcm0gLWYgL3Zhci9saWIvaW1hZ2VfZmlsZV9kYXkxLnRhcgplbHNlCiAgICBwb2RtYW4gcHVsbCAtLWF1dGhmaWxlIC92YXIvbGliL2t1YmVsZXQvY29uZmlnLmpzb24gcXVheS5pby9lZGdlLWluZnJhc3RydWN0dXJlL2tlcm5lbC1tb2R1bGUtbWFuYWdlbWVudC13b3JrZXI6bGF0ZXN0CiAgICBpZiBbICQ/IC1lcSAwIF07IHRoZW4KICAgICAgICBlY2hvICJJbWFnZSBxdWF5LmlvL2VkZ2UtaW5mcmFzdHJ1Y3R1cmUva2VybmVsLW1vZHVsZS1tYW5hZ2VtZW50LXdvcmtlcjpsYXRlc3QgaGFzIGJlZW4gc3VjY2Vzc2Z1bGx5IHB1bGxlZCIKICAgIGVsc2UKICAgICAgICBlY2hvICJGYWlsZWQgdG8gcHVsbCBpbWFnZSBxdWF5LmlvL2VkZ2UtaW5mcmFzdHJ1Y3R1cmUva2VybmVsLW1vZHVsZS1tYW5hZ2VtZW50LXdvcmtlcjpsYXRlc3QiCiAgICAgICAgZXhpdCAxCiAgICBmaQoKICAgIGVjaG8gIkZpbGUgL3Zhci9saWIvaW1hZ2VfZmlsZV9kYXkxLnRhciBpcyBub3Qgb24gdGhlIGZpbGVzeXN0ZW0sIHB1bGxpbmcgaW1hZ2UgcXVheS5pby9wcm9qZWN0L3JlcG86c29tZS10YWcxMiIKICAgIHBvZG1hbiBwdWxsIC0tYXV0aGZpbGUgL3Zhci9saWIva3ViZWxldC9jb25maWcuanNvbiBxdWF5LmlvL3Byb2plY3QvcmVwbzpzb21lLXRhZzEyCiAgICBpZiBbICQ/IC1lcSAwIF07IHRoZW4KICAgICAgICBlY2hvICJJbWFnZSBxdWF5LmlvL3Byb2plY3QvcmVwbzpzb21lLXRhZzEyIGhhcyBiZWVuIHN1Y2Nlc3NmdWxseSBwdWxsZWQiCiAgICBlbHNlCiAgICAgICAgZWNobyAiRmFpbGVkIHRvIHB1bGwgaW1hZ2UgcXVheS5pby9wcm9qZWN0L3JlcG86c29tZS10YWcxMiIKICAgICAgICBleGl0IDEKICAgIGZpCiAgICBlY2hvICJTYXZpbmcgaW1hZ2UgcXVheS5pby9wcm9qZWN0L3JlcG86c29tZS10YWcxMiBpbnRvIGEgZmlsZSAvdmFyL2xpYi9pbWFnZV9maWxlX2RheTEudGFyIgogICAgcG9kbWFuIHNhdmUgLW8gL3Zhci9saWIvaW1hZ2VfZmlsZV9kYXkxLnRhciBxdWF5LmlvL3Byb2plY3QvcmVwbzpzb21lLXRhZzEyCiAgICBpZiBbICQ/IC1lcSAwIF07IHRoZW4KICAgICAgICBlY2hvICJJbWFnZSBxdWF5LmlvL3Byb2plY3QvcmVwbzpzb21lLXRhZzEyIGhhcyBiZWVuIHN1Y2Nlc3NmdWxseSBzYXZlIG9uIGZpbGUgL3Zhci9saWIvaW1hZ2VfZmlsZV9kYXkxLnRhciwgcmVib290aW5nLi4uIgogICAgICAgIHJlYm9vdAogICAgZWxzZQogICAgICAgIGVjaG8gIkZhaWxlZCB0byBzYXZlIGltYWdlIHF1YXkuaW8vcHJvamVjdC9yZXBvOnNvbWUtdGFnMTIgdG8gZmlsZSAvdmFyL2xpYi9pbWFnZV9maWxlX2RheTEudGFyIgogICAgZmkKZmkK"
+            source: "data:text/plain;base64,IyEvYmluL2Jhc2gKCgprZXJuZWxfbW9kdWxlX2ltYWdlX2ZpbGVwYXRoPSIkS0VSTkVMX01PRFVMRV9JTUFHRV9GSUxFUEFUSCIKd29ya2VyX2ltYWdlPSIkV09SS0VSX0lNQUdFIgprZXJuZWxfbW9kdWxlX2ltYWdlPSIkS0VSTkVMX01PRFVMRV9JTUFHRSIKCmlmIFsgLWUgJGtlcm5lbF9tb2R1bGVfaW1hZ2VfZmlsZXBhdGggXTsgdGhlbgogICAgZWNobyAiRmlsZSAka2VybmVsX21vZHVsZV9pbWFnZV9maWxlcGF0aCBmb3VuZC5Ob3RoaW5nIHRvIGRvLCB0aGUgZmlsZSB3YXMgaGFuZGxlZCwgcmVtb3ZpbmcgaXQiCiAgICBybSAtZiAka2VybmVsX21vZHVsZV9pbWFnZV9maWxlcGF0aAplbHNlCiAgICBwb2RtYW4gcHVsbCAtLWF1dGhmaWxlIC92YXIvbGliL2t1YmVsZXQvY29uZmlnLmpzb24gJHdvcmtlcl9pbWFnZQogICAgaWYgWyAkPyAtZXEgMCBdOyB0aGVuCiAgICAgICAgZWNobyAiSW1hZ2UgJHdvcmtlcl9pbWFnZSBoYXMgYmVlbiBzdWNjZXNzZnVsbHkgcHVsbGVkIgogICAgZWxzZQogICAgICAgIGVjaG8gIkZhaWxlZCB0byBwdWxsIGltYWdlICR3b3JrZXJfaW1hZ2UiCiAgICAgICAgZXhpdCAxCiAgICBmaQoKICAgIGVjaG8gIkZpbGUgJGtlcm5lbF9tb2R1bGVfaW1hZ2VfZmlsZXBhdGggaXMgbm90IG9uIHRoZSBmaWxlc3lzdGVtLCBwdWxsaW5nIGltYWdlICIKICAgIHBvZG1hbiBwdWxsIC0tYXV0aGZpbGUgL3Zhci9saWIva3ViZWxldC9jb25maWcuanNvbiAka2VybmVsX21vZHVsZV9pbWFnZQogICAgaWYgWyAkPyAtZXEgMCBdOyB0aGVuCiAgICAgICAgZWNobyAiSW1hZ2UgJGtlcm5lbF9tb2R1bGVfaW1hZ2UgaGFzIGJlZW4gc3VjY2Vzc2Z1bGx5IHB1bGxlZCIKICAgIGVsc2UKICAgICAgICBlY2hvICJGYWlsZWQgdG8gcHVsbCBpbWFnZSAka2VybmVsX21vZHVsZV9pbWFnZSIKICAgICAgICBleGl0IDEKICAgIGZpCiAgICBlY2hvICJTYXZpbmcgaW1hZ2UgJGtlcm5lbF9tb2R1bGVfaW1hZ2UgaW50byBhIGZpbGUgJGtlcm5lbF9tb2R1bGVfaW1hZ2VfZmlsZXBhdGgiCiAgICBwb2RtYW4gc2F2ZSAtbyAka2VybmVsX21vZHVsZV9pbWFnZV9maWxlcGF0aCAka2VybmVsX21vZHVsZV9pbWFnZQogICAgaWYgWyAkPyAtZXEgMCBdOyB0aGVuCiAgICAgICAgZWNobyAiSW1hZ2UgJGtlcm5lbF9tb2R1bGVfaW1hZ2UgaGFzIGJlZW4gc3VjY2Vzc2Z1bGx5IHNhdmUgb24gZmlsZSAka2VybmVsX21vZHVsZV9pbWFnZV9maWxlcGF0aCwgcmVib290aW5nLi4uIgogICAgICAgIHJlYm9vdAogICAgZWxzZQogICAgICAgIGVjaG8gIkZhaWxlZCB0byBzYXZlIGltYWdlICRrZXJuZWxfbW9kdWxlX2ltYWdlIHRvIGZpbGUgJGtlcm5lbF9tb2R1bGVfaW1hZ2VfZmlsZXBhdGgiCiAgICBmaQpmaQo="
         - path: "/usr/local/bin/wait-for-dispatcher.sh"
           mode: 493
           overwrite: true
@@ -92,10 +81,3 @@ spec:
             name: "root"
           contents:
             source: "data:text/plain;base64,IyEvYmluL2Jhc2gKCnNlcnZpY2VfbmFtZT0iTmV0d29ya01hbmFnZXItZGlzcGF0Y2hlciIKZXhwZWN0ZWRfbG9hZF9zdGF0ZT0ibG9hZGVkIgpleHBlY3RlZF9yZXN1bHQ9InN1Y2Nlc3MiCmV4cGVjdGVkX2FjdGl2ZV9zdGF0ZT0iaW5hY3RpdmUiCgp3aGlsZSB0cnVlOyBkbwogICAgIyBHZXQgdGhlIGN1cnJlbnQgc3RhdGUgb2YgdGhlIHNlcnZpY2UKICAgIGxvYWRfc3RhdGU9JChzeXN0ZW1jdGwgc2hvdyAiJHNlcnZpY2VfbmFtZSIgLS1wcm9wZXJ0eT1Mb2FkU3RhdGUgfCBjdXQgLWQ9IC1mMikKICAgIHJ1bl9yZXN1bHQ9JChzeXN0ZW1jdGwgc2hvdyAiJHNlcnZpY2VfbmFtZSIgLS1wcm9wZXJ0eT1SZXN1bHQgfCBjdXQgLWQ9IC1mMikKICAgIGFjdGl2ZV9zdGF0ZT0kKHN5c3RlbWN0bCBzaG93ICIkc2VydmljZV9uYW1lIiAtLXByb3BlcnR5PUFjdGl2ZVN0YXRlIHwgY3V0IC1kPSAtZjIpCgogICAgaWYgWyAiJGxvYWRfc3RhdGUiID0gIiRleHBlY3RlZF9sb2FkX3N0YXRlIiBdICYmIFsgIiRydW5fcmVzdWx0IiA9ICIkZXhwZWN0ZWRfcmVzdWx0IiBdICAmJiBbICIkYWN0aXZlX3N0YXRlIiA9ICIkZXhwZWN0ZWRfYWN0aXZlX3N0YXRlIiBdOyB0aGVuCiAgICAgICAgZWNobyAiU2VydmljZSAkc2VydmljZV9uYW1lIGhhcyBmaW5pc2hlZCBzdWNjZXNzZnVseSIKCWJyZWFrCiAgICBlbHNlCgllY2hvICJTZXJ2aWNlICRzZXJ2aWNlX25hbWUgaGFzIG5vdCBmaW5pc2hlZCB5ZXQsIGxvYWQgc3RhdGUgJGxvYWRfc3RhdGUsIHJ1bl9yZXN1bHQgJHJ1bl9yZXN1bHQgYWN0aXZlX3N0YXRlICRhY3RpdmVfc3RhdGUiCglzbGVlcCAxCiAgICBmaQpkb25lCg=="
-        - path: "/etc/kmm-worker-day1/config.yaml"
-          mode: 420
-          overwrite: true
-          user:
-            name: "root"
-          contents:
-            source: "data:text/plain;base64,Y29udGFpbmVySW1hZ2U6IC92YXIvbGliL2ltYWdlX2ZpbGVfZGF5MS50YXIKaW5UcmVlTW9kdWxlVG9SZW1vdmU6IHRlc3RJblRyZWVLZXJuZWxNb2R1bGVOYW1lCm1vZHByb2JlOgogIGRpck5hbWU6IC9vcHQKICBtb2R1bGVOYW1lOiB0ZXN0S2VybmVsTW9kdWxlTmFtZQo="
