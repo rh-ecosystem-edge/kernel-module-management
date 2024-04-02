@@ -32,7 +32,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2024-03-27T09:31:07Z"
+    createdAt: "2024-04-02T12:56:20Z"
     operatorframework.io/suggested-namespace: openshift-kmm-hub
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -403,13 +403,13 @@ spec:
         serviceAccountName: kmm-operator-hub-controller
     strategy: deployment
   installModes:
-  - supported: false
+  - supported: true
     type: OwnNamespace
   - supported: false
     type: SingleNamespace
   - supported: false
     type: MultiNamespace
-  - supported: true
+  - supported: false
     type: AllNamespaces
   keywords:
   - hub
