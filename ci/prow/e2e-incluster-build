@@ -38,19 +38,10 @@ oc debug "node/${NODE}" -- chroot host/ sudo modprobe dummy
 echo "Verify that dummy is loaded"
 oc debug "node/${NODE}" -- chroot host/ lsmod | grep dummy
 
-echo "Create a build secret..."
-oc create secret generic build-secret --from-literal=ci-build-secret=super-secret-value
-
-echo "Add a configmap that contain the kernel module build dockerfile..."
-oc apply -f ci/kmm-kmod-dockerfile.yaml
-
-echo "Add Secrets containing the signing key and certificate..."
-oc apply -f ci/secret_kmm-kmod-signing.yaml
-
 oc wait --for=condition=Available deployment/kmm-operator-controller deployment/kmm-operator-webhook-server -n openshift-kmm
 
-echo "Add an kmm-ci Module that contains a valid mapping..."
-oc apply -f ci/module-kmm-ci-build-sign.yaml
+echo "Add resources"
+oc apply -k ci/e2e
 
 # Wait for the build pod to be created. `kubectl wait` doesn't support such option,
 # see https://github.com/kubernetes/kubernetes/issues/83242.
@@ -75,7 +66,7 @@ oc debug "node/${NODE}" -- chroot host/ lsmod | grep kmm_ci_b
 check_module_not_loaded "dummy"
 
 echo "Remove the Module..."
-oc delete -f ci/module-kmm-ci-build-sign.yaml --wait=false
+oc delete modules.kmm.sigs.x-k8s.io/kmm-ci --wait=false
 
 echo "Check that the module gets unloaded from the node..."
 timeout 1m bash -c 'until ! oc debug node/${NODE} -- chroot host/ lsmod | grep kmm_ci_a; do sleep 3; done'

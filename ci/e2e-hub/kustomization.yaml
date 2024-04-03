@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: openshift-kmm-hub
+
+resources:
+  - ../sign-key-certs
+  - policy.yaml
+  - placementrule.yaml
+  - placementbinding.yaml
+  - managedclustermodule.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+  - name: mod-example
+    files: [dockerfile=Dockerfile]

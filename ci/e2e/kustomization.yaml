@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../sign-key-certs
+  - module.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+  - name: kmm-kmod-dockerfile
+    files: [dockerfile=Dockerfile]
+
+secretGenerator:
+  - name: build-secret
+    literals: [ci-build-secret=super-secret-value]

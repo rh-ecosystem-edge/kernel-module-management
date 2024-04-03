@@ -8,6 +8,7 @@ readonly SKIP_ACM_INSTALLATION="${SKIP_ACM_INSTALLATION:-false}"
 
 export CLUSTER_NAME=local-cluster
 export OPERATOR_NAMESPACE=openshift-kmm
+export HUB_OPERATOR_NAMESPACE=openshift-kmm-hub
 export ACM_NAMESPACE=advanced-cluster-management
 
 
@@ -37,8 +38,8 @@ if [ "$SKIP_MAKE_DEPLOY_HUB" == true ]; then
   echo "Skipping KMM-Hub deployment"
 else
   echo "Deploy KMMO-Hub..."
-  make deploy-hub KUSTOMIZE_CONFIG_HUB_DEFAULT=ci/install-ci-hub
-  oc wait --for=condition=Available --timeout=1m deployment/kmm-operator-hub-controller deployment/kmm-operator-hub-webhook-server -n ${OPERATOR_NAMESPACE}
+  make deploy-hub
+  oc wait --for=condition=Available --timeout=1m deployment/kmm-operator-hub-controller deployment/kmm-operator-hub-webhook-server -n ${HUB_OPERATOR_NAMESPACE}
 fi
 
 if [ "$SKIP_MAKE_DEPLOY" == true ]; then
@@ -49,18 +50,18 @@ else
   oc wait --for=condition=Available --timeout=1m deployment/kmm-operator-controller deployment/kmm-operator-webhook-server -n ${OPERATOR_NAMESPACE}
 fi
 
-# Apply the ManagedClusterModule
-oc apply -f ci/managedclustermodule-kmm-ci-build-sign.yaml
+# Apply resources
+oc apply -k ci/e2e-hub
 
 # Wait for the build build to be created and completed
-timeout 1m bash -c 'until oc -n ${OPERATOR_NAMESPACE} get builds -o json | jq -er ".items[].metadata.name | select(.? | match(\"build\"))"; do sleep 1; done'
-export build_build=$(oc -n ${OPERATOR_NAMESPACE} get builds -o json | jq -r '.items[].metadata.name | select(.? | match("build"))')
-oc -n ${OPERATOR_NAMESPACE} wait --for=condition=complete --timeout=3m build/${build_build}
+timeout 1m bash -c 'until oc -n ${HUB_OPERATOR_NAMESPACE} get builds -o json | jq -er ".items[].metadata.name | select(.? | match(\"build\"))"; do sleep 1; done'
+export build_build=$(oc -n ${HUB_OPERATOR_NAMESPACE} get builds -o json | jq -r '.items[].metadata.name | select(.? | match("build"))')
+oc -n ${HUB_OPERATOR_NAMESPACE} wait --for=condition=complete --timeout=3m build/${build_build}
 
 # Wait for the sign build to be created and completed
-timeout 1m bash -c 'until oc -n ${OPERATOR_NAMESPACE} get builds -o json | jq -er ".items[].metadata.name | select(.? | match(\"sign\"))"; do sleep 1; done'
-export sign_build=$(oc -n ${OPERATOR_NAMESPACE} get builds -o json | jq -r '.items[].metadata.name | select(.? | match("sign"))')
-oc -n ${OPERATOR_NAMESPACE} wait --for=condition=complete --timeout=1m build/${sign_build}
+timeout 1m bash -c 'until oc -n ${HUB_OPERATOR_NAMESPACE} get builds -o json | jq -er ".items[].metadata.name | select(.? | match(\"sign\"))"; do sleep 1; done'
+export sign_build=$(oc -n ${HUB_OPERATOR_NAMESPACE} get builds -o json | jq -r '.items[].metadata.name | select(.? | match("sign"))')
+oc -n ${HUB_OPERATOR_NAMESPACE} wait --for=condition=complete --timeout=1m build/${sign_build}
 
 # Waiting for the manifestwork to be created
 timeout 1m bash -c 'until oc -n ${CLUSTER_NAME} get manifestwork/mod-example; do sleep 1; done'

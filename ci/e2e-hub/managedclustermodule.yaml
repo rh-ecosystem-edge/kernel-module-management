@@ -1,0 +1,36 @@
+---
+apiVersion: hub.kmm.sigs.x-k8s.io/v1beta1
+kind: ManagedClusterModule
+metadata:
+  name: mod-example
+spec:
+  spokeNamespace: openshift-kmm
+  selector:
+    name: local-cluster
+  moduleSpec:
+    moduleLoader:
+      container:
+        modprobe:
+          moduleName: mod-example
+        imagePullPolicy: Always
+        kernelMappings:
+        - regexp: '^.+$'
+          containerImage: image-registry.openshift-image-registry.svc:5000/$MOD_NAMESPACE/$MOD_NAME:$KERNEL_FULL_VERSION
+          registryTLS:
+            insecure: true
+          build:
+            baseImageRegistryTLS:
+              insecure: true
+            dockerfileConfigMap:
+              name: mod-example
+          sign:
+            keySecret:
+              name: kmm-kmod-signing-key
+            certSecret:
+              name: kmm-kmod-signing-cert
+            unsignedImageRegistryTLS:
+              insecure: true
+            filesToSign:
+              - /bin/getconf
+    selector:
+      node-role.kubernetes.io/worker: ""

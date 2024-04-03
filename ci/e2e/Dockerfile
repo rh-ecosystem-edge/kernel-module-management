@@ -1,0 +1,25 @@
+ARG DTK_AUTO
+
+FROM ${DTK_AUTO} as builder
+
+ARG KERNEL_VERSION
+
+WORKDIR /usr/src
+
+RUN grep super-secret-value /run/secrets/build-secret/ci-build-secret
+
+RUN git clone https://github.com/rh-ecosystem-edge/kernel-module-management.git
+
+WORKDIR /usr/src/kernel-module-management/ci/kmm-kmod
+
+RUN KERNEL_SRC_DIR=/lib/modules/${KERNEL_VERSION}/build make all
+
+FROM registry.redhat.io/ubi9/ubi-minimal
+
+ARG KERNEL_VERSION
+
+RUN ["microdnf", "install", "-y", "kmod"]
+
+COPY --from=builder /usr/src/kernel-module-management/ci/kmm-kmod/kmm_ci_a.ko /opt/lib/modules/${KERNEL_VERSION}/
+COPY --from=builder /usr/src/kernel-module-management/ci/kmm-kmod/kmm_ci_b.ko /opt/lib/modules/${KERNEL_VERSION}/
+RUN depmod -b /opt ${KERNEL_VERSION}

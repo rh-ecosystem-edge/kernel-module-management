@@ -1,0 +1,40 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: allow-klusterlet-deploy-kmm-modules
+spec:
+  remediationAction: enforce
+  disabled: false
+  policy-templates:
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: klusterlet-deploy-modules
+        spec:
+          severity: high
+          object-templates:
+            - complianceType: mustonlyhave
+              objectDefinition:
+                apiVersion: rbac.authorization.k8s.io/v1
+                kind: ClusterRole
+                metadata:
+                  name: kmm-module-manager
+                rules:
+                  - apiGroups: [kmm.sigs.x-k8s.io]
+                    resources: [modules]
+                    verbs: [create, delete, get, list, patch, update, watch]
+            - complianceType: mustonlyhave
+              objectDefinition:
+                apiVersion: rbac.authorization.k8s.io/v1
+                kind: ClusterRoleBinding
+                metadata:
+                  name: klusterlet-kmm
+                subjects:
+                  - kind: ServiceAccount
+                    name: klusterlet-work-sa
+                    namespace: open-cluster-management-agent
+                roleRef:
+                  kind: ClusterRole
+                  name: kmm-module-manager
+                  apiGroup: rbac.authorization.k8s.io
