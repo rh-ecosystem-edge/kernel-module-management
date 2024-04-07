@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/http"
@@ -13,6 +14,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
+
+type Job struct {
+	GCDelay time.Duration `yaml:"gcDelay,omitempty"`
+}
 
 type Webhook struct {
 	DisableHTTP2 bool `yaml:"disableHTTP2"`
@@ -39,6 +44,7 @@ type Metrics struct {
 
 type Config struct {
 	HealthProbeBindAddress string         `yaml:"healthProbeBindAddress"`
+	Job                    Job            `yaml:"job"`
 	LeaderElection         LeaderElection `yaml:"leaderElection"`
 	Metrics                Metrics        `yaml:"metrics"`
 	Webhook                Webhook        `yaml:"webhook"`
