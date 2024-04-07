@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
+	"github.com/budougumi0617/cmpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	buildv1 "github.com/openshift/api/build/v1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -271,7 +274,7 @@ var _ = Describe("GarbageCollect", func() {
 	It("GetModuleBuilds failed", func() {
 		mockOCPBuildsHelper.EXPECT().GetModuleOCPBuilds(ctx, moduleName, namespace, nil).Return(nil, fmt.Errorf("some error"))
 
-		deleted, err := m.GarbageCollect(ctx, moduleName, namespace, nil)
+		deleted, err := m.GarbageCollect(ctx, moduleName, namespace, nil, 0)
 
 		Expect(err).To(HaveOccurred())
 		Expect(deleted).To(BeEmpty())
@@ -287,40 +290,137 @@ var _ = Describe("GarbageCollect", func() {
 			mockOCPBuildsHelper.EXPECT().GetModuleOCPBuilds(ctx, moduleName, namespace, nil).Return([]buildv1.Build{ocpBuild}, nil),
 			mockOCPBuildsHelper.EXPECT().DeleteOCPBuild(ctx, &ocpBuild).Return(fmt.Errorf("some error")),
 		)
-		deleted, err := m.GarbageCollect(ctx, moduleName, namespace, nil)
+		deleted, err := m.GarbageCollect(ctx, moduleName, namespace, nil, 0)
 
 		Expect(err).To(HaveOccurred())
 		Expect(deleted).To(BeEmpty())
 	})
 
-	DescribeTable("should return the correct error and names of the collected OCP builds",
-		func(buildPhase1 buildv1.BuildPhase, buildPhase2 buildv1.BuildPhase, numSuccessfulBuilds int) {
-			ocpBuild1 := buildv1.Build{
-				Status: buildv1.BuildStatus{
-					Phase: buildPhase1,
-				},
+	mld := api.ModuleLoaderData{
+		Name:  "moduleName",
+		Owner: &kmmv1beta1.Module{},
+	}
+
+	type testCase struct {
+		podPhase1, podPhase2                       buildv1.BuildPhase
+		gcDelay                                    time.Duration
+		expectsErr                                 bool
+		resShouldContainPod1, resShouldContainPod2 bool
+	}
+
+	DescribeTable("should return the correct error and names of the collected pods",
+		func(tc testCase) {
+			const (
+				build1Name = "pod-1"
+				build2Name = "pod-2"
+			)
+
+			ctx := context.Background()
+
+			build1 := buildv1.Build{
+				ObjectMeta: metav1.ObjectMeta{Name: build1Name},
+				Status:     buildv1.BuildStatus{Phase: tc.podPhase1},
 			}
-			ocpBuild2 := buildv1.Build{
-				Status: buildv1.BuildStatus{
-					Phase: buildPhase2,
-				},
-			}
-			mockOCPBuildsHelper.EXPECT().GetModuleOCPBuilds(ctx, moduleName, namespace, nil).Return([]buildv1.Build{ocpBuild1, ocpBuild2}, nil)
-			if buildPhase1 == buildv1.BuildPhaseComplete {
-				mockOCPBuildsHelper.EXPECT().DeleteOCPBuild(ctx, &ocpBuild1).Return(nil)
-			}
-			if buildPhase2 == buildv1.BuildPhaseComplete {
-				mockOCPBuildsHelper.EXPECT().DeleteOCPBuild(ctx, &ocpBuild2).Return(nil)
+			build2 := buildv1.Build{
+				ObjectMeta: metav1.ObjectMeta{Name: build2Name},
+				Status:     buildv1.BuildStatus{Phase: tc.podPhase2},
 			}
 
-			deleted, err := m.GarbageCollect(ctx, moduleName, namespace, nil)
+			returnedError := fmt.Errorf("some error")
+			if !tc.expectsErr {
+				returnedError = nil
+			}
+
+			buildList := []buildv1.Build{build1, build2}
+
+			calls := []any{
+				mockOCPBuildsHelper.EXPECT().GetModuleOCPBuilds(ctx, mld.Name, mld.Namespace, mld.Owner).Return(buildList, returnedError),
+			}
+
+			if !tc.expectsErr {
+				now := metav1.Now()
+
+				for i := 0; i < len(buildList); i++ {
+					build := &buildList[i]
+
+					if build.Status.Phase == buildv1.BuildPhaseComplete {
+						c := mockOCPBuildsHelper.
+							EXPECT().
+							DeleteOCPBuild(ctx, cmpmock.DiffEq(build)).
+							Do(func(_ context.Context, b *buildv1.Build) {
+								b.DeletionTimestamp = &now
+								build.DeletionTimestamp = &now
+							})
+
+						calls = append(calls, c)
+
+						if time.Now().After(now.Add(tc.gcDelay)) {
+							calls = append(
+								calls,
+								mockOCPBuildsHelper.EXPECT().RemoveFinalizer(ctx, cmpmock.DiffEq(build), constants.GCDelayFinalizer),
+							)
+						}
+					}
+				}
+			}
+
+			gomock.InOrder(calls...)
+
+			names, err := m.GarbageCollect(ctx, mld.Name, mld.Namespace, mld.Owner, tc.gcDelay)
+
+			if tc.expectsErr {
+				Expect(err).To(HaveOccurred())
+				return
+			}
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(deleted)).To(Equal(numSuccessfulBuilds))
+
+			if tc.resShouldContainPod1 {
+				Expect(names).To(ContainElements(build1Name))
+			}
+
+			if tc.resShouldContainPod2 {
+				Expect(names).To(ContainElements(build2Name))
+			}
 		},
-		Entry("0 successfull builds", buildv1.BuildPhaseRunning, buildv1.BuildPhaseRunning, 0),
-		Entry("1 successfull builds", buildv1.BuildPhaseRunning, buildv1.BuildPhaseComplete, 1),
-		Entry("2 successfull builds", buildv1.BuildPhaseComplete, buildv1.BuildPhaseComplete, 2),
+		Entry(
+			"all pods succeeded",
+			testCase{
+				podPhase1:            buildv1.BuildPhaseComplete,
+				podPhase2:            buildv1.BuildPhaseComplete,
+				resShouldContainPod1: true,
+				resShouldContainPod2: true,
+			},
+		),
+		Entry(
+			"1 pod succeeded",
+			testCase{
+				podPhase1:            buildv1.BuildPhaseComplete,
+				podPhase2:            buildv1.BuildPhaseFailed,
+				resShouldContainPod1: true,
+			},
+		),
+		Entry(
+			"0 pod succeeded",
+			testCase{
+				podPhase1: buildv1.BuildPhaseFailed,
+				podPhase2: buildv1.BuildPhaseFailed,
+			},
+		),
+		Entry(
+			"error occurred",
+			testCase{expectsErr: true},
+		),
+		Entry(
+			"GC delayed",
+			testCase{
+				podPhase1:            buildv1.BuildPhaseComplete,
+				podPhase2:            buildv1.BuildPhaseComplete,
+				gcDelay:              time.Hour,
+				resShouldContainPod1: false,
+				resShouldContainPod2: false,
+			},
+		),
 	)
 
 })

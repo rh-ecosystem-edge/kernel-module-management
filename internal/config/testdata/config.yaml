@@ -3,6 +3,8 @@ metricsBindAddress: 127.0.0.1:8080
 webhook:
   disableHTTP2: true
   port: 9443
+job:
+  gcDelay: 1h
 leaderElection:
   enabled: true
   resourceID: some-resource-id

@@ -9,6 +9,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 var ErrNoMatchingBuild = errors.New("no matching Build")
@@ -19,6 +20,7 @@ type OCPBuildsHelper interface {
 	GetModuleOCPBuildByKernel(ctx context.Context, mld *api.ModuleLoaderData, owner metav1.Object) (*buildv1.Build, error)
 	GetModuleOCPBuilds(ctx context.Context, moduleName, moduleNamespace string, owner metav1.Object) ([]buildv1.Build, error)
 	DeleteOCPBuild(ctx context.Context, build *buildv1.Build) error
+	RemoveFinalizer(ctx context.Context, build *buildv1.Build, finalizer string) error
 }
 
 type ocpBuildsHelper struct {
@@ -82,6 +84,18 @@ func (o *ocpBuildsHelper) DeleteOCPBuild(ctx context.Context, build *buildv1.Bui
 		client.PropagationPolicy(metav1.DeletePropagationBackground),
 	}
 	return o.client.Delete(ctx, build, opts...)
+}
+
+func (o *ocpBuildsHelper) RemoveFinalizer(ctx context.Context, build *buildv1.Build, finalizer string) error {
+	if !controllerutil.RemoveFinalizer(build, finalizer) {
+		return nil
+	}
+
+	podCopy := build.DeepCopy()
+
+	controllerutil.RemoveFinalizer(build, finalizer)
+
+	return o.client.Patch(ctx, build, client.MergeFrom(podCopy))
 }
 
 func filterOCPBuildsByOwner(builds []buildv1.Build, owner metav1.Object) []buildv1.Build {

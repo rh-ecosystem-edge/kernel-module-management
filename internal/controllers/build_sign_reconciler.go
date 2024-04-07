@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	buildv1 "github.com/openshift/api/build/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
@@ -53,8 +54,9 @@ func NewBuildSignReconciler(
 	signAPI sign.SignManager,
 	kernelAPI module.KernelMapper,
 	filter *filter.Filter,
+	gcDelay time.Duration,
 ) *BuildSignReconciler {
-	reconHelperAPI := newBuildSignReconcilerHelper(client, buildAPI, signAPI, kernelAPI)
+	reconHelperAPI := newBuildSignReconcilerHelper(client, buildAPI, signAPI, kernelAPI, gcDelay)
 	return &BuildSignReconciler{
 		reconHelperAPI: reconHelperAPI,
 		filter:         filter,
@@ -110,7 +112,7 @@ func (r *BuildSignReconciler) Reconcile(ctx context.Context, mod *kmmv1beta1.Mod
 	}
 
 	logger.Info("run garbage collector for build/sign pods")
-	err = r.reconHelperAPI.garbageCollect(ctx, mod, mldMappings)
+	err = r.reconHelperAPI.garbageCollect(ctx, mod)
 	if err != nil {
 		return res, fmt.Errorf("failed to run garbage collection: %v", err)
 	}
@@ -127,12 +129,13 @@ type buildSignReconcilerHelperAPI interface {
 	getRelevantKernelMappings(ctx context.Context, mod *kmmv1beta1.Module, targetedNodes []v1.Node) (map[string]*api.ModuleLoaderData, error)
 	handleBuild(ctx context.Context, mld *api.ModuleLoaderData) (bool, error)
 	handleSigning(ctx context.Context, mld *api.ModuleLoaderData) (bool, error)
-	garbageCollect(ctx context.Context, mod *kmmv1beta1.Module, mldMappings map[string]*api.ModuleLoaderData) error
+	garbageCollect(ctx context.Context, mod *kmmv1beta1.Module) error
 }
 
 type buildSignReconcilerHelper struct {
 	client    client.Client
 	buildAPI  build.Manager
+	gcDelay   time.Duration
 	signAPI   sign.SignManager
 	kernelAPI module.KernelMapper
 }
@@ -140,10 +143,12 @@ type buildSignReconcilerHelper struct {
 func newBuildSignReconcilerHelper(client client.Client,
 	buildAPI build.Manager,
 	signAPI sign.SignManager,
-	kernelAPI module.KernelMapper) buildSignReconcilerHelperAPI {
+	kernelAPI module.KernelMapper,
+	gcDelay time.Duration) buildSignReconcilerHelperAPI {
 	return &buildSignReconcilerHelper{
 		client:    client,
 		buildAPI:  buildAPI,
+		gcDelay:   gcDelay,
 		signAPI:   signAPI,
 		kernelAPI: kernelAPI,
 	}
@@ -270,13 +275,11 @@ func (bsrh *buildSignReconcilerHelper) handleSigning(ctx context.Context, mld *a
 	return completedSuccessfully, nil
 }
 
-func (bsrh *buildSignReconcilerHelper) garbageCollect(ctx context.Context,
-	mod *kmmv1beta1.Module,
-	mldMappings map[string]*api.ModuleLoaderData) error {
+func (bsrh *buildSignReconcilerHelper) garbageCollect(ctx context.Context, mod *kmmv1beta1.Module) error {
 	logger := log.FromContext(ctx)
 
 	// Garbage collect for successfully finished build pods
-	deleted, err := bsrh.buildAPI.GarbageCollect(ctx, mod.Name, mod.Namespace, mod)
+	deleted, err := bsrh.buildAPI.GarbageCollect(ctx, mod.Name, mod.Namespace, mod, bsrh.gcDelay)
 	if err != nil {
 		return fmt.Errorf("could not garbage collect build objects: %v", err)
 	}
@@ -284,7 +287,7 @@ func (bsrh *buildSignReconcilerHelper) garbageCollect(ctx context.Context,
 	logger.Info("Garbage-collected Build objects", "names", deleted)
 
 	// Garbage collect for successfully finished sign pods
-	deleted, err = bsrh.signAPI.GarbageCollect(ctx, mod.Name, mod.Namespace, mod)
+	deleted, err = bsrh.signAPI.GarbageCollect(ctx, mod.Name, mod.Namespace, mod, bsrh.gcDelay)
 	if err != nil {
 		return fmt.Errorf("could not garbage collect sign objects: %v", err)
 	}
