@@ -13,7 +13,7 @@ metadata:
   name: acm-operator-subscription
   namespace: advanced-cluster-management
 spec:
-  channel: release-2.7
+  channel: release-2.9
   installPlanApproval: Automatic
   name: advanced-cluster-management
   source: redhat-operators
