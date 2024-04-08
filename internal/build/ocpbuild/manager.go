@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	buildv1 "github.com/openshift/api/build/v1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -32,7 +34,8 @@ func NewManager(
 	maker Maker,
 	ocpBuildsHelper ocpbuildutils.OCPBuildsHelper,
 	authFactory auth.RegistryAuthGetterFactory,
-	registry registry.Registry) build.Manager {
+	registry registry.Registry,
+) build.Manager {
 	return &manager{
 		client:          client,
 		maker:           maker,
@@ -42,7 +45,7 @@ func NewManager(
 	}
 }
 
-func (m *manager) GarbageCollect(ctx context.Context, modName, namespace string, owner metav1.Object) ([]string, error) {
+func (m *manager) GarbageCollect(ctx context.Context, modName, namespace string, owner metav1.Object, delay time.Duration) ([]string, error) {
 	moduleBuilds, err := m.ocpBuildsHelper.GetModuleOCPBuilds(ctx, modName, namespace, owner)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get OCP builds for module's builds %s: %v", modName, err)
@@ -51,11 +54,19 @@ func (m *manager) GarbageCollect(ctx context.Context, modName, namespace string,
 	deleteNames := make([]string, 0, len(moduleBuilds))
 	for _, moduleBuild := range moduleBuilds {
 		if moduleBuild.Status.Phase == buildv1.BuildPhaseComplete {
-			err = m.ocpBuildsHelper.DeleteOCPBuild(ctx, &moduleBuild)
-			if err != nil {
-				return nil, fmt.Errorf("failed to delete OCP build %s: %v", moduleBuild.Name, err)
+			if moduleBuild.DeletionTimestamp == nil {
+				if err = m.ocpBuildsHelper.DeleteOCPBuild(ctx, &moduleBuild); err != nil {
+					return nil, fmt.Errorf("failed to delete build %s: %v", moduleBuild.Name, err)
+				}
 			}
-			deleteNames = append(deleteNames, moduleBuild.Name)
+
+			if moduleBuild.DeletionTimestamp.Add(delay).Before(time.Now()) {
+				if err = m.ocpBuildsHelper.RemoveFinalizer(ctx, &moduleBuild, constants.GCDelayFinalizer); err != nil {
+					return nil, fmt.Errorf("could not remove the GC delay finalizer from build %s/%s: %v", moduleBuild.Namespace, moduleBuild.Name, err)
+				}
+
+				deleteNames = append(deleteNames, moduleBuild.Name)
+			}
 		}
 	}
 	return deleteNames, nil
