@@ -40,6 +40,8 @@ spec:
           args: [--config=controller_config.yaml]
           securityContext:
             allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
           livenessProbe:
             httpGet:
               path: /healthz
