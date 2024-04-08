@@ -2,8 +2,6 @@
 #
 set -euxo pipefail
 
-readonly SKIP_MAKE_DEPLOY="${SKIP_MAKE_DEPLOY:-false}"
-readonly SKIP_MAKE_DEPLOY_HUB="${SKIP_MAKE_DEPLOY_HUB:-false}"
 readonly SKIP_ACM_INSTALLATION="${SKIP_ACM_INSTALLATION:-false}"
 
 export CLUSTER_NAME=local-cluster
@@ -34,21 +32,19 @@ else
   oc label managedcluster local-cluster name=${CLUSTER_NAME}
 fi
 
-if [ "$SKIP_MAKE_DEPLOY_HUB" == true ]; then
-  echo "Skipping KMM-Hub deployment"
-else
-  echo "Deploy KMMO-Hub..."
-  make deploy-hub
-  oc wait --for=condition=Available --timeout=1m deployment/kmm-operator-hub-controller deployment/kmm-operator-hub-webhook-server -n ${HUB_OPERATOR_NAMESPACE}
-fi
+oc create namespace "$OPERATOR_NAMESPACE"
+operator-sdk run bundle "$OO_BUNDLE" -n "$OPERATOR_NAMESPACE"
 
-if [ "$SKIP_MAKE_DEPLOY" == true ]; then
-  echo "Skipping KMM deployment"
-else
-  echo "Deploy KMM..."
-  make deploy KUSTOMIZE_CONFIG_DEFAULT=ci/install-ci-spoke
-  oc wait --for=condition=Available --timeout=1m deployment/kmm-operator-controller deployment/kmm-operator-webhook-server -n ${OPERATOR_NAMESPACE}
-fi
+oc create namespace "$HUB_OPERATOR_NAMESPACE"
+operator-sdk run bundle "$OO_HUB_BUNDLE" -n "$HUB_OPERATOR_NAMESPACE"
+
+oc wait --for=condition=Available -n ${OPERATOR_NAMESPACE} \
+  deployment/kmm-operator-controller \
+  deployment/kmm-operator-webhook-server
+
+oc wait --for=condition=Available -n ${HUB_OPERATOR_NAMESPACE} \
+  deployment/kmm-operator-hub-controller \
+  deployment/kmm-operator-hub-webhook-server
 
 # Apply resources
 oc apply -k ci/e2e-hub
@@ -65,7 +61,7 @@ oc -n ${HUB_OPERATOR_NAMESPACE} wait --for=condition=complete --timeout=1m build
 
 # Waiting for the manifestwork to be created
 timeout 1m bash -c 'until oc -n ${CLUSTER_NAME} get manifestwork/mod-example; do sleep 1; done'
-oc get manifestwork/mod-example -n ${CLUSTER_NAME} -o yaml | yq '.spec.workload.manifests'
+oc get manifestwork/mod-example -n ${CLUSTER_NAME} -o jsonpath='{.spec.workload.manifests}'
 
 # Validate that the Module has no `build`/`sign` sections
 timeout 1m bash -c 'until oc -n ${OPERATOR_NAMESPACE} get module/mod-example; do sleep 1; done'
