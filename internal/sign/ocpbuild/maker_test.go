@@ -108,7 +108,7 @@ COPY --from=signimage /signroot/modules/simple-kmod.ko:/modules/simple-procfs-km
 						BlockOwnerDeletion: ptr.To(true),
 					},
 				},
-				Finalizers: []string{constants.JobEventFinalizer},
+				Finalizers: []string{constants.GCDelayFinalizer, constants.JobEventFinalizer},
 			},
 			Spec: buildv1.BuildSpec{
 				CommonSpec: buildv1.CommonSpec{

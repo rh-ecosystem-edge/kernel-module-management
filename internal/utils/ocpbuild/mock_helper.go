@@ -84,17 +84,3 @@ func (mr *MockOCPBuildsHelperMockRecorder) GetModuleOCPBuilds(ctx, moduleName, m
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetModuleOCPBuilds", reflect.TypeOf((*MockOCPBuildsHelper)(nil).GetModuleOCPBuilds), ctx, moduleName, moduleNamespace, owner)
 }
-
-// RemoveFinalizer mocks base method.
-func (m *MockOCPBuildsHelper) RemoveFinalizer(ctx context.Context, build *v1.Build, finalizer string) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RemoveFinalizer", ctx, build, finalizer)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// RemoveFinalizer indicates an expected call of RemoveFinalizer.
-func (mr *MockOCPBuildsHelperMockRecorder) RemoveFinalizer(ctx, build, finalizer any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveFinalizer", reflect.TypeOf((*MockOCPBuildsHelper)(nil).RemoveFinalizer), ctx, build, finalizer)
-}

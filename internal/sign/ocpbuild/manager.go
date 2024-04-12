@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	buildv1 "github.com/openshift/api/build/v1"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
 	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,7 +42,7 @@ func NewManager(
 	}
 }
 
-func (m *manager) GarbageCollect(ctx context.Context, modName, namespace string, owner metav1.Object, delay time.Duration) ([]string, error) {
+func (m *manager) GarbageCollect(ctx context.Context, modName, namespace string, owner metav1.Object) ([]string, error) {
 	moduleSigns, err := m.ocpBuildsHelper.GetModuleOCPBuilds(ctx, modName, namespace, owner)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get OCP builds for module's signs %s: %v", modName, err)
@@ -53,19 +51,11 @@ func (m *manager) GarbageCollect(ctx context.Context, modName, namespace string,
 	deleteNames := make([]string, 0, len(moduleSigns))
 	for _, moduleSign := range moduleSigns {
 		if moduleSign.Status.Phase == buildv1.BuildPhaseComplete {
-			if moduleSign.DeletionTimestamp == nil {
-				if err = m.ocpBuildsHelper.DeleteOCPBuild(ctx, &moduleSign); err != nil {
-					return nil, fmt.Errorf("failed to delete signing pod %s: %v", moduleSign.Name, err)
-				}
+			err = m.ocpBuildsHelper.DeleteOCPBuild(ctx, &moduleSign)
+			if err != nil {
+				return nil, fmt.Errorf("failed to delete OCP build %s: %v", moduleSign.Name, err)
 			}
-
-			if moduleSign.DeletionTimestamp.Add(delay).Before(time.Now()) {
-				if err = m.ocpBuildsHelper.RemoveFinalizer(ctx, &moduleSign, constants.GCDelayFinalizer); err != nil {
-					return nil, fmt.Errorf("could not remove the GC delay finalizer from pod %s/%s: %v", moduleSign.Namespace, moduleSign.Name, err)
-				}
-
-				deleteNames = append(deleteNames, moduleSign.Name)
-			}
+			deleteNames = append(deleteNames, moduleSign.Name)
 		}
 	}
 	return deleteNames, nil
