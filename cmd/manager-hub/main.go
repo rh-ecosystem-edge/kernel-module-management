@@ -161,14 +161,7 @@ func main() {
 	mcmr := hub.NewManagedClusterModuleReconciler(
 		client,
 		manifestwork.NewCreator(client, scheme, kernelAPI, registryAPI, authFactory, cache, operatorNamespace),
-		cluster.NewClusterAPI(
-			client,
-			module.NewKernelMapper(buildHelperAPI, sign.NewSignerHelper()),
-			buildAPI,
-			signAPI,
-			operatorNamespace,
-			cfg.Job.GCDelay,
-		),
+		cluster.NewClusterAPI(client, kernelAPI, buildAPI, signAPI, operatorNamespace),
 		statusupdater.NewManagedClusterModuleStatusUpdater(client),
 		filterAPI,
 		operatorNamespace,
@@ -199,6 +192,10 @@ func main() {
 
 	if err = controllers.NewBuildSignEventsReconciler(client, jobEventReconcilerHelper, eventRecorder).SetupWithManager(mgr); err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.BuildSignEventsReconcilerName)
+	}
+
+	if err = controllers.NewJobGCReconciler(client, cfg.Job.GCDelay).SetupWithManager(mgr); err != nil {
+		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.JobGCReconcilerName)
 	}
 
 	//+kubebuilder:scaffold:builder
