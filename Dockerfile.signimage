@@ -1,11 +1,11 @@
-FROM registry.access.redhat.com/ubi9/ubi-minimal:9.3 as ksource
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.4 as ksource
 
 # install the package that will contain the sign utilities
 RUN microdnf update -y && \
     microdnf install -y kernel-devel && \
     microdnf clean all
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:9.3
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.4
 
 COPY --from=ksource /usr/src/kernels/*/scripts/sign-file /usr/local/bin/
 

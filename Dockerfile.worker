@@ -24,7 +24,7 @@ COPY .git .git
 RUN git config --global --add safe.directory ${PWD}
 RUN ["make", "worker"]
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:9.3
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.4
 
 RUN microdnf update -y && \
     microdnf install -y kmod shadow-utils && \
