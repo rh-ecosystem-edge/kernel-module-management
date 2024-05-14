@@ -322,8 +322,8 @@ github.com/opencontainers/image-spec/specs-go/v1
 # github.com/opencontainers/runtime-spec v1.2.0
 ## explicit
 github.com/opencontainers/runtime-spec/specs-go
-# github.com/openshift/api v0.0.0-20240206154754-8ec9b53f66b6
-## explicit; go 1.20
+# github.com/openshift/api v0.0.0-20240514123321-944467d2cc3b
+## explicit; go 1.21
 github.com/openshift/api/build/v1
 github.com/openshift/api/image/docker10
 github.com/openshift/api/image/dockerpre012
