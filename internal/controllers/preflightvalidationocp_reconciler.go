@@ -44,6 +44,8 @@ const (
 	driverToolkitSpecName        = "driver-toolkit"
 	driverToolkitJSONFilePath    = "etc/driver-toolkit-release.json"
 	releaseManifestImagesRefFile = "release-manifests/image-references"
+
+	PreflightValidationOCPReconcilerName = "PreflightValidationOCP"
 )
 
 type dtkRelease struct {
@@ -85,7 +87,7 @@ func NewPreflightValidationOCPReconciler(
 
 func (r *PreflightValidationOCPReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		Named("preflightvalidationocp").
+		Named(PreflightValidationOCPReconcilerName).
 		For(&v1beta2.PreflightValidationOCP{}, builder.WithPredicates(filter.PreflightOCPReconcilerUpdatePredicate())).
 		Owns(&v1beta2.PreflightValidation{}).
 		WithOptions(controller.Options{
