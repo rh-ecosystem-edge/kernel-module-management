@@ -191,7 +191,7 @@ func main() {
 		operatorNamespace,
 		scheme,
 	)
-	if err = mnc.SetupWithManager(mgr); err != nil {
+	if err = mnc.SetupWithManager(mgr, !managed); err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.ModuleNMCReconcilerName)
 	}
 
