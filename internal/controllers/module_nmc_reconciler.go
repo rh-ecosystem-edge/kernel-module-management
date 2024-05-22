@@ -143,11 +143,10 @@ func (mnr *ModuleNMCReconciler) Reconcile(ctx context.Context, mod *kmmv1beta1.M
 	return ctrl.Result{}, nil
 }
 
-func (mnr *ModuleNMCReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.
+func (mnr *ModuleNMCReconciler) SetupWithManager(mgr ctrl.Manager, watchBuilds bool) error {
+	b := ctrl.
 		NewControllerManagedBy(mgr).
 		For(&kmmv1beta1.Module{}).
-		Owns(&buildv1.Build{}, builder.WithPredicates(filter.ModuleNMCReconcileBuildPredicate())).
 		Watches(
 			&v1.Node{},
 			handler.EnqueueRequestsFromMapFunc(mnr.filter.FindModulesForNMCNodeChange),
@@ -159,10 +158,15 @@ func (mnr *ModuleNMCReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&kmmv1beta1.NodeModulesConfig{},
 			handler.EnqueueRequestsFromMapFunc(filter.ListModulesForNMC),
 		).
-		Named(ModuleNMCReconcilerName).
-		Complete(
-			reconcile.AsReconciler[*kmmv1beta1.Module](mgr.GetClient(), mnr),
-		)
+		Named(ModuleNMCReconcilerName)
+
+	if watchBuilds {
+		b = b.Owns(&buildv1.Build{}, builder.WithPredicates(filter.ModuleNMCReconcileBuildPredicate()))
+	}
+
+	return b.Complete(
+		reconcile.AsReconciler[*kmmv1beta1.Module](mgr.GetClient(), mnr),
+	)
 }
 
 //go:generate mockgen -source=module_nmc_reconciler.go -package=controllers -destination=mock_module_nmc_reconciler.go moduleNMCReconcilerHelperAPI,namespaceLabeler
