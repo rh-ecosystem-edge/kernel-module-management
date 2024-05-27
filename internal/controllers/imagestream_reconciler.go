@@ -17,6 +17,8 @@ import (
 
 //+kubebuilder:rbac:groups="image.openshift.io",resources=imagestreams,verbs=get;list;watch
 
+const ImageStreamReconcilerName = "ImageStream"
+
 type ImageStreamReconciler struct {
 	client             client.Client
 	kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping
@@ -62,7 +64,7 @@ func (r *ImageStreamReconciler) SetupWithManager(mgr ctrl.Manager, f *filter.Fil
 
 	return ctrl.
 		NewControllerManagedBy(mgr).
-		Named("imagestream").
+		Named(ImageStreamReconcilerName).
 		For(
 			&imagev1.ImageStream{},
 			builder.WithPredicates(dtkPredicates),
