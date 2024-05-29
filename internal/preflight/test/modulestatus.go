@@ -2,10 +2,10 @@ package test
 
 import (
 	"errors"
+	"slices"
 
 	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta2"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/preflight"
-	"golang.org/x/exp/slices"
 	"k8s.io/apimachinery/pkg/types"
 )
 

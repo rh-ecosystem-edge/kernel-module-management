@@ -3,6 +3,7 @@ package preflight
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta2"
@@ -15,7 +16,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 
-	"golang.org/x/exp/slices"
 	"k8s.io/apimachinery/pkg/types"
 	ctrlruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
