@@ -19,7 +19,7 @@ require (
 	github.com/onsi/gomega v1.32.0
 	github.com/openshift/api v0.0.0-20240514123321-944467d2cc3b
 	github.com/otiai10/copy v1.14.0
-	github.com/prometheus/client_golang v1.19.0
+	github.com/prometheus/client_golang v1.19.1
 	github.com/spf13/cobra v1.8.0
 	go.uber.org/mock v0.4.0
 	golang.org/x/exp v0.0.0-20240314144324-c7f7c6466f7f
