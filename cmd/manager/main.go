@@ -191,7 +191,7 @@ func main() {
 		operatorNamespace,
 		scheme,
 	)
-	if err = mnc.SetupWithManager(mgr); err != nil {
+	if err = mnc.SetupWithManager(mgr, !managed); err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.ModuleNMCReconcilerName)
 	}
 
@@ -217,14 +217,6 @@ func main() {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.NodeLabelModuleVersionReconcilerName)
 	}
 
-	preflightStatusUpdaterAPI := preflight.NewStatusUpdater(client)
-	preflightOCPStatusUpdaterAPI := preflight.NewOCPStatusUpdater(client)
-	preflightAPI := preflight.NewPreflightAPI(client, buildAPI, signAPI, registryAPI, kernelAPI, preflightStatusUpdaterAPI, authFactory)
-
-	if err = controllers.NewPreflightValidationReconciler(client, filterAPI, metricsAPI, preflightStatusUpdaterAPI, preflightAPI).SetupWithManager(mgr); err != nil {
-		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.PreflightValidationReconcilerName)
-	}
-
 	if managed {
 		setupLogger.Info("Starting as managed")
 
@@ -245,6 +237,25 @@ func main() {
 		if err = controllers.NewJobGCReconciler(client, cfg.Job.GCDelay).SetupWithManager(mgr); err != nil {
 			cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.JobGCReconcilerName)
 		}
+
+		preflightStatusUpdaterAPI := preflight.NewStatusUpdater(client)
+		preflightAPI := preflight.NewPreflightAPI(client, buildAPI, signAPI, registryAPI, kernelAPI, preflightStatusUpdaterAPI, authFactory)
+
+		if err = controllers.NewPreflightValidationReconciler(client, filterAPI, metricsAPI, preflightStatusUpdaterAPI, preflightAPI).SetupWithManager(mgr); err != nil {
+			cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.PreflightValidationReconcilerName)
+		}
+
+		preflightOCPStatusUpdaterAPI := preflight.NewOCPStatusUpdater(client)
+
+		if err = controllers.NewPreflightValidationOCPReconciler(client,
+			filterAPI,
+			registryAPI,
+			authFactory,
+			kernelOsDtkMapping,
+			preflightOCPStatusUpdaterAPI,
+			scheme).SetupWithManager(mgr); err != nil {
+			cmd.FatalError(setupLogger, err, "unable to create controller", "controller", controllers.PreflightValidationOCPReconcilerName)
+		}
 	}
 
 	dtkNSN := types.NamespacedName{
@@ -255,19 +266,7 @@ func main() {
 	dtkClient := ctrlclient.NewNamespacedClient(client, constants.DTKImageStreamNamespace)
 
 	if err = controllers.NewImageStreamReconciler(dtkClient, kernelOsDtkMapping, dtkNSN).SetupWithManager(mgr, filterAPI); err != nil {
-		setupLogger.Error(err, "unable to create controller", "controller", "ImageStream")
-		os.Exit(1)
-	}
-
-	if err = controllers.NewPreflightValidationOCPReconciler(client,
-		filterAPI,
-		registryAPI,
-		authFactory,
-		kernelOsDtkMapping,
-		preflightOCPStatusUpdaterAPI,
-		scheme).SetupWithManager(mgr); err != nil {
-		setupLogger.Error(err, "unable to create controller", "controller", "PreflightOCP")
-		os.Exit(1)
+		cmd.FatalError(setupLogger, err, "unable to create controller", "controller", controllers.ImageStreamReconcilerName)
 	}
 
 	//+kubebuilder:scaffold:builder

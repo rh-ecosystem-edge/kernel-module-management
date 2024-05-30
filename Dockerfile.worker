@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM registry.access.redhat.com/ubi9/go-toolset:1.20 as builder
+FROM registry.access.redhat.com/ubi9/go-toolset:1.21 as builder
 
 # Add the vendored dependencies
 COPY vendor vendor
@@ -24,7 +24,7 @@ COPY .git .git
 RUN git config --global --add safe.directory ${PWD}
 RUN ["make", "worker"]
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:9.3
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.4
 
 RUN microdnf update -y && \
     microdnf install -y kmod shadow-utils && \
