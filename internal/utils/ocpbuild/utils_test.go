@@ -11,21 +11,21 @@ import (
 
 var _ = Describe("GetOCPBuildLabels", func() {
 	const (
-		kernelVersion = "some-kernel-version"
-		moduleName    = "some-module"
-		buildType     = "some-build-type"
+		kernelNormalizedVersion = "1.2.3_4"
+		moduleName              = "some-module"
+		buildType               = "some-build-type"
 	)
 
 	It("should work as expected", func() {
 		mld := &api.ModuleLoaderData{
-			KernelVersion: kernelVersion,
-			Name:          moduleName,
+			KernelNormalizedVersion: kernelNormalizedVersion,
+			Name:                    moduleName,
 		}
 
 		expected := map[string]string{
 			constants.ModuleNameLabel:     moduleName,
 			constants.BuildTypeLabel:      buildType,
-			constants.TargetKernelTarget:  kernelVersion,
+			constants.TargetKernelTarget:  kernelNormalizedVersion,
 			"app.kubernetes.io/name":      "kmm",
 			"app.kubernetes.io/component": buildType,
 			"app.kubernetes.io/part-of":   "kmm",
