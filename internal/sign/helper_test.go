@@ -17,7 +17,7 @@ var _ = Describe("GetRelevantSign", func() {
 		keySecret     = "securebootkey"
 		certSecret    = "securebootcert"
 		filesToSign   = "/modules/simple-kmod.ko:/modules/simple-procfs-kmod.ko"
-		kernelVersion = "1.2.3"
+		kernelVersion = "1.2.3+4"
 	)
 
 	var (
