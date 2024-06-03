@@ -2,6 +2,7 @@ package sign
 
 import (
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/kernel"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 )
 
@@ -18,7 +19,7 @@ func NewSignerHelper() Helper {
 	return &helper{}
 }
 
-func (m *helper) GetRelevantSign(moduleSign *kmmv1beta1.Sign, mappingSign *kmmv1beta1.Sign, kernel string) (*kmmv1beta1.Sign, error) {
+func (m *helper) GetRelevantSign(moduleSign *kmmv1beta1.Sign, mappingSign *kmmv1beta1.Sign, kernelVersion string) (*kmmv1beta1.Sign, error) {
 	var signConfig *kmmv1beta1.Sign
 	if moduleSign == nil {
 		// km.Sign cannot be nil in case mod.Sign is nil, checked above
@@ -41,7 +42,10 @@ func (m *helper) GetRelevantSign(moduleSign *kmmv1beta1.Sign, mappingSign *kmmv1
 		//append (not overwrite) any files in the km to the defaults
 		signConfig.FilesToSign = append(signConfig.FilesToSign, mappingSign.FilesToSign...)
 	}
-	osConfigEnvVars := utils.KernelComponentsAsEnvVars(kernel)
+
+	osConfigEnvVars := utils.KernelComponentsAsEnvVars(
+		kernel.NormalizeVersion(kernelVersion),
+	)
 	unsignedImage, err := utils.ReplaceInTemplates(osConfigEnvVars, signConfig.UnsignedImage)
 	if err != nil {
 		return nil, err
