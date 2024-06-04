@@ -22,21 +22,6 @@ import (
 	"os"
 	"strconv"
 
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/client-go/kubernetes"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/klog/v2/textlogger"
-	clusterv1alpha1 "open-cluster-management.io/api/cluster/v1alpha1"
-	ctrl "sigs.k8s.io/controller-runtime"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
-
-	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
-	// to ensure that exec-entrypoint and run can make use of them.
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
-
 	buildv1 "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
@@ -59,6 +44,21 @@ import (
 	signocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/sign/ocpbuild"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
+
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/klog/v2/textlogger"
+	clusterv1alpha1 "open-cluster-management.io/api/cluster/v1alpha1"
+	ctrl "sigs.k8s.io/controller-runtime"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
+
+	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
+	// to ensure that exec-entrypoint and run can make use of them.
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -137,22 +137,6 @@ func main() {
 		),
 	)
 
-	buildAPI := buildocpbuild.NewManager(
-		client,
-		buildocpbuild.NewMaker(client, buildHelperAPI, scheme, kernelOsDtkMapping),
-		ocpbuildutils.NewOCPBuildsHelper(client, buildocpbuild.BuildType),
-		authFactory,
-		registryAPI,
-	)
-
-	signAPI := signocpbuild.NewManager(
-		client,
-		signocpbuild.NewMaker(client, cmd.GetEnvOrFatalError("RELATED_IMAGE_SIGN", setupLogger), scheme),
-		ocpbuildutils.NewOCPBuildsHelper(client, signocpbuild.BuildType),
-		authFactory,
-		registryAPI,
-	)
-
 	kernelAPI := module.NewKernelMapper(buildHelperAPI, sign.NewSignerHelper())
 
 	dpc := controllers.NewDevicePluginReconciler(
@@ -163,16 +147,6 @@ func main() {
 		operatorNamespace)
 	if err = dpc.SetupWithManager(mgr); err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.DevicePluginReconcilerName)
-	}
-
-	bsc := controllers.NewBuildSignReconciler(
-		client,
-		buildAPI,
-		signAPI,
-		kernelAPI,
-		filterAPI)
-	if err = bsc.SetupWithManager(mgr, constants.KernelLabel); err != nil {
-		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.BuildSignReconcilerName)
 	}
 
 	caHelper := ca.NewHelper(client, scheme)
@@ -228,6 +202,32 @@ func main() {
 			cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.NodeKernelClusterClaimReconcilerName)
 		}
 	} else {
+		buildAPI := buildocpbuild.NewManager(
+			client,
+			buildocpbuild.NewMaker(client, buildHelperAPI, scheme, kernelOsDtkMapping),
+			ocpbuildutils.NewOCPBuildsHelper(client, buildocpbuild.BuildType),
+			authFactory,
+			registryAPI,
+		)
+
+		signAPI := signocpbuild.NewManager(
+			client,
+			signocpbuild.NewMaker(client, cmd.GetEnvOrFatalError("RELATED_IMAGE_SIGN", setupLogger), scheme),
+			ocpbuildutils.NewOCPBuildsHelper(client, signocpbuild.BuildType),
+			authFactory,
+			registryAPI,
+		)
+
+		bsc := controllers.NewBuildSignReconciler(
+			client,
+			buildAPI,
+			signAPI,
+			kernelAPI,
+			filterAPI)
+		if err = bsc.SetupWithManager(mgr, constants.KernelLabel); err != nil {
+			cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.BuildSignReconcilerName)
+		}
+
 		helper := controllers.NewJobEventReconcilerHelper(client)
 
 		if err = controllers.NewBuildSignEventsReconciler(client, helper, eventRecorder).SetupWithManager(mgr); err != nil {
