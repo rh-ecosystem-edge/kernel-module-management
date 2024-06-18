@@ -26,6 +26,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -56,10 +57,11 @@ func NewDevicePluginReconciler(
 	client client.Client,
 	metricsAPI metrics.Metrics,
 	filter *filter.Filter,
+	nodeAPI node.Node,
 	scheme *runtime.Scheme,
 	operatorNamespace string,
 ) *DevicePluginReconciler {
-	reconHelperAPI := newDevicePluginReconcilerHelper(client, metricsAPI, scheme, operatorNamespace)
+	reconHelperAPI := newDevicePluginReconcilerHelper(client, metricsAPI, nodeAPI, scheme, operatorNamespace)
 	return &DevicePluginReconciler{
 		client:         client,
 		reconHelperAPI: reconHelperAPI,
@@ -138,10 +140,12 @@ type devicePluginReconcilerHelper struct {
 	client          client.Client
 	metricsAPI      metrics.Metrics
 	daemonSetHelper daemonSetCreator
+	nodeAPI         node.Node
 }
 
 func newDevicePluginReconcilerHelper(client client.Client,
 	metricsAPI metrics.Metrics,
+	nodeAPI node.Node,
 	scheme *runtime.Scheme,
 	operatorNamespace string) devicePluginReconcilerHelperAPI {
 	daemonSetHelper := newDaemonSetCreator(scheme, operatorNamespace)
@@ -149,6 +153,7 @@ func newDevicePluginReconcilerHelper(client client.Client,
 		client:          client,
 		metricsAPI:      metricsAPI,
 		daemonSetHelper: daemonSetHelper,
+		nodeAPI:         nodeAPI,
 	}
 }
 
@@ -277,7 +282,7 @@ func (dprh *devicePluginReconcilerHelper) moduleUpdateDevicePluginStatus(ctx con
 	}
 
 	// get the number of nodes targeted by selector (which also relevant for device plugin)
-	numTargetedNodes, err := dprh.getNumTargetedNodes(ctx, mod.Spec.Selector)
+	numTargetedNodes, err := dprh.nodeAPI.GetNumTargetedNodes(ctx, mod.Spec.Selector)
 	if err != nil {
 		return fmt.Errorf("failed to determine the number of nodes that should be targeted by Module's %s/%s selector: %v", mod.Namespace, mod.Name, err)
 	}
@@ -296,26 +301,6 @@ func (dprh *devicePluginReconcilerHelper) moduleUpdateDevicePluginStatus(ctx con
 	mod.Status.DevicePlugin.AvailableNumber = numAvailable
 
 	return dprh.client.Status().Patch(ctx, mod, client.MergeFrom(unmodifiedMod))
-}
-
-func (dprh *devicePluginReconcilerHelper) getNumTargetedNodes(ctx context.Context, selectorLabels map[string]string) (int, error) {
-	logger := log.FromContext(ctx)
-	logger.V(1).Info("Listing nodes", "selector", selectorLabels)
-
-	selectedNodes := v1.NodeList{}
-	opt := client.MatchingLabels(selectorLabels)
-	if err := dprh.client.List(ctx, &selectedNodes, opt); err != nil {
-		return 0, fmt.Errorf("could not list nodes: %v", err)
-	}
-
-	numNodes := 0
-
-	for _, node := range selectedNodes.Items {
-		if utils.IsNodeSchedulable(&node) {
-			numNodes += 1
-		}
-	}
-	return numNodes, nil
 }
 
 //go:generate mockgen -source=device_plugin_reconciler.go -package=controllers -destination=mock_device_plugin_reconciler.go daemonSetCreator

@@ -16,6 +16,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/meta"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	v1 "k8s.io/api/core/v1"
@@ -53,6 +54,7 @@ type ModuleNMCReconciler struct {
 	filter      *filter.Filter
 	nsLabeler   namespaceLabeler
 	reconHelper moduleNMCReconcilerHelperAPI
+	nodeAPI     node.Node
 }
 
 func NewModuleNMCReconciler(client client.Client,
@@ -60,6 +62,7 @@ func NewModuleNMCReconciler(client client.Client,
 	registryAPI registry.Registry,
 	nmcHelper nmc.Helper,
 	filter *filter.Filter,
+	nodeAPI node.Node,
 	authFactory auth.RegistryAuthGetterFactory,
 	operatorNamespace string,
 	scheme *runtime.Scheme) *ModuleNMCReconciler {
@@ -77,6 +80,7 @@ func NewModuleNMCReconciler(client client.Client,
 		filter:      filter,
 		nsLabeler:   newNamespaceLabeler(client),
 		reconHelper: reconHelper,
+		nodeAPI:     nodeAPI,
 	}
 }
 
@@ -108,7 +112,7 @@ func (mnr *ModuleNMCReconciler) Reconcile(ctx context.Context, mod *kmmv1beta1.M
 	}
 
 	// get nodes targeted by selector
-	targetedNodes, err := mnr.reconHelper.getNodesListBySelector(ctx, mod)
+	targetedNodes, err := mnr.nodeAPI.GetNodesListBySelector(ctx, mod.Spec.Selector)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get list of nodes by selector: %v", err)
 	}
@@ -174,7 +178,6 @@ func (mnr *ModuleNMCReconciler) SetupWithManager(mgr ctrl.Manager, watchBuilds b
 type moduleNMCReconcilerHelperAPI interface {
 	setFinalizerAndStatus(ctx context.Context, mod *kmmv1beta1.Module) error
 	finalizeModule(ctx context.Context, mod *kmmv1beta1.Module) error
-	getNodesListBySelector(ctx context.Context, mod *kmmv1beta1.Module) ([]v1.Node, error)
 	getNMCsByModuleSet(ctx context.Context, mod *kmmv1beta1.Module) (sets.Set[string], error)
 	prepareSchedulingData(ctx context.Context, mod *kmmv1beta1.Module, targetedNodes []v1.Node, currentNMCs sets.Set[string]) (map[string]schedulingData, []error)
 	enableModuleOnNode(ctx context.Context, mld *api.ModuleLoaderData, node *v1.Node) error
@@ -277,25 +280,6 @@ func (mnrh *moduleNMCReconcilerHelper) finalizeModule(ctx context.Context, mod *
 	controllerutil.RemoveFinalizer(mod, constants.ModuleFinalizer)
 
 	return mnrh.client.Patch(ctx, mod, client.MergeFrom(modCopy))
-}
-
-func (mnrh *moduleNMCReconcilerHelper) getNodesListBySelector(ctx context.Context, mod *kmmv1beta1.Module) ([]v1.Node, error) {
-	logger := log.FromContext(ctx)
-	logger.V(1).Info("Listing nodes", "selector", mod.Spec.Selector)
-
-	selectedNodes := v1.NodeList{}
-	opt := client.MatchingLabels(mod.Spec.Selector)
-	if err := mnrh.client.List(ctx, &selectedNodes, opt); err != nil {
-		return nil, fmt.Errorf("could not list nodes: %v", err)
-	}
-	nodes := make([]v1.Node, 0, len(selectedNodes.Items))
-
-	for _, node := range selectedNodes.Items {
-		if utils.IsNodeSchedulable(&node) {
-			nodes = append(nodes, node)
-		}
-	}
-	return nodes, nil
 }
 
 func (mnrh *moduleNMCReconcilerHelper) getNMCsByModuleSet(ctx context.Context, mod *kmmv1beta1.Module) (sets.Set[string], error) {
