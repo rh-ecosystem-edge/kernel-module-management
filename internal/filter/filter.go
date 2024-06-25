@@ -7,6 +7,7 @@ import (
 	"github.com/go-logr/logr"
 	buildv1 "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -51,8 +52,9 @@ var nodeBecomesSchedulable predicate.Predicate = predicate.Funcs{
 			return false
 		}
 
-		isOldSchedulable := utils.IsNodeSchedulable(oldNode)
-		isNewSchedulable := utils.IsNodeSchedulable(newNode)
+		n := node.NewNode(nil)
+		isOldSchedulable := n.IsNodeSchedulable(oldNode)
+		isNewSchedulable := n.IsNodeSchedulable(newNode)
 		if isOldSchedulable != isNewSchedulable && isNewSchedulable {
 			return true
 		}

@@ -18,6 +18,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/config"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ocp/ca"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/worker"
@@ -253,7 +254,7 @@ var _ = Describe("nmcReconcilerHelperImpl_GarbageCollectInUseLabels", func() {
 		ctrl := gomock.NewController(GinkgoT())
 		client = testclient.NewMockClient(ctrl)
 		pm = NewMockpodManager(ctrl)
-		wh = newNMCReconcilerHelper(client, pm, nil)
+		wh = newNMCReconcilerHelper(client, pm, nil, nil)
 	})
 
 	It("should do nothing if no labels should be collected", func() {
@@ -363,13 +364,15 @@ var _ = Describe("nmcReconcilerHelperImpl_ProcessModuleSpec", func() {
 		client *testclient.MockClient
 		pm     *MockpodManager
 		wh     nmcReconcilerHelper
+		nm     node.Node
 	)
 
 	BeforeEach(func() {
 		ctrl := gomock.NewController(GinkgoT())
 		client = testclient.NewMockClient(ctrl)
 		pm = NewMockpodManager(ctrl)
-		wh = newNMCReconcilerHelper(client, pm, nil)
+		nm = node.NewNode(client)
+		wh = newNMCReconcilerHelper(client, pm, nil, nm)
 	})
 
 	It("should create a loader Pod if there is no existing Pod and the status is missing", func() {
@@ -681,7 +684,7 @@ var _ = Describe("nmcReconcilerHelperImpl_ProcessUnconfiguredModuleStatus", func
 		ctrl := gomock.NewController(GinkgoT())
 		client = testclient.NewMockClient(ctrl)
 		pm = NewMockpodManager(ctrl)
-		helper = newNMCReconcilerHelper(client, pm, nil)
+		helper = newNMCReconcilerHelper(client, pm, nil, nil)
 	})
 
 	nmc := &kmmv1beta1.NodeModulesConfig{
@@ -824,7 +827,7 @@ var _ = Describe("nmcReconcilerHelperImpl_SyncStatus", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		kubeClient = testclient.NewMockClient(ctrl)
 		pm = NewMockpodManager(ctrl)
-		wh = newNMCReconcilerHelper(kubeClient, pm, nil)
+		wh = newNMCReconcilerHelper(kubeClient, pm, nil, nil)
 		sw = testclient.NewMockStatusWriter(ctrl)
 	})
 
@@ -1110,7 +1113,7 @@ var _ = Describe("nmcReconcilerHelperImpl_RemovePodFinalizers", func() {
 		ctrl := gomock.NewController(GinkgoT())
 		kubeClient = testclient.NewMockClient(ctrl)
 		pm = NewMockpodManager(ctrl)
-		wh = newNMCReconcilerHelper(kubeClient, pm, nil)
+		wh = newNMCReconcilerHelper(kubeClient, pm, nil, nil)
 	})
 
 	It("should do nothing if no pods are present", func() {
@@ -1181,7 +1184,7 @@ var _ = Describe("nmcReconcilerHelperImpl_UpdateNodeLabelsAndRecordEvents", func
 			ObjectMeta: metav1.ObjectMeta{Name: "nmcName"},
 		}
 		fakeRecorder = record.NewFakeRecorder(10)
-		wh = newNMCReconcilerHelper(client, nil, fakeRecorder)
+		wh = newNMCReconcilerHelper(client, nil, fakeRecorder, nil)
 	})
 
 	moduleConfig := kmmv1beta1.ModuleConfig{

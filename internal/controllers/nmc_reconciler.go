@@ -15,6 +15,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/meta"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ocp/ca"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/worker"
@@ -77,9 +78,10 @@ func NewNMCReconciler(
 	caHelper ca.Helper,
 	workerCfg *config.Worker,
 	recorder record.EventRecorder,
+	nodeAPI node.Node,
 ) *NMCReconciler {
 	pm := newPodManager(client, workerImage, scheme, caHelper, workerCfg)
-	helper := newNMCReconcilerHelper(client, pm, recorder)
+	helper := newNMCReconcilerHelper(client, pm, recorder, nodeAPI)
 	return &NMCReconciler{
 		client: client,
 		helper: helper,
@@ -208,18 +210,6 @@ func GetContainerStatus(statuses []v1.ContainerStatus, name string) v1.Container
 	return v1.ContainerStatus{}
 }
 
-func FindNodeCondition(cond []v1.NodeCondition, conditionType v1.NodeConditionType) *v1.NodeCondition {
-	for i := 0; i < len(cond); i++ {
-		c := cond[i]
-
-		if c.Type == conditionType {
-			return &c
-		}
-	}
-
-	return nil
-}
-
 //go:generate mockgen -source=nmc_reconciler.go -package=controllers -destination=mock_nmc_reconciler.go workerHelper
 
 type nmcReconcilerHelper interface {
@@ -235,13 +225,15 @@ type nmcReconcilerHelperImpl struct {
 	client   client.Client
 	pm       podManager
 	recorder record.EventRecorder
+	nodeAPI  node.Node
 }
 
-func newNMCReconcilerHelper(client client.Client, pm podManager, recorder record.EventRecorder) nmcReconcilerHelper {
+func newNMCReconcilerHelper(client client.Client, pm podManager, recorder record.EventRecorder, nodeAPI node.Node) nmcReconcilerHelper {
 	return &nmcReconcilerHelperImpl{
 		client:   client,
 		pm:       pm,
 		recorder: recorder,
+		nodeAPI:  nodeAPI,
 	}
 }
 
@@ -337,7 +329,7 @@ func (h *nmcReconcilerHelperImpl) ProcessModuleSpec(
 			return fmt.Errorf("could not get node %s: %v", nmcObj.Name, err)
 		}
 
-		readyCondition := FindNodeCondition(node.Status.Conditions, v1.NodeReady)
+		readyCondition := h.nodeAPI.FindNodeCondition(node.Status.Conditions, v1.NodeReady)
 		if readyCondition == nil {
 			return fmt.Errorf("node %s has no Ready condition", nmcObj.Name)
 		}

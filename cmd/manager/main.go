@@ -19,6 +19,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	"os"
 	"strconv"
 
@@ -129,6 +130,7 @@ func main() {
 	metricsAPI := metrics.New()
 	metricsAPI.Register()
 	buildHelperAPI := build.NewHelper()
+	nodeAPI := node.NewNode(client)
 	registryAPI := registry.NewRegistry()
 	authFactory := auth.NewRegistryAuthGetterFactory(
 		client,
@@ -143,6 +145,7 @@ func main() {
 		client,
 		metricsAPI,
 		filterAPI,
+		nodeAPI,
 		scheme,
 		operatorNamespace)
 	if err = dpc.SetupWithManager(mgr); err != nil {
@@ -161,6 +164,7 @@ func main() {
 		registryAPI,
 		nmcHelper,
 		filterAPI,
+		nodeAPI,
 		authFactory,
 		operatorNamespace,
 		scheme,
@@ -173,7 +177,7 @@ func main() {
 
 	eventRecorder := mgr.GetEventRecorderFor("kmm")
 
-	if err = controllers.NewNMCReconciler(client, scheme, workerImage, caHelper, &cfg.Worker, eventRecorder).SetupWithManager(ctx, mgr); err != nil {
+	if err = controllers.NewNMCReconciler(client, scheme, workerImage, caHelper, &cfg.Worker, eventRecorder, nodeAPI).SetupWithManager(ctx, mgr); err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.NodeModulesConfigReconcilerName)
 	}
 
@@ -217,13 +221,13 @@ func main() {
 			authFactory,
 			registryAPI,
 		)
-
 		bsc := controllers.NewBuildSignReconciler(
 			client,
 			buildAPI,
 			signAPI,
 			kernelAPI,
-			filterAPI)
+			filterAPI,
+			nodeAPI)
 		if err = bsc.SetupWithManager(mgr, constants.KernelLabel); err != nil {
 			cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.BuildSignReconcilerName)
 		}

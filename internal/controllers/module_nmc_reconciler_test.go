@@ -15,6 +15,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/meta"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	"go.uber.org/mock/gomock"
@@ -38,12 +39,14 @@ var _ = Describe("Reconcile", func() {
 		mockReconHelper     *MockmoduleNMCReconcilerHelperAPI
 		mod                 *kmmv1beta1.Module
 		mnr                 *ModuleNMCReconciler
+		mn                  *node.MockNode
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		mockNamespaceHelper = NewMocknamespaceLabeler(ctrl)
 		mockReconHelper = NewMockmoduleNMCReconcilerHelperAPI(ctrl)
+		mn = node.NewMockNode(ctrl)
 
 		mod = &kmmv1beta1.Module{
 			ObjectMeta: metav1.ObjectMeta{Name: moduleName, Namespace: namespace},
@@ -52,6 +55,7 @@ var _ = Describe("Reconcile", func() {
 		mnr = &ModuleNMCReconciler{
 			nsLabeler:   mockNamespaceHelper,
 			reconHelper: mockReconHelper,
+			nodeAPI:     mn,
 		}
 	})
 
@@ -110,10 +114,10 @@ var _ = Describe("Reconcile", func() {
 		}
 		mockReconHelper.EXPECT().setFinalizerAndStatus(ctx, mod).Return(nil)
 		if c.getNodesError {
-			mockReconHelper.EXPECT().getNodesListBySelector(ctx, mod).Return(nil, returnedError)
+			mn.EXPECT().GetNodesListBySelector(ctx, mod.Spec.Selector).Return(nil, returnedError)
 			goto executeTestFunction
 		}
-		mockReconHelper.EXPECT().getNodesListBySelector(ctx, mod).Return(targetedNodes, nil)
+		mn.EXPECT().GetNodesListBySelector(ctx, mod.Spec.Selector).Return(targetedNodes, nil)
 		if c.getNMCsMapError {
 			mockReconHelper.EXPECT().getNMCsByModuleSet(ctx, mod).Return(nil, returnedError)
 			goto executeTestFunction
@@ -166,7 +170,7 @@ var _ = Describe("Reconcile", func() {
 		gomock.InOrder(
 			mockNamespaceHelper.EXPECT().setLabel(ctx, mod.Namespace),
 			mockReconHelper.EXPECT().setFinalizerAndStatus(ctx, mod).Return(nil),
-			mockReconHelper.EXPECT().getNodesListBySelector(ctx, mod).Return(targetedNodes, nil),
+			mn.EXPECT().GetNodesListBySelector(ctx, mod.Spec.Selector).Return(targetedNodes, nil),
 			mockReconHelper.EXPECT().getNMCsByModuleSet(ctx, mod).Return(currentNMCs, nil),
 			mockReconHelper.EXPECT().prepareSchedulingData(ctx, mod, targetedNodes, currentNMCs).Return(nmcMLDConfigs, nil),
 			mockReconHelper.EXPECT().enableModuleOnNode(ctx, &mld, &node).Return(nil),
@@ -184,7 +188,7 @@ var _ = Describe("Reconcile", func() {
 		gomock.InOrder(
 			mockNamespaceHelper.EXPECT().setLabel(ctx, mod.Namespace),
 			mockReconHelper.EXPECT().setFinalizerAndStatus(ctx, mod).Return(nil),
-			mockReconHelper.EXPECT().getNodesListBySelector(ctx, mod).Return(targetedNodes, nil),
+			mn.EXPECT().GetNodesListBySelector(ctx, mod.Spec.Selector).Return(targetedNodes, nil),
 			mockReconHelper.EXPECT().getNMCsByModuleSet(ctx, mod).Return(currentNMCs, nil),
 			mockReconHelper.EXPECT().prepareSchedulingData(ctx, mod, targetedNodes, currentNMCs).Return(nmcMLDConfigs, nil),
 			mockReconHelper.EXPECT().disableModuleOnNode(ctx, mod.Namespace, mod.Name, node.Name).Return(nil),
@@ -250,48 +254,6 @@ var _ = Describe("setFinalizerAndStatus", func() {
 
 		err := mnrh.setFinalizerAndStatus(ctx, &mod)
 		Expect(err).To(HaveOccurred())
-	})
-})
-
-var _ = Describe("getNodesListBySelector", func() {
-	var (
-		ctrl *gomock.Controller
-		clnt *client.MockClient
-		mnrh moduleNMCReconcilerHelperAPI
-	)
-
-	BeforeEach(func() {
-		ctrl = gomock.NewController(GinkgoT())
-		clnt = client.NewMockClient(ctrl)
-		mnrh = newModuleNMCReconcilerHelper(clnt, nil, nil, nil, nil, operatorNamespace, scheme)
-	})
-
-	ctx := context.Background()
-
-	It("list failed", func() {
-		clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).Return(fmt.Errorf("some error"))
-
-		nodes, err := mnrh.getNodesListBySelector(ctx, &kmmv1beta1.Module{})
-
-		Expect(err).To(HaveOccurred())
-		Expect(nodes).To(BeNil())
-	})
-
-	It("Return nodes", func() {
-		node1 := v1.Node{}
-		node2 := v1.Node{}
-		node3 := v1.Node{}
-		clnt.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ interface{}, list *v1.NodeList, _ ...interface{}) error {
-				list.Items = []v1.Node{node1, node2, node3}
-				return nil
-			},
-		)
-		nodes, err := mnrh.getNodesListBySelector(ctx, &kmmv1beta1.Module{})
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(nodes).To(Equal([]v1.Node{node1, node2, node3}))
-
 	})
 })
 
