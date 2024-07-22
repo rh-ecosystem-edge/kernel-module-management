@@ -3,7 +3,7 @@ approvers:
   - chr15p
   - enriquebelarte
   - mresvanis
-  - qbarrand
+  - TomerNewman
   - ybettan
   - yevgeny-shnaidman
 reviewers:
@@ -11,7 +11,7 @@ reviewers:
   - chr15p
   - enriquebelarte
   - mresvanis
-  - qbarrand
+  - TomerNewman
   - ybettan
   - yevgeny-shnaidman
 component: Kernel Module Management
