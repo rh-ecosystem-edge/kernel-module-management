@@ -53,7 +53,6 @@ spec:
             value: must-gather
           - name: RELATED_IMAGE_SIGN
             value: signer
-        imagePullPolicy: Always
         securityContext:
           allowPrivilegeEscalation: false
         livenessProbe:
