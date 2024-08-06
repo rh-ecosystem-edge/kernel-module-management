@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/budougumi0617/cmpmock"
 	"github.com/mitchellh/hashstructure/v2"
@@ -1575,6 +1576,75 @@ var (
 )
 
 var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
+
+	const irsName = "some-secret"
+
+	var (
+		ctrl   *gomock.Controller
+		client *testclient.MockClient
+		psh    *MockpullSecretHelper
+
+		nmc *kmmv1beta1.NodeModulesConfig
+		mi  kmmv1beta1.ModuleItem
+
+		ctx               context.Context
+		moduleConfigToUse kmmv1beta1.ModuleConfig
+		caHelper          *ca.MockHelper
+	)
+
+	BeforeEach(func() {
+
+		ctrl = gomock.NewController(GinkgoT())
+		client = testclient.NewMockClient(ctrl)
+		psh = NewMockpullSecretHelper(ctrl)
+		caHelper = ca.NewMockHelper(ctrl)
+
+		nmc = &kmmv1beta1.NodeModulesConfig{
+			ObjectMeta: metav1.ObjectMeta{Name: nmcName},
+		}
+
+		mi = kmmv1beta1.ModuleItem{
+			ImageRepoSecret:    &v1.LocalObjectReference{Name: irsName},
+			Name:               moduleName,
+			Namespace:          namespace,
+			ServiceAccountName: serviceAccountName,
+		}
+
+		moduleConfigToUse = moduleConfig
+		ctx = context.TODO()
+	})
+
+	It("it should fail if firmwareClassPath was not set but firmware loading was", func() {
+
+		moduleConfigToUse.Modprobe.FirmwarePath = "/firmware-path"
+
+		nms := &kmmv1beta1.NodeModuleSpec{
+			ModuleItem: mi,
+			Config:     moduleConfigToUse,
+		}
+
+		pm := &podManagerImpl{
+			client:      client,
+			psh:         psh,
+			scheme:      scheme,
+			workerImage: workerImage,
+			workerCfg:   workerCfg,
+			caHelper:    caHelper,
+		}
+
+		gomock.InOrder(
+			psh.EXPECT().VolumesAndVolumeMounts(ctx, &mi),
+			caHelper.EXPECT().GetClusterCA(ctx, namespace).Return(clusterCACM, nil),
+			caHelper.EXPECT().GetServiceCA(ctx, namespace).Return(serviceCACM, nil),
+		)
+
+		Expect(
+			pm.CreateLoaderPod(ctx, nmc, nms),
+		).To(
+			HaveOccurred(),
+		)
+	})
+
 	DescribeTable(
 		"should work as expected",
 		func(firmwareClassPath *string, withFirmwareLoading bool) {
@@ -1583,20 +1653,6 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 			psh := NewMockpullSecretHelper(ctrl)
 			caHelper := ca.NewMockHelper(ctrl)
 
-			nmc := &kmmv1beta1.NodeModulesConfig{
-				ObjectMeta: metav1.ObjectMeta{Name: nmcName},
-			}
-
-			const irsName = "some-secret"
-
-			mi := kmmv1beta1.ModuleItem{
-				ImageRepoSecret:    &v1.LocalObjectReference{Name: irsName},
-				Name:               moduleName,
-				Namespace:          namespace,
-				ServiceAccountName: serviceAccountName,
-			}
-
-			moduleConfigToUse := moduleConfig
 			if withFirmwareLoading {
 				moduleConfigToUse.Modprobe.FirmwarePath = "/firmware-path"
 			}
@@ -1606,7 +1662,7 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 				Config:     moduleConfigToUse,
 			}
 
-			expected := getBaseWorkerPod("load", WorkerActionLoad, nmc, firmwareClassPath, withFirmwareLoading)
+			expected := getBaseWorkerPod("load", WorkerActionLoad, nmc, firmwareClassPath, withFirmwareLoading, true)
 
 			Expect(
 				controllerutil.SetControllerReference(nmc, expected, scheme),
@@ -1619,7 +1675,7 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 			container, _ := podcmd.FindContainerByName(expected, "worker")
 			Expect(container).NotTo(BeNil())
 
-			if firmwareClassPath != nil {
+			if withFirmwareLoading && firmwareClassPath != nil {
 				container.SecurityContext = &v1.SecurityContext{
 					Privileged: ptr.To(true),
 				}
@@ -1637,8 +1693,6 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			expected.Annotations[hashAnnotationKey] = fmt.Sprintf("%d", hash)
-
-			ctx := context.TODO()
 
 			gomock.InOrder(
 				psh.EXPECT().VolumesAndVolumeMounts(ctx, &mi),
@@ -1669,35 +1723,75 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 		Entry("pod with empty firmwareClassPath, without firmware loading", ptr.To(""), false),
 		Entry("pod with firmwareClassPath, without firmware loading", ptr.To("some-path"), false),
 		Entry("pod with firmwareClassPath, with firmware loading", ptr.To("some-path"), true),
-		Entry("pod without firmwareClassPath, with firmware loading", nil, true),
 	)
 })
 
 var _ = Describe("podManagerImpl_CreateUnloaderPod", func() {
-	It("should work as expected", func() {
-		ctrl := gomock.NewController(GinkgoT())
-		client := testclient.NewMockClient(ctrl)
-		psh := NewMockpullSecretHelper(ctrl)
-		caHelper := ca.NewMockHelper(ctrl)
 
-		nmc := &kmmv1beta1.NodeModulesConfig{
+	const irsName = "some-secret"
+
+	var (
+		ctrl   *gomock.Controller
+		client *testclient.MockClient
+		psh    *MockpullSecretHelper
+
+		nmc *kmmv1beta1.NodeModulesConfig
+		mi  kmmv1beta1.ModuleItem
+
+		ctx               context.Context
+		moduleConfigToUse kmmv1beta1.ModuleConfig
+		status            *kmmv1beta1.NodeModuleStatus
+		caHelper          *ca.MockHelper
+	)
+
+	BeforeEach(func() {
+
+		ctrl = gomock.NewController(GinkgoT())
+		client = testclient.NewMockClient(ctrl)
+		psh = NewMockpullSecretHelper(ctrl)
+		caHelper = ca.NewMockHelper(ctrl)
+
+		nmc = &kmmv1beta1.NodeModulesConfig{
 			ObjectMeta: metav1.ObjectMeta{Name: nmcName},
 		}
 
-		mi := kmmv1beta1.ModuleItem{
+		mi = kmmv1beta1.ModuleItem{
+			ImageRepoSecret:    &v1.LocalObjectReference{Name: irsName},
 			Name:               moduleName,
 			Namespace:          namespace,
 			ServiceAccountName: serviceAccountName,
 		}
 
-		moduleConfigToUse := moduleConfig
+		moduleConfigToUse = moduleConfig
 		moduleConfigToUse.Modprobe.FirmwarePath = "/firmware-path"
-		status := &kmmv1beta1.NodeModuleStatus{
+		status = &kmmv1beta1.NodeModuleStatus{
 			ModuleItem: mi,
 			Config:     moduleConfigToUse,
 		}
+		ctx = context.TODO()
+	})
 
-		expected := getBaseWorkerPod("unload", WorkerActionUnload, nmc, nil, true)
+	It("it should fail if firmwareClassPath was not set but firmware loading was", func() {
+
+		pm := newPodManager(client, workerImage, scheme, caHelper, workerCfg)
+		pm.(*podManagerImpl).psh = psh
+
+		gomock.InOrder(
+			psh.EXPECT().VolumesAndVolumeMounts(ctx, &mi),
+			caHelper.EXPECT().GetClusterCA(ctx, namespace).Return(clusterCACM, nil),
+			caHelper.EXPECT().GetServiceCA(ctx, namespace).Return(serviceCACM, nil),
+		)
+
+		Expect(
+			pm.CreateUnloaderPod(ctx, nmc, status),
+		).To(
+			HaveOccurred(),
+		)
+	})
+
+	It("should work as expected", func() {
+
+		expected := getBaseWorkerPod("unload", WorkerActionUnload, nmc, ptr.To("some-path"), true, false)
 
 		container, _ := podcmd.FindContainerByName(expected, "worker")
 		Expect(container).NotTo(BeNil())
@@ -1715,8 +1809,6 @@ var _ = Describe("podManagerImpl_CreateUnloaderPod", func() {
 
 		expected.Annotations[hashAnnotationKey] = fmt.Sprintf("%d", hash)
 
-		ctx := context.TODO()
-
 		gomock.InOrder(
 			psh.EXPECT().VolumesAndVolumeMounts(ctx, &mi),
 			caHelper.EXPECT().GetClusterCA(ctx, namespace).Return(clusterCACM, nil),
@@ -1724,7 +1816,9 @@ var _ = Describe("podManagerImpl_CreateUnloaderPod", func() {
 			client.EXPECT().Create(ctx, cmpmock.DiffEq(expected)),
 		)
 
-		pm := newPodManager(client, workerImage, scheme, caHelper, workerCfg)
+		workerCfg := *workerCfg
+		workerCfg.SetFirmwareClassPath = ptr.To("some-path")
+		pm := newPodManager(client, workerImage, scheme, caHelper, &workerCfg)
 		pm.(*podManagerImpl).psh = psh
 
 		Expect(
@@ -1825,7 +1919,8 @@ var _ = Describe("podManagerImpl_ListWorkerPodsOnNode", func() {
 	})
 })
 
-func getBaseWorkerPod(subcommand string, action WorkerAction, owner ctrlclient.Object, firmwareClassPath *string, withFirmware bool) *v1.Pod {
+func getBaseWorkerPod(subcommand string, action WorkerAction, owner ctrlclient.Object, firmwareClassPath *string,
+	withFirmware, isLoaderPod bool) *v1.Pod {
 	GinkgoHelper()
 
 	const (
@@ -1864,13 +1959,13 @@ softdep b pre: c
 `
 
 	args := []string{"kmod", subcommand, "/etc/kmm-worker/config.yaml"}
-	if firmwareClassPath != nil {
-		args = append(args, "--set-firmware-class-path", *firmwareClassPath)
-	}
-	if !withFirmware {
-		configAnnotationValue = strings.ReplaceAll(configAnnotationValue, "firmwarePath: /firmware-path\n  ", "")
+	if withFirmware {
+		args = append(args, "--set-firmware-mount-path", *firmwareClassPath)
+		if isLoaderPod && firmwareClassPath != nil {
+			args = append(args, "--set-firmware-class-path", *firmwareClassPath)
+		}
 	} else {
-		args = append(args, "--set-firmware-mount-path", "/var/lib/firmware")
+		configAnnotationValue = strings.ReplaceAll(configAnnotationValue, "firmwarePath: /firmware-path\n  ", "")
 	}
 	pod := v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1898,6 +1993,7 @@ softdep b pre: c
 						Limits:   limits,
 						Requests: requests,
 					},
+					SecurityContext: &v1.SecurityContext{},
 					VolumeMounts: []v1.VolumeMount{
 						{
 							Name:      volNameConfig,
@@ -2041,20 +2137,16 @@ softdep b pre: c
 	}
 
 	if withFirmware {
-		hostPath := "/var/lib/firmware"
-		if firmwareClassPath != nil {
-			hostPath = *firmwareClassPath
-		}
 		fwVolMount := v1.VolumeMount{
 			Name:      volNameVarLibFirmware,
-			MountPath: "/var/lib/firmware",
+			MountPath: *firmwareClassPath,
 		}
 		pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, fwVolMount)
 		fwVol := v1.Volume{
 			Name: volNameVarLibFirmware,
 			VolumeSource: v1.VolumeSource{
 				HostPath: &v1.HostPathVolumeSource{
-					Path: hostPath,
+					Path: *firmwareClassPath,
 					Type: &hostPathDirectoryOrCreate,
 				},
 			},
