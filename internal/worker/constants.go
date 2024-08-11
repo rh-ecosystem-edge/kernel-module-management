@@ -8,5 +8,4 @@ const (
 	ImagesDir                 = "/var/run/kmm/images"
 	PullSecretsDir            = "/var/run/kmm/pull-secrets"
 	GlobalPullSecretPath      = "/var/lib/kubelet/config.json"
-	FirmwareMountPath         = "/var/lib/firmware"
 )
