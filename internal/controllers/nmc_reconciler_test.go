@@ -1614,7 +1614,7 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 		ctx = context.TODO()
 	})
 
-	It("it should fail if firmwareClassPath was not set but firmware loading was", func() {
+	It("it should fail if firmwareHostPath was not set but firmware loading was", func() {
 
 		moduleConfigToUse.Modprobe.FirmwarePath = "/firmware-path"
 
@@ -1647,7 +1647,7 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 
 	DescribeTable(
 		"should work as expected",
-		func(firmwareClassPath *string, withFirmwareLoading bool) {
+		func(firmwareHostPath *string, withFirmwareLoading bool) {
 			ctrl := gomock.NewController(GinkgoT())
 			client := testclient.NewMockClient(ctrl)
 			psh := NewMockpullSecretHelper(ctrl)
@@ -1662,7 +1662,7 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 				Config:     moduleConfigToUse,
 			}
 
-			expected := getBaseWorkerPod("load", WorkerActionLoad, nmc, firmwareClassPath, withFirmwareLoading, true)
+			expected := getBaseWorkerPod("load", nmc, firmwareHostPath, withFirmwareLoading, true)
 
 			Expect(
 				controllerutil.SetControllerReference(nmc, expected, scheme),
@@ -1675,7 +1675,7 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 			container, _ := podcmd.FindContainerByName(expected, "worker")
 			Expect(container).NotTo(BeNil())
 
-			if withFirmwareLoading && firmwareClassPath != nil {
+			if withFirmwareLoading && firmwareHostPath != nil {
 				container.SecurityContext = &v1.SecurityContext{
 					Privileged: ptr.To(true),
 				}
@@ -1702,7 +1702,7 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 			)
 
 			workerCfg := *workerCfg
-			workerCfg.SetFirmwareClassPath = firmwareClassPath
+			workerCfg.FirmwareHostPath = firmwareHostPath
 
 			pm := &podManagerImpl{
 				caHelper:    caHelper,
@@ -1719,10 +1719,10 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 				HaveOccurred(),
 			)
 		},
-		Entry("pod without firmwareClassPath, without firmware loading", nil, false),
-		Entry("pod with empty firmwareClassPath, without firmware loading", ptr.To(""), false),
-		Entry("pod with firmwareClassPath, without firmware loading", ptr.To("some-path"), false),
-		Entry("pod with firmwareClassPath, with firmware loading", ptr.To("some-path"), true),
+		Entry("firmwareHostPath not set, firmware loading not requested", nil, false),
+		Entry("firmwareHostPath set to empty string, firmware loading not requested", ptr.To(""), false),
+		Entry("firmwareHostPath set, firmware loading not requested", ptr.To("some-path"), false),
+		Entry("firmwareHostPath set , firmware loading requested", ptr.To("some-path"), true),
 	)
 })
 
@@ -1791,7 +1791,7 @@ var _ = Describe("podManagerImpl_CreateUnloaderPod", func() {
 
 	It("should work as expected", func() {
 
-		expected := getBaseWorkerPod("unload", WorkerActionUnload, nmc, ptr.To("some-path"), true, false)
+		expected := getBaseWorkerPod("unload", nmc, ptr.To("some-path"), true, false)
 
 		container, _ := podcmd.FindContainerByName(expected, "worker")
 		Expect(container).NotTo(BeNil())
@@ -1817,7 +1817,7 @@ var _ = Describe("podManagerImpl_CreateUnloaderPod", func() {
 		)
 
 		workerCfg := *workerCfg
-		workerCfg.SetFirmwareClassPath = ptr.To("some-path")
+		workerCfg.FirmwareHostPath = ptr.To("some-path")
 		pm := newPodManager(client, workerImage, scheme, caHelper, &workerCfg)
 		pm.(*podManagerImpl).psh = psh
 
@@ -1919,7 +1919,7 @@ var _ = Describe("podManagerImpl_ListWorkerPodsOnNode", func() {
 	})
 })
 
-func getBaseWorkerPod(subcommand string, action WorkerAction, owner ctrlclient.Object, firmwareClassPath *string,
+func getBaseWorkerPod(subcommand string, owner ctrlclient.Object, firmwareHostPath *string,
 	withFirmware, isLoaderPod bool) *v1.Pod {
 	GinkgoHelper()
 
@@ -1931,6 +1931,11 @@ func getBaseWorkerPod(subcommand string, action WorkerAction, owner ctrlclient.O
 		volNameVarLibFirmware = "var-lib-firmware"
 		volNameModulesOrder   = "modules-order"
 	)
+
+	action := WorkerActionLoad
+	if !isLoaderPod {
+		action = WorkerActionUnload
+	}
 
 	hostPathFile := v1.HostPathFile
 	hostPathDirectory := v1.HostPathDirectory
@@ -1960,9 +1965,9 @@ softdep b pre: c
 
 	args := []string{"kmod", subcommand, "/etc/kmm-worker/config.yaml"}
 	if withFirmware {
-		args = append(args, "--set-firmware-mount-path", *firmwareClassPath)
-		if isLoaderPod && firmwareClassPath != nil {
-			args = append(args, "--set-firmware-class-path", *firmwareClassPath)
+		args = append(args, "--set-firmware-mount-path", *firmwareHostPath)
+		if isLoaderPod && firmwareHostPath != nil {
+			args = append(args, "--set-firmware-class-path", *firmwareHostPath)
 		}
 	} else {
 		configAnnotationValue = strings.ReplaceAll(configAnnotationValue, "firmwarePath: /firmware-path\n  ", "")
@@ -2139,14 +2144,14 @@ softdep b pre: c
 	if withFirmware {
 		fwVolMount := v1.VolumeMount{
 			Name:      volNameVarLibFirmware,
-			MountPath: *firmwareClassPath,
+			MountPath: *firmwareHostPath,
 		}
 		pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, fwVolMount)
 		fwVol := v1.Volume{
 			Name: volNameVarLibFirmware,
 			VolumeSource: v1.VolumeSource{
 				HostPath: &v1.HostPathVolumeSource{
-					Path: *firmwareClassPath,
+					Path: *firmwareHostPath,
 					Type: &hostPathDirectoryOrCreate,
 				},
 			},

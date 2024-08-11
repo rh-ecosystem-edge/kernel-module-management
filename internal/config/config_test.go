@@ -36,9 +36,9 @@ var _ = Describe("ParseFile", func() {
 				SecureServing:    true,
 			},
 			Worker: Worker{
-				RunAsUser:            ptr.To[int64](1234),
-				SELinuxType:          "mySELinuxType",
-				SetFirmwareClassPath: ptr.To("/some/path"),
+				RunAsUser:        ptr.To[int64](1234),
+				SELinuxType:      "mySELinuxType",
+				FirmwareHostPath: ptr.To("/some/path"),
 			},
 		}
 
