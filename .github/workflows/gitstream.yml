@@ -14,7 +14,7 @@ jobs:
       GO_RELEASE: go1.20.11.linux-amd64.tar.gz
 
     container:
-      image: ghcr.io/qbarrand/gitstream:main
+      image: quay.io/edge-infrastructure/gitstream:latest
 
     permissions:
       actions: write
