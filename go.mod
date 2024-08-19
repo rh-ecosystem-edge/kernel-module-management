@@ -8,7 +8,7 @@ require (
 	github.com/a8m/envsubst v1.4.2
 	github.com/budougumi0617/cmpmock v0.0.4
 	github.com/containers/image/v5 v5.31.0
-	github.com/docker/docker v26.1.5+incompatible
+	github.com/docker/docker v27.1.2+incompatible
 	github.com/go-logr/logr v1.4.2
 	github.com/google/go-cmp v0.6.0
 	github.com/google/go-containerregistry v0.19.1
