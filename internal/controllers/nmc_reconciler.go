@@ -55,6 +55,9 @@ const (
 	volumeNameConfig           = "config"
 	workerContainerName        = "worker"
 	globalPullSecretName       = "global-pull-secret"
+	initContainerName          = "image-extractor"
+	sharedFilesDir             = "/tmp"
+	volNameTmp                 = "tmp"
 )
 
 //+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=nodemodulesconfigs,verbs=get;list;watch
@@ -834,7 +837,7 @@ func (p *podManagerImpl) ListWorkerPodsOnNode(ctx context.Context, nodeName stri
 }
 
 func (p *podManagerImpl) LoaderPodTemplate(ctx context.Context, nmc client.Object, nms *kmmv1beta1.NodeModuleSpec) (*v1.Pod, error) {
-	pod, err := p.baseWorkerPod(ctx, nmc.GetName(), &nms.ModuleItem, nmc)
+	pod, err := p.baseWorkerPod(ctx, nmc, &nms.ModuleItem, &nms.Config)
 	if err != nil {
 		return nil, fmt.Errorf("could not create the base Pod: %v", err)
 	}
@@ -856,6 +859,13 @@ func (p *podManagerImpl) LoaderPodTemplate(ctx context.Context, nmc client.Objec
 		}
 
 		args = append(args, "--"+worker.FlagFirmwarePath, *firmwareHostPath)
+
+		firmwarePathContainerImg := filepath.Join(nms.Config.Modprobe.FirmwarePath, "*")
+		firmwarePathWorkerImg := filepath.Join(sharedFilesDir, nms.Config.Modprobe.FirmwarePath)
+		if err = addCopyCommand(pod, firmwarePathContainerImg, firmwarePathWorkerImg); err != nil {
+			return nil, fmt.Errorf("could not add the copy command to the init container: %v", err)
+		}
+
 		if err = setFirmwareVolume(pod, firmwareHostPath); err != nil {
 			return nil, fmt.Errorf("could not map host volume needed for firmware loading: %v", err)
 		}
@@ -881,7 +891,7 @@ func (p *podManagerImpl) LoaderPodTemplate(ctx context.Context, nmc client.Objec
 }
 
 func (p *podManagerImpl) UnloaderPodTemplate(ctx context.Context, nmc client.Object, nms *kmmv1beta1.NodeModuleStatus) (*v1.Pod, error) {
-	pod, err := p.baseWorkerPod(ctx, nmc.GetName(), &nms.ModuleItem, nmc)
+	pod, err := p.baseWorkerPod(ctx, nmc, &nms.ModuleItem, &nms.Config)
 	if err != nil {
 		return nil, fmt.Errorf("could not create the base Pod: %v", err)
 	}
@@ -908,6 +918,13 @@ func (p *podManagerImpl) UnloaderPodTemplate(ctx context.Context, nmc client.Obj
 			return nil, fmt.Errorf("firmwareHostPath was not set while the Module requires firmware unloading")
 		}
 		args = append(args, "--"+worker.FlagFirmwarePath, *firmwareHostPath)
+
+		firmwarePathContainerImg := filepath.Join(nms.Config.Modprobe.FirmwarePath, "*")
+		firmwarePathWorkerImg := filepath.Join(sharedFilesDir, nms.Config.Modprobe.FirmwarePath)
+		if err = addCopyCommand(pod, firmwarePathContainerImg, firmwarePathWorkerImg); err != nil {
+			return nil, fmt.Errorf("could not add the copy command to the init container: %v", err)
+		}
+
 		if err = setFirmwareVolume(pod, firmwareHostPath); err != nil {
 			return nil, fmt.Errorf("could not map host volume needed for firmware unloading: %v", err)
 		}
@@ -933,12 +950,26 @@ var (
 	}
 )
 
-func (p *podManagerImpl) baseWorkerPod(
-	ctx context.Context,
-	nodeName string,
-	item *kmmv1beta1.ModuleItem,
-	owner client.Object,
-) (*v1.Pod, error) {
+func addCopyCommand(pod *v1.Pod, src, dst string) error {
+
+	container, _ := podcmd.FindContainerByName(pod, initContainerName)
+	if container == nil {
+		return errors.New("could not find the init container")
+	}
+
+	const template = `
+mkdir -p %s;
+cp -R %s %s;
+`
+	copyCommand := fmt.Sprintf(template, dst, src, dst)
+	container.Args[0] = strings.Join([]string{container.Args[0], copyCommand}, "")
+
+	return nil
+}
+
+func (p *podManagerImpl) baseWorkerPod(ctx context.Context, nmc client.Object, item *kmmv1beta1.ModuleItem,
+	moduleConfig *kmmv1beta1.ModuleConfig) (*v1.Pod, error) {
+
 	const (
 		trustedCAVolumeName   = "trusted-ca"
 		volNameEtcContainers  = "etc-containers"
@@ -1048,6 +1079,12 @@ func (p *podManagerImpl) baseWorkerPod(
 				},
 			},
 		},
+		{
+			Name: volNameTmp,
+			VolumeSource: v1.VolumeSource{
+				EmptyDir: &v1.EmptyDirVolumeSource{},
+			},
+		},
 	}
 
 	volumeMounts := []v1.VolumeMount{
@@ -1082,8 +1119,14 @@ func (p *podManagerImpl) baseWorkerPod(
 			ReadOnly:  true,
 			MountPath: filepath.Join(worker.PullSecretsDir, "_global", v1.DockerConfigJsonKey),
 		},
+		{
+			Name:      volNameTmp,
+			MountPath: sharedFilesDir,
+			ReadOnly:  true,
+		},
 	}
 
+	nodeName := nmc.GetName()
 	pod := v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: item.Namespace,
@@ -1096,6 +1139,24 @@ func (p *podManagerImpl) baseWorkerPod(
 			},
 		},
 		Spec: v1.PodSpec{
+			InitContainers: []v1.Container{
+				{
+					Name:    initContainerName,
+					Image:   moduleConfig.ContainerImage,
+					Command: []string{"/bin/sh", "-c"},
+					Args:    []string{""},
+					VolumeMounts: []v1.VolumeMount{
+						{
+							Name:      volNameTmp,
+							MountPath: sharedFilesDir,
+						},
+					},
+					Resources: v1.ResourceRequirements{
+						Requests: requests,
+						Limits:   limits,
+					},
+				},
+			},
 			Containers: []v1.Container{
 				{
 					Name:         workerContainerName,
@@ -1114,8 +1175,14 @@ func (p *podManagerImpl) baseWorkerPod(
 		},
 	}
 
-	if err = ctrl.SetControllerReference(owner, &pod, p.scheme); err != nil {
+	if err = ctrl.SetControllerReference(nmc, &pod, p.scheme); err != nil {
 		return nil, fmt.Errorf("could not set the owner as controller: %v", err)
+	}
+
+	kmodsPathContainerImg := filepath.Join(moduleConfig.Modprobe.DirName, "lib", "modules", moduleConfig.KernelVersion)
+	kmodsPathWorkerImg := filepath.Join(sharedFilesDir, moduleConfig.Modprobe.DirName, "lib", "modules")
+	if err = addCopyCommand(&pod, kmodsPathContainerImg, kmodsPathWorkerImg); err != nil {
+		return nil, fmt.Errorf("could not add the copy command to the init container: %v", err)
 	}
 
 	controllerutil.AddFinalizer(&pod, nodeModulesConfigFinalizer)
@@ -1227,6 +1294,7 @@ func setFirmwareVolume(pod *v1.Pod, firmwareHostPath *string) error {
 
 	pod.Spec.Volumes = append(pod.Spec.Volumes, firmwareVolume)
 	container.VolumeMounts = append(container.VolumeMounts, firmwareVolumeMount)
+
 	return nil
 }
 
