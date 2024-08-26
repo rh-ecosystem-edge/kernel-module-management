@@ -20,6 +20,7 @@ spec:
             User=root
             Type=oneshot
             TimeoutSec=10
+            EnvironmentFile=/etc/mco/proxy.env
             Environment="IN_TREE_MODULE_TO_REMOVE=testInTreeKernelModuleName"
             Environment="KERNEL_MODULE=testKernelModuleName"
             Environment="KERNEL_MODULE_IMAGE_FILEPATH=/var/lib/image_file_day1.tar"
@@ -43,6 +44,7 @@ spec:
             [Service]
             User=root
             Type=oneshot
+            EnvironmentFile=/etc/mco/proxy.env
             Environment="KERNEL_MODULE_IMAGE=quay.io/project/repo:some-tag12"
             Environment="KERNEL_MODULE_IMAGE_FILEPATH=/var/lib/image_file_day1.tar"
             Environment="WORKER_IMAGE=quay.io/edge-infrastructure/kernel-module-management-worker:latest"

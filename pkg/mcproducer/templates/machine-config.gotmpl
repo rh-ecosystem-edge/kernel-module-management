@@ -20,6 +20,7 @@ spec:
             User=root
             Type=oneshot
             TimeoutSec=10
+            EnvironmentFile=/etc/mco/proxy.env
             Environment="IN_TREE_MODULE_TO_REMOVE={{.InTreeModuleToRemove}}"
             Environment="KERNEL_MODULE={{.KernelModule}}"
             Environment="KERNEL_MODULE_IMAGE_FILEPATH={{.KernelModuleImageFilepath}}"
@@ -43,6 +44,7 @@ spec:
             [Service]
             User=root
             Type=oneshot
+            EnvironmentFile=/etc/mco/proxy.env
             Environment="KERNEL_MODULE_IMAGE={{.KernelModuleImage}}"
             Environment="KERNEL_MODULE_IMAGE_FILEPATH={{.KernelModuleImageFilepath}}"
             Environment="WORKER_IMAGE={{.WorkerImage}}"
