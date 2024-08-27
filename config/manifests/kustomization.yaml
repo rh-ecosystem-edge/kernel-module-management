@@ -8,3 +8,9 @@ resources:
 - ../olm
 - ../samples
 - ../scorecard
+labels:
+- includeSelectors: true
+  pairs:
+    app.kubernetes.io/component: kmm
+    app.kubernetes.io/name: kmm
+    app.kubernetes.io/part-of: kmm

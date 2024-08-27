@@ -4,10 +4,12 @@ kind: Kustomization
 resources:
 - deployment.yaml
 
-commonLabels:
-  app.kubernetes.io/component: webhook-server
 
 images:
 - name: webhook-server
   newName: quay.io/edge-infrastructure/kernel-module-management-webhook-server
   newTag: latest
+labels:
+- includeSelectors: true
+  pairs:
+    app.kubernetes.io/component: webhook-server
