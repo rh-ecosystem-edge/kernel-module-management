@@ -34,7 +34,7 @@ spec:
             [Install]
             WantedBy=multi-user.target
           enabled: true
-          name: "replace-kernel-module.service"
+          name: "{{.MachineConfigName}}-replace-kernel-module.service"
         - contents: |
             [Unit]
             Description=Pull oot kernel module image
@@ -56,7 +56,7 @@ spec:
             [Install]
             WantedBy=multi-user.target
           enabled: true
-          name: "pull-kernel-module-image.service"
+          name: "{{.MachineConfigName}}-pull-kernel-module-image.service"
         - enabled: false
           mask: true
           name: crio-wipe.service
