@@ -7,10 +7,6 @@ namespace: openshift-kmm-hub
 namePrefix: kmm-operator-hub-
 
 # Labels to add to all resources and selectors.
-commonLabels:
-  app.kubernetes.io/name: kmm-hub
-  app.kubernetes.io/component: kmm-hub
-  app.kubernetes.io/part-of: kmm
 
 resources:
 - ../deploy-hub
@@ -19,4 +15,10 @@ components:
 - ../webhook-cert
 
 configurations:
-  - kustomizeconfig.yaml
+- kustomizeconfig.yaml
+labels:
+- includeSelectors: true
+  pairs:
+    app.kubernetes.io/component: kmm-hub
+    app.kubernetes.io/name: kmm-hub
+    app.kubernetes.io/part-of: kmm
