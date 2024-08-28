@@ -1,4 +1,3 @@
 namePrefix:
 - kind: Service
-  name: webhook-service
   path: metadata/annotations/service.beta.openshift.io\/serving-cert-secret-name
