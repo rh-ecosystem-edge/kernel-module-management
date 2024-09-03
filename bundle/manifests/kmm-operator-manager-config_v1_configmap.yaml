@@ -16,6 +16,7 @@ data:
     worker:
       runAsUser: 0
       seLinuxType: spc_t
+      firmwareHostPath: /var/lib/firmware
 kind: ConfigMap
 metadata:
   labels:
