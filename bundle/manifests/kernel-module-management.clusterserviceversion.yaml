@@ -8,6 +8,11 @@ metadata:
           "apiVersion": "kmm.sigs.x-k8s.io/v1beta1",
           "kind": "Module",
           "metadata": {
+            "labels": {
+              "app.kubernetes.io/component": "kmm",
+              "app.kubernetes.io/name": "kmm",
+              "app.kubernetes.io/part-of": "kmm"
+            },
             "name": "module-sample"
           },
           "spec": {
@@ -28,6 +33,11 @@ metadata:
           "apiVersion": "kmm.sigs.x-k8s.io/v1beta1",
           "kind": "PreflightValidation",
           "metadata": {
+            "labels": {
+              "app.kubernetes.io/component": "kmm",
+              "app.kubernetes.io/name": "kmm",
+              "app.kubernetes.io/part-of": "kmm"
+            },
             "name": "preflightvalidation-sample"
           },
           "spec": {
@@ -39,6 +49,11 @@ metadata:
           "apiVersion": "kmm.sigs.x-k8s.io/v1beta1",
           "kind": "PreflightValidationOCP",
           "metadata": {
+            "labels": {
+              "app.kubernetes.io/component": "kmm",
+              "app.kubernetes.io/name": "kmm",
+              "app.kubernetes.io/part-of": "kmm"
+            },
             "name": "preflightvalidationocp-sample"
           },
           "spec": {
@@ -48,11 +63,15 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2024-06-03T15:27:53Z"
+    createdAt: "2024-09-03T12:40:53Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
     repository: https://github.com/rh-ecosystem-edge/kernel-module-management
+  labels:
+    app.kubernetes.io/component: kmm
+    app.kubernetes.io/name: kmm
+    app.kubernetes.io/part-of: kmm
   name: kernel-module-management.v0.0.1
   namespace: placeholder
 spec:
@@ -364,7 +383,6 @@ spec:
                 - name: RELATED_IMAGE_SIGN
                   value: quay.io/edge-infrastructure/kernel-module-management-signimage:latest
                 image: quay.io/edge-infrastructure/kernel-module-management-operator:latest
-                imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -475,7 +493,6 @@ spec:
                 - --enable-namespace
                 - --enable-preflightvalidation
                 image: quay.io/edge-infrastructure/kernel-module-management-webhook-server:latest
-                imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
                     path: /healthz
