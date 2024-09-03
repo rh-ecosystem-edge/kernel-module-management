@@ -10,12 +10,8 @@ import (
 func rootFuncPreRunE(cmd *cobra.Command, args []string) error {
 	logger.Info("Starting worker", "version", Version, "git commit", GitCommit)
 
-	im, err := getImageMounter(cmd)
-	if err != nil {
-		return fmt.Errorf("failed to get appropriate ImageMounter: %v", err)
-	}
 	mr := worker.NewModprobeRunner(logger)
-	w = worker.NewWorker(im, mr, logger)
+	w = worker.NewWorker(mr, logger)
 
 	return nil
 }
@@ -77,19 +73,4 @@ func setCommandsFlags() {
 		false,
 		"If true, extract the image from a tarball image instead of pulling from the registry",
 	)
-}
-
-func getImageMounter(cmd *cobra.Command) (worker.ImageMounter, error) {
-	flag := cmd.Flags().Lookup("tarball")
-	if flag.Changed {
-		return worker.NewTarImageMounter(worker.ImagesDir, logger), nil
-	}
-
-	logger.Info("Reading pull secrets", "base dir", worker.PullSecretsDir)
-	keyChain, err := worker.ReadKubernetesSecrets(cmd.Context(), worker.PullSecretsDir, logger)
-	if err != nil {
-		return nil, fmt.Errorf("could not read pull secrets: %v", err)
-	}
-	res := worker.NewMirrorResolver(logger)
-	return worker.NewRemoteImageMounter(worker.ImagesDir, res, keyChain, logger), nil
 }
