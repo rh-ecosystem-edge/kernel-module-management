@@ -8,6 +8,11 @@ metadata:
           "apiVersion": "hub.kmm.sigs.x-k8s.io/v1beta1",
           "kind": "ManagedClusterModule",
           "metadata": {
+            "labels": {
+              "app.kubernetes.io/component": "kmm-hub",
+              "app.kubernetes.io/name": "kmm-hub",
+              "app.kubernetes.io/part-of": "kmm"
+            },
             "name": "managedclustermodule-sample"
           },
           "spec": {
@@ -32,11 +37,15 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2024-06-03T15:27:54Z"
+    createdAt: "2024-09-03T16:21:51Z"
     operatorframework.io/suggested-namespace: openshift-kmm-hub
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
     repository: https://github.com/rh-ecosystem-edge/kernel-module-management
+  labels:
+    app.kubernetes.io/component: kmm-hub
+    app.kubernetes.io/name: kmm-hub
+    app.kubernetes.io/part-of: kmm
   name: kernel-module-management-hub.v0.0.1
   namespace: placeholder
 spec:
@@ -219,7 +228,6 @@ spec:
                 - name: RELATED_IMAGE_SIGN
                   value: quay.io/edge-infrastructure/kernel-module-management-signimage:latest
                 image: quay.io/edge-infrastructure/kernel-module-management-operator-hub:latest
-                imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -328,7 +336,6 @@ spec:
                 - --config=controller_config.yaml
                 - --enable-managedclustermodule
                 image: quay.io/edge-infrastructure/kernel-module-management-webhook-server:latest
-                imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
                     path: /healthz
