@@ -261,6 +261,7 @@ var _ = Describe("NodeModulesConfigReconciler_Reconcile", func() {
 var moduleConfig = kmmv1beta1.ModuleConfig{
 	KernelVersion:         "kernel-version",
 	ContainerImage:        "container image",
+	ImagePullPolicy:       v1.PullIfNotPresent,
 	InsecurePull:          true,
 	InTreeModulesToRemove: []string{"intree1", "intree2"},
 	Modprobe: kmmv1beta1.ModprobeSpec{
@@ -1943,6 +1944,7 @@ func getBaseWorkerPod(subcommand string, owner ctrlclient.Object, firmwareHostPa
 	hostPathDirectoryOrCreate := v1.HostPathDirectoryOrCreate
 
 	configAnnotationValue := `containerImage: container image
+imagePullPolicy: IfNotPresent
 inTreeModulesToRemove:
 - intree1
 - intree2
@@ -2000,10 +2002,11 @@ cp -R /firmware-path/* /tmp/firmware-path;
 		Spec: v1.PodSpec{
 			InitContainers: []v1.Container{
 				{
-					Name:    "image-extractor",
-					Image:   "container image",
-					Command: []string{"/bin/sh", "-c"},
-					Args:    []string{initContainerArg},
+					Name:            "image-extractor",
+					Image:           "container image",
+					ImagePullPolicy: v1.PullIfNotPresent,
+					Command:         []string{"/bin/sh", "-c"},
+					Args:            []string{initContainerArg},
 					Resources: v1.ResourceRequirements{
 						Limits:   limits,
 						Requests: requests,
