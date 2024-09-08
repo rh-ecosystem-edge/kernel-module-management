@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/worker"
 	"github.com/spf13/cobra"
 )
@@ -11,7 +12,8 @@ func rootFuncPreRunE(cmd *cobra.Command, args []string) error {
 	logger.Info("Starting worker", "version", Version, "git commit", GitCommit)
 
 	mr := worker.NewModprobeRunner(logger)
-	w = worker.NewWorker(mr, logger)
+	fsh := utils.NewFSHelper(logger)
+	w = worker.NewWorker(mr, fsh, logger)
 
 	return nil
 }
