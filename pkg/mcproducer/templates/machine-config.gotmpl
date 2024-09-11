@@ -23,7 +23,7 @@ spec:
             EnvironmentFile=/etc/mco/proxy.env
             Environment="IN_TREE_MODULE_TO_REMOVE={{.InTreeModuleToRemove}}"
             Environment="KERNEL_MODULE={{.KernelModule}}"
-            Environment="KERNEL_MODULE_IMAGE_FILEPATH={{.KernelModuleImageFilepath}}"
+            Environment="KERNEL_MODULE_IMAGE={{.KernelModuleImage}}"
             Environment="WORKER_CONFIG_FILEPATH={{.WorkerConfigFilepath}}"
             Environment="WORKER_IMAGE={{.WorkerImage}}"
             ExecStartPre=ls /usr/local/bin
