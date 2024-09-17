@@ -59,20 +59,8 @@ func setCommandsFlags() {
 		"",
 		"if set, this value will be written to "+worker.FirmwareClassPathLocation+" and it is also the value that firmware host path is mounted to")
 
-	kmodLoadCmd.Flags().Bool(
-		"tarball",
-		false,
-		"If true, extract the image from a tarball image instead of pulling from the registry",
-	)
-
 	kmodUnloadCmd.Flags().String(
 		worker.FlagFirmwarePath,
 		"",
 		"if set, this the value that firmware host path is mounted to")
-
-	kmodUnloadCmd.Flags().Bool(
-		"tarball",
-		false,
-		"If true, extract the image from a tarball image instead of pulling from the registry",
-	)
 }
