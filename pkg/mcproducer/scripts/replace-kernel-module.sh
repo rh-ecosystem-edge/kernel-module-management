@@ -5,6 +5,7 @@ in_tree_module_to_remove="$IN_TREE_MODULE_TO_REMOVE"
 kernel_module="$KERNEL_MODULE"
 worker_image="$WORKER_IMAGE"
 kernel_module_image="$KERNEL_MODULE_IMAGE"
+firmware_files_path="$FIRMWARE_FILES_PATH"
 kernel_module_image_tag=$(uname -r)
 full_kernel_module_image="$kernel_module_image:$kernel_module_image_tag"
 worker_pod_name=kmm-pod
@@ -31,14 +32,20 @@ if [ -n "$(podman images -q $full_kernel_module_image 2> /dev/null)" ]; then
     podman volume create $worker_volume_name
     podman pod create --name $worker_pod_name
     echo "creating init container"
+    copycmd="mkdir -p /tmp/opt/lib/modules && cp -R /opt/lib/modules/* /tmp/opt/lib/modules;"
+    if [[ -n "$FIRMWARE_FILES_PATH" ]]; then
+      folders=("tmp" "$firmware_files_path");
+      path_to_copy_firmware=$(printf '/%s' "${folders[@]%/}")
+      copycmd+=" mkdir -p ${path_to_copy_firmware} && \
+      cp -R ${firmware_files_path}/* ${path_to_copy_firmware}"
+    fi
     podman create \
-      --pod $worker_pod_name \
-      --init-ctr=always \
-      --rm \
-      -v $worker_volume_name:/tmp \
-      $full_kernel_module_image \
-      /bin/sh -c "mkdir -p /tmp/opt/lib/modules && \
-      cp -R /opt/lib/modules/* /tmp/opt/lib/modules"
+          --pod $worker_pod_name \
+          --init-ctr=always \
+          --rm \
+          -v $worker_volume_name:/tmp \
+          $full_kernel_module_image \
+          /bin/sh -c "${copycmd}"
     echo "creating worker container"
     worker_pod_id=$(
     podman create \
@@ -59,6 +66,8 @@ if [ -n "$(podman images -q $full_kernel_module_image 2> /dev/null)" ]; then
         echo "failed to insert OOT kernel module $kernel_module"
     fi
     podman wait $worker_pod_id
+    echo "removing kmm-pod"
+    podman pod rm $worker_pod_name
     echo "removing volume"
     podman volume rm $worker_volume_name
 else

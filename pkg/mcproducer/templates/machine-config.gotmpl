@@ -21,6 +21,7 @@ spec:
             Type=oneshot
             TimeoutSec=10
             EnvironmentFile=/etc/mco/proxy.env
+            Environment="FIRMWARE_FILES_PATH={{.FirmwareFilesPath}}"
             Environment="IN_TREE_MODULE_TO_REMOVE={{.InTreeModuleToRemove}}"
             Environment="KERNEL_MODULE={{.KernelModule}}"
             Environment="KERNEL_MODULE_IMAGE={{.KernelModuleImage}}"

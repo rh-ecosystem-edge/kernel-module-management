@@ -39,6 +39,7 @@ func ProduceMachineConfig(machineConfigName,
 	kernelModuleImage,
 	kernelModuleName,
 	inTreeModuleToRemove,
+	firmwareFilesPath,
 	workerImage string) (string, error) {
 
 	err := verifyKernelModuleImage(kernelModuleImage)
@@ -52,6 +53,7 @@ func ProduceMachineConfig(machineConfigName,
 	}
 
 	templateParams := map[string]any{
+		"FirmwareFilesPath":         firmwareFilesPath,
 		"KernelModuleImage":         kernelModuleImage,
 		"KernelModule":              kernelModuleName,
 		"MachineConfigPoolRef":      machineConfigPoolRef,

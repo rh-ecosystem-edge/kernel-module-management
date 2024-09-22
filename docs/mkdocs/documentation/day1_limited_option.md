@@ -70,6 +70,8 @@ The parameters are:
                           module
 - `workerImage`: optional parameter. The worker image to use. In case this parameter is not passed, the default worker image 
                  will be used: quay.io/edge-infrastructure/kernel-module-management-worker:latest.
+  - `firmwareFilesPath`:` optional parameter. In case there is a need to also use firmware,
+                          this parameter should hold the path to the directory containing those files as a string format.
                                        
 
 The API is located under `pkg/mcproducer` package of the KMM source code.
@@ -78,17 +80,18 @@ Users only need to import the `pkg/mcproducer` package into their operator/utili
 MCO YAML to the cluster.
 
 ### Utility
-`day1-utility` can be called from a shell. day1-utility executable is not a part of KMM github repo.
+`day1-utility` can be called from a shell. day1-utility executable is not a part of KMM GitHub repo.
 In order to build it the following commands needs to be run:
 `make day1-utility`
 
 Utility uses the following flags:
-`-image <string>`: container image that contains kernel module .ko file
-`-kernel-module <string>`: name of the OOT module to load
-`-machine-config <string>`: name of the machine config to create
-`-machine-config-pool <string>`: name of the machine config pool to use
+`-image <string>`: container image that contains kernel module .ko file.
+`-kernel-module <string>`: name of the OOT module to load.
+`-machine-config <string>`: name of the machine config to create.
+`-machine-config-pool <string>`: name of the machine config pool to use.
 `-in-tree-module-to-remove <string>`: in-tree kernel module that should be removed prior to loading the oot module.
-`-worker-image <string>`: kernel-management worker image to use. If not passed, a default value will be used
+`-worker-image <string>`: kernel-management worker image to use. If not passed, a default value will be used.
+`-firmware-files-path <string>`: path to the firmware files inside the module image.
 
 The first 4 flags are mandatory, but the last 2 are optional. They correspond to the parameters of the API
 
