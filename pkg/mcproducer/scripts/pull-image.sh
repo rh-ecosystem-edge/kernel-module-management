@@ -6,8 +6,9 @@ kernel_module_image="$KERNEL_MODULE_IMAGE"
 kernel_module_image_tag=$(uname -r)
 full_kernel_module_image="$kernel_module_image:$kernel_module_image_tag"
 
-if [ -n "$(podman images -q $full_kernel_module_image 2> /dev/null)" ]; then
-    echo "Image $full_kernel_module_image exist locally. Nothing to do, removing $kmm_config_file_filepath"
+if [ -n "$(podman images -q "$full_kernel_module_image" 2> /dev/null)" ] && \
+   [ -n "$(podman images -q "$worker_image" 2> /dev/null)" ]; then
+    echo "Images $full_kernel_module_image and $worker_image exist locally. Nothing to do, removing $kmm_config_file_filepath"
     rm -f $kmm_config_file_filepath
 else
     podman pull --authfile /var/lib/kubelet/config.json $worker_image
