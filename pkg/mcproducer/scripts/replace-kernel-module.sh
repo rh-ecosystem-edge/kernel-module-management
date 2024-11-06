@@ -25,8 +25,9 @@ EOF
 }
 
 echo "before checking image presence"
-if [ -n "$(podman images -q $full_kernel_module_image 2> /dev/null)" ]; then
-    echo "Image $full_kernel_module_image found on the local file system, creating kmm config file"
+if [ -n "$(podman images -q "$full_kernel_module_image" 2> /dev/null)" ] && \
+   [ -n "$(podman images -q "$worker_image" 2> /dev/null)" ]; then
+    echo "Images $full_kernel_module_image and $worker_image found on the local file system, creating kmm config file"
     create_kmm_config
     echo "creating volume"
     podman volume create $worker_volume_name
