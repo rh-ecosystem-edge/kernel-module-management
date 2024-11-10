@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
@@ -23,7 +22,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ocp/ca"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/worker"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -1602,7 +1600,6 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 	var (
 		ctrl   *gomock.Controller
 		client *testclient.MockClient
-		psh    *MockpullSecretHelper
 
 		nmc *kmmv1beta1.NodeModulesConfig
 		mi  kmmv1beta1.ModuleItem
@@ -1616,7 +1613,6 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 
 		ctrl = gomock.NewController(GinkgoT())
 		client = testclient.NewMockClient(ctrl)
-		psh = NewMockpullSecretHelper(ctrl)
 		caHelper = ca.NewMockHelper(ctrl)
 
 		nmc = &kmmv1beta1.NodeModulesConfig{
@@ -1645,7 +1641,6 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 
 		pm := &podManagerImpl{
 			client:      client,
-			psh:         psh,
 			scheme:      scheme,
 			workerImage: workerImage,
 			workerCfg:   workerCfg,
@@ -1653,7 +1648,6 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 		}
 
 		gomock.InOrder(
-			psh.EXPECT().VolumesAndVolumeMounts(ctx, &mi),
 			caHelper.EXPECT().GetClusterCA(ctx, namespace).Return(clusterCACM, nil),
 			caHelper.EXPECT().GetServiceCA(ctx, namespace).Return(serviceCACM, nil),
 		)
@@ -1665,12 +1659,67 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 		)
 	})
 
+	It("imagePullSecret should not be defined, if missing from ModuleItem", func() {
+		mi.ImageRepoSecret = nil
+		nms := &kmmv1beta1.NodeModuleSpec{
+			ModuleItem: mi,
+			Config:     moduleConfigToUse,
+		}
+
+		expected := getBaseWorkerPod("load", nmc, nil, false, true, nil)
+
+		Expect(
+			controllerutil.SetControllerReference(nmc, expected, scheme),
+		).NotTo(
+			HaveOccurred(),
+		)
+
+		controllerutil.AddFinalizer(expected, nodeModulesConfigFinalizer)
+
+		container, _ := podcmd.FindContainerByName(expected, "worker")
+		Expect(container).NotTo(BeNil())
+
+		container.SecurityContext = &v1.SecurityContext{
+			Capabilities: &v1.Capabilities{
+				Add: []v1.Capability{"SYS_MODULE"},
+			},
+			RunAsUser:      workerCfg.RunAsUser,
+			SELinuxOptions: &v1.SELinuxOptions{Type: workerCfg.SELinuxType},
+		}
+
+		hash, err := hashstructure.Hash(expected, hashstructure.FormatV2, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		expected.Annotations[hashAnnotationKey] = fmt.Sprintf("%d", hash)
+
+		gomock.InOrder(
+			caHelper.EXPECT().GetClusterCA(ctx, namespace).Return(clusterCACM, nil),
+			caHelper.EXPECT().GetServiceCA(ctx, namespace).Return(serviceCACM, nil),
+			client.EXPECT().Create(ctx, cmpmock.DiffEq(expected)),
+		)
+
+		workerCfg := *workerCfg
+
+		pm := &podManagerImpl{
+			caHelper:    caHelper,
+			client:      client,
+			scheme:      scheme,
+			workerImage: workerImage,
+			workerCfg:   &workerCfg,
+		}
+
+		Expect(
+			pm.CreateLoaderPod(ctx, nmc, nms),
+		).NotTo(
+			HaveOccurred(),
+		)
+	})
+
 	DescribeTable(
 		"should work as expected",
 		func(firmwareHostPath *string, withFirmwareLoading bool) {
 			ctrl := gomock.NewController(GinkgoT())
 			client := testclient.NewMockClient(ctrl)
-			psh := NewMockpullSecretHelper(ctrl)
 			caHelper := ca.NewMockHelper(ctrl)
 
 			if withFirmwareLoading {
@@ -1682,7 +1731,7 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 				Config:     moduleConfigToUse,
 			}
 
-			expected := getBaseWorkerPod("load", nmc, firmwareHostPath, withFirmwareLoading, true)
+			expected := getBaseWorkerPod("load", nmc, firmwareHostPath, withFirmwareLoading, true, mi.ImageRepoSecret)
 
 			Expect(
 				controllerutil.SetControllerReference(nmc, expected, scheme),
@@ -1715,7 +1764,6 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 			expected.Annotations[hashAnnotationKey] = fmt.Sprintf("%d", hash)
 
 			gomock.InOrder(
-				psh.EXPECT().VolumesAndVolumeMounts(ctx, &mi),
 				caHelper.EXPECT().GetClusterCA(ctx, namespace).Return(clusterCACM, nil),
 				caHelper.EXPECT().GetServiceCA(ctx, namespace).Return(serviceCACM, nil),
 				client.EXPECT().Create(ctx, cmpmock.DiffEq(expected)),
@@ -1727,7 +1775,6 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 			pm := &podManagerImpl{
 				caHelper:    caHelper,
 				client:      client,
-				psh:         psh,
 				scheme:      scheme,
 				workerImage: workerImage,
 				workerCfg:   &workerCfg,
@@ -1753,10 +1800,8 @@ var _ = Describe("podManagerImpl_CreateUnloaderPod", func() {
 	var (
 		ctrl   *gomock.Controller
 		client *testclient.MockClient
-		psh    *MockpullSecretHelper
-
-		nmc *kmmv1beta1.NodeModulesConfig
-		mi  kmmv1beta1.ModuleItem
+		nmc    *kmmv1beta1.NodeModulesConfig
+		mi     kmmv1beta1.ModuleItem
 
 		ctx               context.Context
 		moduleConfigToUse kmmv1beta1.ModuleConfig
@@ -1768,7 +1813,6 @@ var _ = Describe("podManagerImpl_CreateUnloaderPod", func() {
 
 		ctrl = gomock.NewController(GinkgoT())
 		client = testclient.NewMockClient(ctrl)
-		psh = NewMockpullSecretHelper(ctrl)
 		caHelper = ca.NewMockHelper(ctrl)
 
 		nmc = &kmmv1beta1.NodeModulesConfig{
@@ -1794,10 +1838,8 @@ var _ = Describe("podManagerImpl_CreateUnloaderPod", func() {
 	It("it should fail if firmwareClassPath was not set but firmware loading was", func() {
 
 		pm := newPodManager(client, workerImage, scheme, caHelper, workerCfg)
-		pm.(*podManagerImpl).psh = psh
 
 		gomock.InOrder(
-			psh.EXPECT().VolumesAndVolumeMounts(ctx, &mi),
 			caHelper.EXPECT().GetClusterCA(ctx, namespace).Return(clusterCACM, nil),
 			caHelper.EXPECT().GetServiceCA(ctx, namespace).Return(serviceCACM, nil),
 		)
@@ -1811,7 +1853,7 @@ var _ = Describe("podManagerImpl_CreateUnloaderPod", func() {
 
 	It("should work as expected", func() {
 
-		expected := getBaseWorkerPod("unload", nmc, ptr.To("/var/lib/firmware"), true, false)
+		expected := getBaseWorkerPod("unload", nmc, ptr.To("/var/lib/firmware"), true, false, mi.ImageRepoSecret)
 
 		container, _ := podcmd.FindContainerByName(expected, "worker")
 		Expect(container).NotTo(BeNil())
@@ -1830,7 +1872,6 @@ var _ = Describe("podManagerImpl_CreateUnloaderPod", func() {
 		expected.Annotations[hashAnnotationKey] = fmt.Sprintf("%d", hash)
 
 		gomock.InOrder(
-			psh.EXPECT().VolumesAndVolumeMounts(ctx, &mi),
 			caHelper.EXPECT().GetClusterCA(ctx, namespace).Return(clusterCACM, nil),
 			caHelper.EXPECT().GetServiceCA(ctx, namespace).Return(serviceCACM, nil),
 			client.EXPECT().Create(ctx, cmpmock.DiffEq(expected)),
@@ -1840,7 +1881,6 @@ var _ = Describe("podManagerImpl_CreateUnloaderPod", func() {
 		workerCfg.FirmwareHostPath = ptr.To("/var/lib/firmware")
 
 		pm := newPodManager(client, workerImage, scheme, caHelper, &workerCfg)
-		pm.(*podManagerImpl).psh = psh
 
 		Expect(
 			pm.CreateUnloaderPod(ctx, nmc, status),
@@ -1941,7 +1981,7 @@ var _ = Describe("podManagerImpl_ListWorkerPodsOnNode", func() {
 })
 
 func getBaseWorkerPod(subcommand string, owner ctrlclient.Object, firmwareHostPath *string,
-	withFirmware, isLoaderPod bool) *v1.Pod {
+	withFirmware, isLoaderPod bool, imagePullSecret *v1.LocalObjectReference) *v1.Pod {
 	GinkgoHelper()
 
 	const (
@@ -1958,7 +1998,6 @@ func getBaseWorkerPod(subcommand string, owner ctrlclient.Object, firmwareHostPa
 		action = WorkerActionUnload
 	}
 
-	hostPathFile := v1.HostPathFile
 	hostPathDirectory := v1.HostPathDirectory
 	hostPathDirectoryOrCreate := v1.HostPathDirectoryOrCreate
 
@@ -2075,11 +2114,6 @@ cp -R /firmware-path/* /tmp/firmware-path;
 							MountPath: "/etc/pki/tls/certs",
 						},
 						{
-							Name:      globalPullSecretName,
-							ReadOnly:  true,
-							MountPath: filepath.Join(worker.PullSecretsDir, "_global", v1.DockerConfigJsonKey),
-						},
-						{
 							Name:      volNameTmp,
 							MountPath: sharedFilesDir,
 							ReadOnly:  true,
@@ -2170,15 +2204,6 @@ cp -R /firmware-path/* /tmp/firmware-path;
 					},
 				},
 				{
-					Name: globalPullSecretName,
-					VolumeSource: v1.VolumeSource{
-						HostPath: &v1.HostPathVolumeSource{
-							Path: worker.GlobalPullSecretPath,
-							Type: &hostPathFile,
-						},
-					},
-				},
-				{
 					Name: volNameTmp,
 					VolumeSource: v1.VolumeSource{
 						EmptyDir: &v1.EmptyDirVolumeSource{},
@@ -2219,6 +2244,10 @@ cp -R /firmware-path/* /tmp/firmware-path;
 		pod.Spec.Volumes = append(pod.Spec.Volumes, fwVol)
 	}
 
+	if imagePullSecret != nil {
+		pod.Spec.ImagePullSecrets = []v1.LocalObjectReference{*imagePullSecret}
+	}
+
 	Expect(
 		controllerutil.SetControllerReference(owner, &pod, scheme),
 	).NotTo(
@@ -2229,98 +2258,6 @@ cp -R /firmware-path/* /tmp/firmware-path;
 
 	return &pod
 }
-
-var _ = Describe("pullSecretHelperImpl_VolumesAndVolumeMounts", func() {
-	It("should work as expected", func() {
-		ctrl := gomock.NewController(GinkgoT())
-		kubeClient := testclient.NewMockClient(ctrl)
-		psh := pullSecretHelperImpl{client: kubeClient}
-
-		const (
-			irs           = "pull-secret-0"
-			saPullSecret1 = "pull-secret-1"
-			saPullSecret2 = "pull-secret-2"
-		)
-
-		saPullSecret1Hash, err := hashstructure.Hash(saPullSecret1, hashstructure.FormatV2, nil)
-		Expect(err).To(BeNil())
-		saPullSecret2Hash, err := hashstructure.Hash(saPullSecret2, hashstructure.FormatV2, nil)
-		Expect(err).To(BeNil())
-
-		item := kmmv1beta1.ModuleItem{
-			ImageRepoSecret:    &v1.LocalObjectReference{Name: irs},
-			Namespace:          namespace,
-			ServiceAccountName: serviceAccountName,
-		}
-
-		ctx := context.TODO()
-		nsn := types.NamespacedName{Namespace: namespace, Name: serviceAccountName}
-
-		kubeClient.
-			EXPECT().
-			Get(ctx, nsn, &v1.ServiceAccount{}).
-			Do(func(_ context.Context, _ types.NamespacedName, sa *v1.ServiceAccount, _ ...ctrlclient.GetOption) {
-				sa.ImagePullSecrets = []v1.LocalObjectReference{
-					{Name: saPullSecret1},
-					{Name: saPullSecret1}, // intentional duplicate, should not be in the volume list
-					{Name: saPullSecret2},
-				}
-			})
-
-		vols := []v1.Volume{
-			{
-				Name: volNameImageRepoSecret,
-				VolumeSource: v1.VolumeSource{
-					Secret: &v1.SecretVolumeSource{
-						SecretName: irs,
-						Optional:   ptr.To(false),
-					},
-				},
-			},
-			{
-				Name: fmt.Sprintf("pull-secret-%d", saPullSecret1Hash),
-				VolumeSource: v1.VolumeSource{
-					Secret: &v1.SecretVolumeSource{
-						SecretName: saPullSecret1,
-						Optional:   ptr.To(true),
-					},
-				},
-			},
-			{
-				Name: fmt.Sprintf("pull-secret-%d", saPullSecret2Hash),
-				VolumeSource: v1.VolumeSource{
-					Secret: &v1.SecretVolumeSource{
-						SecretName: saPullSecret2,
-						Optional:   ptr.To(true),
-					},
-				},
-			},
-		}
-
-		volMounts := []v1.VolumeMount{
-			{
-				Name:      volNameImageRepoSecret,
-				ReadOnly:  true,
-				MountPath: filepath.Join(worker.PullSecretsDir, irs),
-			},
-			{
-				Name:      fmt.Sprintf("pull-secret-%d", saPullSecret1Hash),
-				ReadOnly:  true,
-				MountPath: filepath.Join(worker.PullSecretsDir, saPullSecret1),
-			},
-			{
-				Name:      fmt.Sprintf("pull-secret-%d", saPullSecret2Hash),
-				ReadOnly:  true,
-				MountPath: filepath.Join(worker.PullSecretsDir, saPullSecret2),
-			},
-		}
-
-		resVols, resVolMounts, err := psh.VolumesAndVolumeMounts(ctx, &item)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(resVols).To(BeComparableTo(vols))
-		Expect(resVolMounts).To(BeComparableTo(volMounts))
-	})
-})
 
 var _ = Describe("getKernelModuleReadyLabels", func() {
 	lph := newLabelPreparationHelper()
