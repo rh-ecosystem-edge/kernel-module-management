@@ -649,6 +649,7 @@ func (h *nmcReconcilerHelperImpl) UpdateNodeLabels(ctx context.Context, nmc *kmm
 	deprecatedNodeModuleReadyLabels := h.lph.getDeprecatedKernelModuleReadyLabels(*node)
 
 	// get spec labels and their config
+
 	specLabels := h.lph.getSpecLabelsAndTheirConfigs(nmc)
 
 	// get status labels and their config
