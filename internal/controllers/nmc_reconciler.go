@@ -130,17 +130,18 @@ func (r *NMCReconciler) Reconcile(ctx context.Context, req reconcile.Request) (r
 		return ctrl.Result{}, fmt.Errorf("could not get node %s: %v", nmcObj.Name, err)
 	}
 
-	// skipping handling NMC spec, labelling, events until node becomes ready
-	if !r.nodeAPI.IsNodeSchedulable(&node) {
-		return ctrl.Result{}, nil
-	}
-
 	errs := make([]error, 0, len(nmcObj.Spec.Modules)+len(nmcObj.Status.Modules))
 
 	for _, mod := range nmcObj.Spec.Modules {
 		moduleNameKey := mod.Namespace + "/" + mod.Name
 
 		logger := logger.WithValues("module", moduleNameKey)
+
+		// skipping handling NMC spec module until node is ready
+		if !r.nodeAPI.IsNodeSchedulable(&node, mod.Config.Tolerations) {
+			delete(statusMap, moduleNameKey)
+			continue
+		}
 
 		if err := r.helper.ProcessModuleSpec(ctrl.LoggerInto(ctx, logger), &nmcObj, &mod, statusMap[moduleNameKey], &node); err != nil {
 			errs = append(
@@ -1170,6 +1171,7 @@ func (p *podManagerImpl) baseWorkerPod(ctx context.Context, nmc client.Object, i
 			ServiceAccountName: item.ServiceAccountName,
 			ImagePullSecrets:   imagePullSecrets,
 			Volumes:            volumes,
+			Tolerations:        moduleConfig.Tolerations,
 		},
 	}
 
