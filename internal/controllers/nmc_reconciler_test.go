@@ -128,8 +128,22 @@ var _ = Describe("NodeModulesConfigReconciler_Reconcile", func() {
 	})
 
 	It("should not continue if node is not schedulable", func() {
+		spec0 := kmmv1beta1.NodeModuleSpec{
+			ModuleItem: kmmv1beta1.ModuleItem{
+				Namespace: namespace,
+				Name:      "mod0",
+			},
+		}
+		var (
+			loaded   []types.NamespacedName
+			unloaded []types.NamespacedName
+			err      error
+		)
 		nmc := &kmmv1beta1.NodeModulesConfig{
 			ObjectMeta: metav1.ObjectMeta{Name: nmcName},
+			Spec: kmmv1beta1.NodeModulesConfigSpec{
+				Modules: []kmmv1beta1.NodeModuleSpec{spec0},
+			},
 		}
 		node := v1.Node{}
 		gomock.InOrder(
@@ -141,12 +155,16 @@ var _ = Describe("NodeModulesConfigReconciler_Reconcile", func() {
 				}),
 			wh.EXPECT().SyncStatus(ctx, nmc),
 			kubeClient.EXPECT().Get(ctx, types.NamespacedName{Name: nmc.Name}, &node).Return(nil),
-			nm.EXPECT().IsNodeSchedulable(&node).Return(false),
+			nm.EXPECT().IsNodeSchedulable(&node, nil).Return(false),
+			wh.EXPECT().GarbageCollectInUseLabels(ctx, nmc),
+			wh.EXPECT().UpdateNodeLabels(ctx, nmc, &node).Return(loaded, unloaded, err),
+			wh.EXPECT().RecordEvents(&node, loaded, unloaded),
 		)
 
-		_, err := r.Reconcile(ctx, req)
+		_, err = r.Reconcile(ctx, req)
 		Expect(err).To(BeNil())
 	})
+
 
 	It("should process spec entries and orphan statuses", func() {
 		const (
@@ -211,8 +229,9 @@ var _ = Describe("NodeModulesConfigReconciler_Reconcile", func() {
 				}),
 			wh.EXPECT().SyncStatus(ctx, nmc),
 			kubeClient.EXPECT().Get(ctx, types.NamespacedName{Name: nmc.Name}, &node).Return(nil),
-			nm.EXPECT().IsNodeSchedulable(&node).Return(true),
+			nm.EXPECT().IsNodeSchedulable(&node, nil).Return(true),
 			wh.EXPECT().ProcessModuleSpec(contextWithValueMatch, nmc, &spec0, &status0, &node),
+			nm.EXPECT().IsNodeSchedulable(&node, nil).Return(true),
 			wh.EXPECT().ProcessModuleSpec(contextWithValueMatch, nmc, &spec1, nil, &node),
 			wh.EXPECT().ProcessUnconfiguredModuleStatus(contextWithValueMatch, nmc, &status2, &node),
 			wh.EXPECT().GarbageCollectInUseLabels(ctx, nmc),
@@ -290,7 +309,7 @@ var _ = Describe("NodeModulesConfigReconciler_Reconcile", func() {
 				}),
 			wh.EXPECT().SyncStatus(ctx, nmc).Return(nil),
 			kubeClient.EXPECT().Get(ctx, types.NamespacedName{Name: nmc.Name}, &node).Return(nil),
-			nm.EXPECT().IsNodeSchedulable(&node).Return(true),
+			nm.EXPECT().IsNodeSchedulable(&node, nil).Return(true),
 			wh.EXPECT().ProcessModuleSpec(contextWithValueMatch, nmc, &spec0, &status0, &node).Return(fmt.Errorf(errorMeassge)),
 			wh.EXPECT().ProcessUnconfiguredModuleStatus(contextWithValueMatch, nmc, &status2, &node).Return(fmt.Errorf(errorMeassge)),
 			wh.EXPECT().GarbageCollectInUseLabels(ctx, nmc).Return(fmt.Errorf(errorMeassge)),
