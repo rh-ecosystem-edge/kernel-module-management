@@ -114,10 +114,10 @@ var _ = Describe("Reconcile", func() {
 		}
 		mockReconHelper.EXPECT().setFinalizerAndStatus(ctx, mod).Return(nil)
 		if c.getNodesError {
-			mn.EXPECT().GetNodesListBySelector(ctx, mod.Spec.Selector).Return(nil, returnedError)
+			mn.EXPECT().GetNodesListBySelector(ctx, mod.Spec.Selector, nil).Return(nil, returnedError)
 			goto executeTestFunction
 		}
-		mn.EXPECT().GetNodesListBySelector(ctx, mod.Spec.Selector).Return(targetedNodes, nil)
+		mn.EXPECT().GetNodesListBySelector(ctx, mod.Spec.Selector, nil).Return(targetedNodes, nil)
 		if c.getNMCsMapError {
 			mockReconHelper.EXPECT().getNMCsByModuleSet(ctx, mod).Return(nil, returnedError)
 			goto executeTestFunction
@@ -170,7 +170,7 @@ var _ = Describe("Reconcile", func() {
 		gomock.InOrder(
 			mockNamespaceHelper.EXPECT().setLabel(ctx, mod.Namespace),
 			mockReconHelper.EXPECT().setFinalizerAndStatus(ctx, mod).Return(nil),
-			mn.EXPECT().GetNodesListBySelector(ctx, mod.Spec.Selector).Return(targetedNodes, nil),
+			mn.EXPECT().GetNodesListBySelector(ctx, mod.Spec.Selector, nil).Return(targetedNodes, nil),
 			mockReconHelper.EXPECT().getNMCsByModuleSet(ctx, mod).Return(currentNMCs, nil),
 			mockReconHelper.EXPECT().prepareSchedulingData(ctx, mod, targetedNodes, currentNMCs).Return(nmcMLDConfigs, nil),
 			mockReconHelper.EXPECT().enableModuleOnNode(ctx, &mld, &node).Return(nil),
@@ -188,7 +188,7 @@ var _ = Describe("Reconcile", func() {
 		gomock.InOrder(
 			mockNamespaceHelper.EXPECT().setLabel(ctx, mod.Namespace),
 			mockReconHelper.EXPECT().setFinalizerAndStatus(ctx, mod).Return(nil),
-			mn.EXPECT().GetNodesListBySelector(ctx, mod.Spec.Selector).Return(targetedNodes, nil),
+			mn.EXPECT().GetNodesListBySelector(ctx, mod.Spec.Selector, nil).Return(targetedNodes, nil),
 			mockReconHelper.EXPECT().getNMCsByModuleSet(ctx, mod).Return(currentNMCs, nil),
 			mockReconHelper.EXPECT().prepareSchedulingData(ctx, mod, targetedNodes, currentNMCs).Return(nmcMLDConfigs, nil),
 			mockReconHelper.EXPECT().disableModuleOnNode(ctx, mod.Namespace, mod.Name, node.Name).Return(nil),
