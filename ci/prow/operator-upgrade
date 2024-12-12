@@ -23,4 +23,7 @@ oc wait --for=condition=Available -n openshift-kmm --timeout=1m deployment/kmm-o
 ./bin/operator-sdk run bundle-upgrade "$OO_BUNDLE" \
     --namespace openshift-kmm \
     --timeout 5m0s
-oc wait --for=condition=Available -n openshift-kmm --timeout=1m deployment/kmm-operator-controller
+
+oc wait --for=condition=Available -n openshift-kmm --timeout=1m \
+    deployment/kmm-operator-controller \
+    deployment/kmm-operator-webhook
