@@ -160,7 +160,6 @@ spec:
                           type: object
                       required:
                       - containerImage
-                      - imagePullPolicy
                       - insecurePull
                       - kernelVersion
                       - modprobe
@@ -309,7 +308,6 @@ spec:
                           type: object
                       required:
                       - containerImage
-                      - imagePullPolicy
                       - insecurePull
                       - kernelVersion
                       - modprobe
