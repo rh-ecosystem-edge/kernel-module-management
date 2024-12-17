@@ -130,8 +130,17 @@ var _ = Describe("NodeModulesConfigReconciler_Reconcile", func() {
 	})
 
 	It("should remove kmod labels and not continue if node is not schedulable", func() {
+		spec0 := kmmv1beta1.NodeModuleSpec{
+			ModuleItem: kmmv1beta1.ModuleItem{
+				Namespace: namespace,
+				Name:      "mod0",
+			},
+		}
 		nmc := &kmmv1beta1.NodeModulesConfig{
 			ObjectMeta: metav1.ObjectMeta{Name: nmcName},
+			Spec: kmmv1beta1.NodeModulesConfigSpec{
+				Modules: []kmmv1beta1.NodeModuleSpec{spec0},
+			},
 		}
 		node := v1.Node{
 			ObjectMeta: metav1.ObjectMeta{
@@ -162,7 +171,8 @@ var _ = Describe("NodeModulesConfigReconciler_Reconcile", func() {
 					return nil
 				},
 			),
-			nm.EXPECT().IsNodeSchedulable(&node).Return(false),
+			nm.EXPECT().IsNodeSchedulable(&node, nil).Return(false),
+			nm.EXPECT().IsNodeSchedulable(&node, nil).Return(false),
 			nm.EXPECT().RemoveNodeReadyLabels(ctx, &node).DoAndReturn(
 				func(_ context.Context, obj ctrlclient.Object) error {
 					delete(node.ObjectMeta.Labels, kmodName)
@@ -209,7 +219,7 @@ var _ = Describe("NodeModulesConfigReconciler_Reconcile", func() {
 					return nil
 				},
 			),
-			nm.EXPECT().IsNodeSchedulable(&node).Return(false),
+			nm.EXPECT().IsNodeSchedulable(&node, nil).Return(false),
 			nm.EXPECT().RemoveNodeReadyLabels(ctx, &node).DoAndReturn(
 				func(_ context.Context, obj ctrlclient.Object) error {
 					return fmt.Errorf("some error")
@@ -285,10 +295,12 @@ var _ = Describe("NodeModulesConfigReconciler_Reconcile", func() {
 				}),
 			wh.EXPECT().SyncStatus(ctx, nmc),
 			kubeClient.EXPECT().Get(ctx, types.NamespacedName{Name: nmc.Name}, &node).Return(nil),
-			nm.EXPECT().IsNodeSchedulable(&node).Return(true),
+			nm.EXPECT().IsNodeSchedulable(&node, nil).Return(true),
 			wh.EXPECT().ProcessModuleSpec(contextWithValueMatch, nmc, &spec0, &status0, &node),
+			nm.EXPECT().IsNodeSchedulable(&node, nil).Return(true),
 			wh.EXPECT().ProcessModuleSpec(contextWithValueMatch, nmc, &spec1, nil, &node),
 			wh.EXPECT().ProcessUnconfiguredModuleStatus(contextWithValueMatch, nmc, &status2, &node),
+			nm.EXPECT().IsNodeSchedulable(&node, nil).Return(true),
 			wh.EXPECT().GarbageCollectInUseLabels(ctx, nmc),
 			wh.EXPECT().UpdateNodeLabels(ctx, nmc, &node).Return(loaded, unloaded, err),
 			wh.EXPECT().RecordEvents(&node, loaded, unloaded),
@@ -364,9 +376,10 @@ var _ = Describe("NodeModulesConfigReconciler_Reconcile", func() {
 				}),
 			wh.EXPECT().SyncStatus(ctx, nmc).Return(nil),
 			kubeClient.EXPECT().Get(ctx, types.NamespacedName{Name: nmc.Name}, &node).Return(nil),
-			nm.EXPECT().IsNodeSchedulable(&node).Return(true),
+			nm.EXPECT().IsNodeSchedulable(&node, nil).Return(true),
 			wh.EXPECT().ProcessModuleSpec(contextWithValueMatch, nmc, &spec0, &status0, &node).Return(fmt.Errorf(errorMeassge)),
 			wh.EXPECT().ProcessUnconfiguredModuleStatus(contextWithValueMatch, nmc, &status2, &node).Return(fmt.Errorf(errorMeassge)),
+			nm.EXPECT().IsNodeSchedulable(&node, nil).Return(true),
 			wh.EXPECT().GarbageCollectInUseLabels(ctx, nmc).Return(fmt.Errorf(errorMeassge)),
 			wh.EXPECT().UpdateNodeLabels(ctx, nmc, &node).Return(nil, nil, fmt.Errorf(errorMeassge)),
 		)
