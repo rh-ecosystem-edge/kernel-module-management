@@ -37,7 +37,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2024-12-15T08:56:31Z"
+    createdAt: "2024-12-23T09:43:32Z"
     operatorframework.io/suggested-namespace: openshift-kmm-hub
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -298,7 +298,7 @@ spec:
           app.kubernetes.io/name: kmm-hub
           app.kubernetes.io/part-of: kmm
           control-plane: webhook-server
-        name: kmm-operator-hub-webhook-server
+        name: kmm-operator-hub-webhook
         spec:
           replicas: 1
           selector:
@@ -447,7 +447,7 @@ spec:
   - admissionReviewVersions:
     - v1
     containerPort: 443
-    deploymentName: kmm-operator-hub-webhook-server
+    deploymentName: kmm-operator-hub-webhook
     failurePolicy: Fail
     generateName: vmanagedclustermodule.kb.io
     rules:

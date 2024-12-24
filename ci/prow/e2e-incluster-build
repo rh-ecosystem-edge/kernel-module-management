@@ -38,7 +38,7 @@ oc debug "node/${NODE}" -- chroot host/ sudo modprobe dummy
 echo "Verify that dummy is loaded"
 oc debug "node/${NODE}" -- chroot host/ lsmod | grep dummy
 
-oc wait --for=condition=Available deployment/kmm-operator-controller deployment/kmm-operator-webhook-server -n openshift-kmm
+oc wait --for=condition=Available deployment/kmm-operator-controller deployment/kmm-operator-webhook -n openshift-kmm
 
 echo "Add resources"
 oc apply -k ci/e2e
