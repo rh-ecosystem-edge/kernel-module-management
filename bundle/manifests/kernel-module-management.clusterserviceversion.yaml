@@ -63,7 +63,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2024-12-15T08:56:31Z"
+    createdAt: "2024-12-23T09:43:31Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -453,7 +453,7 @@ spec:
           app.kubernetes.io/name: kmm
           app.kubernetes.io/part-of: kmm
           control-plane: webhook-server
-        name: kmm-operator-webhook-server
+        name: kmm-operator-webhook
         spec:
           replicas: 1
           selector:
@@ -628,7 +628,7 @@ spec:
     conversionCRDs:
     - preflightvalidations.kmm.sigs.x-k8s.io
     - preflightvalidationsocp.kmm.sigs.x-k8s.io
-    deploymentName: kmm-operator-webhook-server
+    deploymentName: kmm-operator-webhook
     generateName: cpreflightvalidationspreflightvalidationsocp.kb.io
     sideEffects: None
     targetPort: 9443
@@ -637,7 +637,7 @@ spec:
   - admissionReviewVersions:
     - v1
     containerPort: 443
-    deploymentName: kmm-operator-webhook-server
+    deploymentName: kmm-operator-webhook
     failurePolicy: Fail
     generateName: namespace-deletion.kmm.sigs.k8s.io
     rules:
@@ -656,7 +656,7 @@ spec:
   - admissionReviewVersions:
     - v1
     containerPort: 443
-    deploymentName: kmm-operator-webhook-server
+    deploymentName: kmm-operator-webhook
     failurePolicy: Fail
     generateName: vmodule.kb.io
     rules:
