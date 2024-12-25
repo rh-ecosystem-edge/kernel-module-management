@@ -85,6 +85,7 @@ func main() {
 
 	var configFile string
 
+	jkhkj
 	flag.StringVar(&configFile, "config", "", "The path to the configuration file.")
 
 	flag.Parse()
