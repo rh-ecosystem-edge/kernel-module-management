@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM registry.access.redhat.com/ubi9/go-toolset:1.21 as builder
+FROM golang:1.23 as builder
 
 # Copy the Go Modules manifests
 COPY go.mod go.mod
@@ -31,7 +31,7 @@ FROM registry.access.redhat.com/ubi9/ubi-minimal:9.4
 
 ARG TARGET
 
-COPY --from=builder /opt/app-root/src/${TARGET} /usr/local/bin/manager
+COPY --from=builder /go/${TARGET} /usr/local/bin/manager
 
 RUN microdnf update -y && \
     microdnf install -y shadow-utils && \
