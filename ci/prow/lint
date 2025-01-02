@@ -2,8 +2,6 @@
 
 set -euxo pipefail
 
-export GOCACHE=/tmp
-
 # Generate code and compare with the current source.
 # Fail with a diff if some files are outdated.
 go install go.uber.org/mock/mockgen@v0.2.0
@@ -16,4 +14,4 @@ fi
 
 export GOLANGCI_LINT_CACHE=/tmp
 
-make lint GOLANGCI_LINT=/usr/bin/golangci-lint
+make lint
