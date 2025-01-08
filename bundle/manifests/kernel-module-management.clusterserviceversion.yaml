@@ -63,7 +63,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2024-12-23T09:43:31Z"
+    createdAt: "2025-01-08T08:23:59Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -165,34 +165,6 @@ spec:
           - ""
           resources:
           - configmaps
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - watch
-        - apiGroups:
-          - ""
-          resources:
-          - namespaces
-          verbs:
-          - get
-          - list
-          - patch
-          - watch
-        - apiGroups:
-          - ""
-          resources:
-          - nodes
-          verbs:
-          - get
-          - list
-          - patch
-          - watch
-        - apiGroups:
-          - ""
-          resources:
           - pods
           verbs:
           - create
@@ -204,14 +176,17 @@ spec:
         - apiGroups:
           - ""
           resources:
-          - secrets
+          - namespaces
+          - nodes
           verbs:
           - get
           - list
+          - patch
           - watch
         - apiGroups:
           - ""
           resources:
+          - secrets
           - serviceaccounts
           verbs:
           - get
@@ -229,6 +204,8 @@ spec:
           - kmm.sigs.x-k8s.io
           resources:
           - modules
+          - preflightvalidations/status
+          - preflightvalidationsocp
           verbs:
           - get
           - list
@@ -239,12 +216,15 @@ spec:
           - kmm.sigs.x-k8s.io
           resources:
           - modules/finalizers
+          - preflightvalidations/finalizers
+          - preflightvalidationsocp/finalizers
           verbs:
           - update
         - apiGroups:
           - kmm.sigs.x-k8s.io
           resources:
           - modules/status
+          - preflightvalidationsocp/status
           verbs:
           - get
           - patch
@@ -285,46 +265,6 @@ spec:
           - patch
           - update
           - watch
-        - apiGroups:
-          - kmm.sigs.x-k8s.io
-          resources:
-          - preflightvalidations/finalizers
-          verbs:
-          - update
-        - apiGroups:
-          - kmm.sigs.x-k8s.io
-          resources:
-          - preflightvalidations/status
-          verbs:
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - kmm.sigs.x-k8s.io
-          resources:
-          - preflightvalidationsocp
-          verbs:
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - kmm.sigs.x-k8s.io
-          resources:
-          - preflightvalidationsocp/finalizers
-          verbs:
-          - update
-        - apiGroups:
-          - kmm.sigs.x-k8s.io
-          resources:
-          - preflightvalidationsocp/status
-          verbs:
-          - get
-          - patch
-          - update
         - apiGroups:
           - authentication.k8s.io
           resources:
