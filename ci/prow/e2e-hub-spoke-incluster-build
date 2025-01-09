@@ -51,7 +51,7 @@ else
 fi
 
 # Apply resources
-oc apply -k ci/e2e-hub
+timeout 1m bash -c 'until oc apply -k ci/e2e-hub; do sleep 3; done'
 
 # Wait for the build build to be created and completed
 timeout 1m bash -c 'until oc -n ${HUB_OPERATOR_NAMESPACE} get builds -o json | jq -er ".items[].metadata.name | select(.? | match(\"build\"))"; do sleep 1; done'
