@@ -41,7 +41,7 @@ oc debug "node/${NODE}" -- chroot host/ lsmod | grep dummy
 oc wait --for=condition=Available deployment/kmm-operator-controller deployment/kmm-operator-webhook -n openshift-kmm
 
 echo "Add resources"
-oc apply -k ci/e2e
+timeout 1m bash -c 'until oc apply -k ci/e2e; do sleep 3; done'
 
 # Wait for the build pod to be created. `kubectl wait` doesn't support such option,
 # see https://github.com/kubernetes/kubernetes/issues/83242.
