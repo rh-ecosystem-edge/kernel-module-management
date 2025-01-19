@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"go.uber.org/mock/gomock"
 )
 
 // DiffEq is a simple custom matcher. it is be able to modify behavior with `github.com/google/go-cmp/cmp/cmpopts`.

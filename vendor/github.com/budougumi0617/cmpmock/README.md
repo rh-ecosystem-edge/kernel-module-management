@@ -5,7 +5,7 @@
 [![test](https://github.com/budougumi0617/cmpmock/workflows/test/badge.svg)](https://github.com/budougumi0617/cmpmock/actions?query=workflow%3Atest)
 [![reviewdog](https://github.com/budougumi0617/cmpmock/workflows/reviewdog/badge.svg)](https://github.com/budougumi0617/cmpmock/actions?query=workflow%3Areviewdog)
 
-Readable & Flexible matcher for https://github.com/golang/mock
+Readable & Flexible matcher for `go.uber.org/mock/gomock` ( https://github.com/uber-go/mock )
 
 ## Description
 cmpmock provides a simple custom matcher. it is be able to modify behavior with `github.com/google/go-cmp/cmp/cmpopts`.
