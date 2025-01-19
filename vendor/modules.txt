@@ -1168,8 +1168,8 @@ k8s.io/utils/path
 k8s.io/utils/pointer
 k8s.io/utils/ptr
 k8s.io/utils/trace
-# open-cluster-management.io/api v0.13.0
-## explicit; go 1.21
+# open-cluster-management.io/api v0.15.0
+## explicit; go 1.22.0
 open-cluster-management.io/api/cluster/v1
 open-cluster-management.io/api/cluster/v1alpha1
 open-cluster-management.io/api/work/v1
