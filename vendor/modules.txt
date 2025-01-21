@@ -20,8 +20,8 @@ github.com/beorn7/perks/quantile
 # github.com/blang/semver/v4 v4.0.0
 ## explicit; go 1.14
 github.com/blang/semver/v4
-# github.com/budougumi0617/cmpmock v0.0.4
-## explicit; go 1.16
+# github.com/budougumi0617/cmpmock v0.1.1
+## explicit; go 1.18
 github.com/budougumi0617/cmpmock
 # github.com/cenkalti/backoff/v4 v4.3.0
 ## explicit; go 1.18
@@ -113,9 +113,6 @@ github.com/go-task/slim-sprig/v3
 ## explicit; go 1.15
 github.com/gogo/protobuf/proto
 github.com/gogo/protobuf/sortkeys
-# github.com/golang/mock v1.6.0
-## explicit; go 1.11
-github.com/golang/mock/gomock
 # github.com/golang/protobuf v1.5.4
 ## explicit; go 1.17
 github.com/golang/protobuf/proto

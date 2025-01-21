@@ -6,7 +6,7 @@ toolchain go1.23.4
 
 require (
 	github.com/a8m/envsubst v1.4.2
-	github.com/budougumi0617/cmpmock v0.0.4
+	github.com/budougumi0617/cmpmock v0.1.1
 	github.com/containers/image/v5 v5.33.1
 	github.com/go-logr/logr v1.4.2
 	github.com/google/go-cmp v0.6.0
@@ -61,7 +61,6 @@ require (
 	github.com/go-openapi/swag v0.23.0 // indirect
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/mock v1.6.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/cel-go v0.22.0 // indirect
