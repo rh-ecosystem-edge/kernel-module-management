@@ -22,6 +22,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mic"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 
 	buildv1 "github.com/openshift/api/build/v1"
@@ -141,6 +142,7 @@ func main() {
 	)
 
 	kernelAPI := module.NewKernelMapper(buildHelperAPI, sign.NewSignerHelper())
+	micAPI := mic.NewModuleImagesConfigAPI(client, scheme)
 
 	dpc := controllers.NewDevicePluginReconciler(
 		client,
@@ -163,6 +165,7 @@ func main() {
 		client,
 		kernelAPI,
 		registryAPI,
+		micAPI,
 		nmcHelper,
 		filterAPI,
 		nodeAPI,

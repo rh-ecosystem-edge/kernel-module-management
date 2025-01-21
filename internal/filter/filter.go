@@ -198,6 +198,13 @@ func (f *Filter) ImageStreamReconcilerPredicate() predicate.Predicate {
 	}
 }
 
+func ModuleReconcileMICPredicate() predicate.Predicate {
+	return predicate.And(
+		skipCreations,
+		skipDeletions,
+	)
+}
+
 func NodeUpdateKernelChangedPredicate() predicate.Predicate {
 	return predicate.Funcs{
 		UpdateFunc: func(updateEvent event.UpdateEvent) bool {

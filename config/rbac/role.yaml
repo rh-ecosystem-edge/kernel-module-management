@@ -87,6 +87,18 @@ rules:
 - apiGroups:
   - kmm.sigs.x-k8s.io
   resources:
+  - moduleimagesconfigs
+  - nodemodulesconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
+  - kmm.sigs.x-k8s.io
+  resources:
   - modules
   - preflightvalidations/status
   - preflightvalidationsocp
@@ -113,17 +125,6 @@ rules:
   - get
   - patch
   - update
-- apiGroups:
-  - kmm.sigs.x-k8s.io
-  resources:
-  - nodemodulesconfigs
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - watch
 - apiGroups:
   - kmm.sigs.x-k8s.io
   resources:
