@@ -138,7 +138,7 @@ func (r *NMCReconciler) Reconcile(ctx context.Context, req reconcile.Request) (r
 		logger := logger.WithValues("module", moduleNameKey)
 
 		// skipping handling NMC spec module until node is ready
-		if !r.nodeAPI.IsNodeSchedulable(&node, mod.Config.Tolerations) {
+		if !r.nodeAPI.IsNodeSchedulable(&node, mod.Tolerations) {
 			readyLabelsToRemove = append(readyLabelsToRemove, utils.GetKernelModuleReadyNodeLabel(mod.Namespace, mod.Name))
 			delete(statusMap, moduleNameKey)
 			continue
@@ -557,6 +557,7 @@ func (h *nmcReconcilerHelperImpl) SyncStatus(ctx context.Context, nmcObj *kmmv1b
 				status.ImageRepoSecret = &p.Spec.ImagePullSecrets[0]
 			}
 			status.ServiceAccountName = p.Spec.ServiceAccountName
+			status.Tolerations = p.Spec.Tolerations
 
 			status.LastTransitionTime = GetContainerStatus(p.Status.ContainerStatuses, workerContainerName).
 				State.
@@ -1173,7 +1174,7 @@ func (p *podManagerImpl) baseWorkerPod(ctx context.Context, nmc client.Object, i
 			ServiceAccountName: item.ServiceAccountName,
 			ImagePullSecrets:   imagePullSecrets,
 			Volumes:            volumes,
-			Tolerations:        moduleConfig.Tolerations,
+			Tolerations:        item.Tolerations,
 		},
 	}
 

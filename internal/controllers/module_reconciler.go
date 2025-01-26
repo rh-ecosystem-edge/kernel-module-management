@@ -365,7 +365,6 @@ func (mrh *moduleReconcilerHelper) enableModuleOnNode(ctx context.Context, mld *
 		ImagePullPolicy:       mld.ImagePullPolicy,
 		InTreeModulesToRemove: mld.InTreeModulesToRemove,
 		Modprobe:              mld.Modprobe,
-		Tolerations:           mld.Tolerations,
 	}
 
 	if tls := mld.RegistryTLS; tls != nil {
