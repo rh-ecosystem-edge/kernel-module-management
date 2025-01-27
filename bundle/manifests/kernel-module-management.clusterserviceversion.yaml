@@ -63,7 +63,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-01-30T12:27:42Z"
+    createdAt: "2025-02-03T08:50:57Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -78,6 +78,12 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
+    - kind: ModuleBuildSignConfig
+      name: modulebuildsignconfigs.kmm.sigs.x-k8s.io
+      version: v1beta1
+    - kind: ModuleImagesConfig
+      name: moduleimagesconfigs.kmm.sigs.x-k8s.io
+      version: v1beta1
     - description: Module describes how to load a module on different kernel versions
       displayName: Module
       kind: Module
