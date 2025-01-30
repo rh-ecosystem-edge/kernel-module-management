@@ -1114,6 +1114,12 @@ var _ = Describe("nmcReconcilerHelperImpl_SyncStatus", func() {
 			serviceAccountName = "some-sa"
 		)
 
+		testToleration := v1.Toleration{
+			Key:    "test-key",
+			Value:  "test-value",
+			Effect: v1.TaintEffectNoExecute,
+		}
+
 		nmc := &kmmv1beta1.NodeModulesConfig{
 			ObjectMeta: metav1.ObjectMeta{Name: nmcName},
 			Status: kmmv1beta1.NodeModulesConfigStatus{
@@ -1149,6 +1155,7 @@ var _ = Describe("nmcReconcilerHelperImpl_SyncStatus", func() {
 			Spec: v1.PodSpec{
 				ServiceAccountName: serviceAccountName,
 				ImagePullSecrets:   []v1.LocalObjectReference{v1.LocalObjectReference{Name: irsName}},
+				Tolerations:        []v1.Toleration{testToleration},
 			},
 			Status: v1.PodStatus{
 				Phase: v1.PodSucceeded,
@@ -1190,6 +1197,7 @@ var _ = Describe("nmcReconcilerHelperImpl_SyncStatus", func() {
 				Name:               modName,
 				Namespace:          modNamespace,
 				ServiceAccountName: serviceAccountName,
+				Tolerations:        []v1.Toleration{testToleration},
 			},
 			Config:             cfg,
 			LastTransitionTime: now,
@@ -1717,6 +1725,13 @@ var _ = Describe("podManagerImpl_CreateLoaderPod", func() {
 			Name:               moduleName,
 			Namespace:          namespace,
 			ServiceAccountName: serviceAccountName,
+			Tolerations: []v1.Toleration{
+				{
+					Key:    "test-key",
+					Value:  "test-value",
+					Effect: v1.TaintEffectNoExecute,
+				},
+			},
 		}
 
 		moduleConfigToUse = moduleConfig
@@ -1917,6 +1932,13 @@ var _ = Describe("podManagerImpl_CreateUnloaderPod", func() {
 			Name:               moduleName,
 			Namespace:          namespace,
 			ServiceAccountName: serviceAccountName,
+			Tolerations: []v1.Toleration{
+				{
+					Key:    "test-key",
+					Value:  "test-value",
+					Effect: v1.TaintEffectNoExecute,
+				},
+			},
 		}
 
 		moduleConfigToUse = moduleConfig
@@ -2151,6 +2173,13 @@ cp -R /firmware-path/* /tmp/firmware-path;
 			},
 		},
 		Spec: v1.PodSpec{
+			Tolerations: []v1.Toleration{
+				{
+					Key:    "test-key",
+					Value:  "test-value",
+					Effect: v1.TaintEffectNoExecute,
+				},
+			},
 			InitContainers: []v1.Container{
 				{
 					Name:            "image-extractor",
