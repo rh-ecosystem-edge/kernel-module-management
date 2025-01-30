@@ -19,9 +19,10 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	"os"
 	"strconv"
+
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 
 	buildv1 "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
@@ -158,7 +159,7 @@ func main() {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.ModuleCAReconcilerName)
 	}
 
-	mnc := controllers.NewModuleNMCReconciler(
+	mnc := controllers.NewModuleReconciler(
 		client,
 		kernelAPI,
 		registryAPI,
@@ -170,7 +171,7 @@ func main() {
 		scheme,
 	)
 	if err = mnc.SetupWithManager(mgr, !managed); err != nil {
-		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.ModuleNMCReconcilerName)
+		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.ModuleReconcilerName)
 	}
 
 	ctx := ctrl.SetupSignalHandler()
