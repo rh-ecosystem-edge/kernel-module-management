@@ -18,7 +18,7 @@ else
   echo "Install ACM..."
   oc create namespace ${ACM_NAMESPACE}
   oc apply -f ci/acm_subscription.yaml
-  timeout 1m bash -c '
+  timeout 5m bash -c '
     until oc get crds -o json | jq -er ".items[].metadata.name | select(.? | match(\"multiclusterhubs\"))"; do
       sleep 1;
     done

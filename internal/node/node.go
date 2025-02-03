@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/meta"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -13,11 +14,12 @@ import (
 //go:generate mockgen -source=node.go -package=node -destination=mock_node.go
 
 type Node interface {
-	IsNodeSchedulable(node *v1.Node) bool
-	GetNodesListBySelector(ctx context.Context, selector map[string]string) ([]v1.Node, error)
-	GetNumTargetedNodes(ctx context.Context, selector map[string]string) (int, error)
+	IsNodeSchedulable(node *v1.Node, tolerations []v1.Toleration) bool
+	GetNodesListBySelector(ctx context.Context, selector map[string]string, tolerations []v1.Toleration) ([]v1.Node, error)
+	GetNumTargetedNodes(ctx context.Context, selector map[string]string, tolerations []v1.Toleration) (int, error)
 	UpdateLabels(ctx context.Context, node *v1.Node, toBeAdded, toBeRemoved []string) error
 	NodeBecomeReadyAfter(node *v1.Node, checkTime metav1.Time) bool
+	RemoveNodeReadyLabels(ctx context.Context, node *v1.Node) error
 }
 
 type node struct {
@@ -30,16 +32,23 @@ func NewNode(client client.Client) Node {
 	}
 }
 
-func (n *node) IsNodeSchedulable(node *v1.Node) bool {
+func (n *node) IsNodeSchedulable(node *v1.Node, tolerations []v1.Toleration) bool {
 	for _, taint := range node.Spec.Taints {
-		if taint.Effect == v1.TaintEffectNoSchedule {
+		toleranceFound := false
+		for _, toleration := range tolerations {
+			if toleration.ToleratesTaint(&taint) {
+				toleranceFound = true
+				break
+			}
+		}
+		if !toleranceFound && (taint.Effect == v1.TaintEffectNoSchedule || taint.Effect == v1.TaintEffectNoExecute) {
 			return false
 		}
 	}
 	return true
 }
 
-func (n *node) GetNodesListBySelector(ctx context.Context, selector map[string]string) ([]v1.Node, error) {
+func (n *node) GetNodesListBySelector(ctx context.Context, selector map[string]string, tolerations []v1.Toleration) ([]v1.Node, error) {
 	logger := log.FromContext(ctx)
 	logger.V(1).Info("Listing nodes", "selector", selector)
 
@@ -51,15 +60,15 @@ func (n *node) GetNodesListBySelector(ctx context.Context, selector map[string]s
 	nodes := make([]v1.Node, 0, len(selectedNodes.Items))
 
 	for _, node := range selectedNodes.Items {
-		if n.IsNodeSchedulable(&node) {
+		if n.IsNodeSchedulable(&node, tolerations) {
 			nodes = append(nodes, node)
 		}
 	}
 	return nodes, nil
 }
 
-func (n *node) GetNumTargetedNodes(ctx context.Context, selector map[string]string) (int, error) {
-	targetedNode, err := n.GetNodesListBySelector(ctx, selector)
+func (n *node) GetNumTargetedNodes(ctx context.Context, selector map[string]string, tolerations []v1.Toleration) (int, error) {
+	targetedNode, err := n.GetNodesListBySelector(ctx, selector, tolerations)
 	if err != nil {
 		return 0, fmt.Errorf("could not list nodes: %v", err)
 	}
@@ -74,6 +83,20 @@ func (n *node) UpdateLabels(ctx context.Context, node *v1.Node, toBeAdded, toBeR
 
 	if err := n.client.Patch(ctx, node, patchFrom); err != nil {
 		return fmt.Errorf("could not patch node: %v", err)
+	}
+	return nil
+}
+
+func (n *node) RemoveNodeReadyLabels(ctx context.Context, node *v1.Node) error {
+	var labelsToRemove []string
+	for label := range node.GetLabels() {
+		if ok, _, _ := utils.IsKernelModuleReadyNodeLabel(label); ok ||
+			utils.IsDeprecatedKernelModuleReadyNodeLabel(label) {
+			labelsToRemove = append(labelsToRemove, label)
+		}
+	}
+	if err := n.UpdateLabels(ctx, node, []string{}, labelsToRemove); err != nil {
+		return fmt.Errorf("could update node %s labels: %v", node.Name, err)
 	}
 	return nil
 }
