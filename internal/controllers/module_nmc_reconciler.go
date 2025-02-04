@@ -365,7 +365,6 @@ func (mnrh *moduleNMCReconcilerHelper) enableModuleOnNode(ctx context.Context, m
 		ImagePullPolicy:       mld.ImagePullPolicy,
 		InTreeModulesToRemove: mld.InTreeModulesToRemove,
 		Modprobe:              mld.Modprobe,
-		Tolerations:           mld.Tolerations,
 	}
 
 	if tls := mld.RegistryTLS; tls != nil {
