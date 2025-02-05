@@ -19,7 +19,6 @@ package main
 import (
 	"flag"
 	"os"
-	"time"
 
 	buildv1 "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
@@ -43,7 +42,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	buildocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build/ocpbuild"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cache"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cluster"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cmd"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
@@ -154,13 +152,10 @@ func main() {
 	ctrlLogger := setupLogger.WithValues("name", hub.ManagedClusterModuleReconcilerName)
 	ctrlLogger.Info("Adding controller")
 
-	cache := cache.New[string](10 * time.Minute)
 	ctx := ctrl.SetupSignalHandler()
-	cache.StartCollecting(ctx, 10*time.Minute)
-
 	mcmr := hub.NewManagedClusterModuleReconciler(
 		client,
-		manifestwork.NewCreator(client, scheme, kernelAPI, registryAPI, authFactory, cache, operatorNamespace),
+		manifestwork.NewCreator(client, scheme, kernelAPI, registryAPI, authFactory, operatorNamespace),
 		cluster.NewClusterAPI(client, kernelAPI, buildAPI, signAPI, operatorNamespace),
 		statusupdater.NewManagedClusterModuleStatusUpdater(client),
 		filterAPI,
@@ -212,5 +207,4 @@ func main() {
 		cmd.FatalError(setupLogger, err, "problem running manager")
 	}
 
-	cache.WaitForTermination()
 }
