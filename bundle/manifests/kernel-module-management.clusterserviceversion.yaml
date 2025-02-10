@@ -63,7 +63,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-02-05T08:03:23Z"
+    createdAt: "2025-02-09T09:29:53Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -209,6 +209,18 @@ spec:
         - apiGroups:
           - kmm.sigs.x-k8s.io
           resources:
+          - moduleimagesconfigs
+          - nodemodulesconfigs
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - watch
+        - apiGroups:
+          - kmm.sigs.x-k8s.io
+          resources:
           - modules
           - preflightvalidations/status
           - preflightvalidationsocp
@@ -235,17 +247,6 @@ spec:
           - get
           - patch
           - update
-        - apiGroups:
-          - kmm.sigs.x-k8s.io
-          resources:
-          - nodemodulesconfigs
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - watch
         - apiGroups:
           - kmm.sigs.x-k8s.io
           resources:
