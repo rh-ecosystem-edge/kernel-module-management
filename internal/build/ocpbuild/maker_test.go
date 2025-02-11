@@ -144,7 +144,8 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 								v1.EnvVar{Name: "MOD_NAME", Value: moduleName},
 								v1.EnvVar{Name: "MOD_NAMESPACE", Value: namespace},
 							),
-							Volumes: buildVolumesFromBuildSecrets(buildSecrets),
+							Volumes:    buildVolumesFromBuildSecrets(buildSecrets),
+							PullSecret: &irs,
 						},
 					},
 					Output: buildv1.BuildOutput{
@@ -162,8 +163,8 @@ var _ = Describe("Maker_MakeBuildTemplate", func() {
 
 		if imagePullSecret != nil {
 			mld.ImageRepoSecret = imagePullSecret
-
 			expected.Spec.CommonSpec.Output.PushSecret = imagePullSecret
+			expected.Spec.Strategy.DockerStrategy.PullSecret = imagePullSecret
 		}
 
 		if len(buildSecrets) > 0 {

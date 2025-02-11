@@ -153,8 +153,9 @@ func (m *maker) MakeBuildTemplate(
 				Strategy: buildv1.BuildStrategy{
 					Type: buildv1.DockerBuildStrategyType,
 					DockerStrategy: &buildv1.DockerBuildStrategy{
-						BuildArgs: envVarsFromKMMBuildArgs(buildArgs),
-						Volumes:   buildVolumesFromBuildSecrets(kmmBuild.Secrets),
+						BuildArgs:  envVarsFromKMMBuildArgs(buildArgs),
+						Volumes:    buildVolumesFromBuildSecrets(kmmBuild.Secrets),
+						PullSecret: mld.ImageRepoSecret,
 					},
 				},
 				Output:         buildTarget,
