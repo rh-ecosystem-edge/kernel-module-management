@@ -142,7 +142,7 @@ func main() {
 	)
 
 	kernelAPI := module.NewKernelMapper(buildHelperAPI, sign.NewSignerHelper())
-	micAPI := mic.NewModuleImagesConfigAPI(client, scheme)
+	micAPI := mic.New(client, scheme)
 
 	dpc := controllers.NewDevicePluginReconciler(
 		client,
