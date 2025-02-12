@@ -226,8 +226,6 @@ spec:
                   - image
                   type: object
                 type: array
-            required:
-            - images
             type: object
           status:
             description: |-
