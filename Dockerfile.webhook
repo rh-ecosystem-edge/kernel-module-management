@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM registry.access.redhat.com/ubi9/go-toolset:1.21 as builder
+FROM golang:1.23 as builder
 
 # Copy the Go Modules manifests
 COPY go.mod go.mod
@@ -27,6 +27,6 @@ RUN make webhook-server
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.4
 
-COPY --from=builder /opt/app-root/src/webhook-server /usr/local/bin/webhook-server
+COPY --from=builder /go/webhook-server /usr/local/bin/webhook-server
 
 ENTRYPOINT ["/usr/local/bin/webhook-server"]
