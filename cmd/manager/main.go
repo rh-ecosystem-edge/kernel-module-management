@@ -24,6 +24,7 @@ import (
 
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mic"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/pod"
 
 	buildv1 "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
@@ -181,7 +182,9 @@ func main() {
 
 	eventRecorder := mgr.GetEventRecorderFor("kmm")
 
-	if err = controllers.NewNMCReconciler(client, scheme, workerImage, caHelper, &cfg.Worker, eventRecorder, nodeAPI).SetupWithManager(ctx, mgr); err != nil {
+	workerPodManagerAPI := pod.NewWorkerPodManager(client, workerImage, scheme, &cfg.Worker)
+	if err = controllers.NewNMCReconciler(client, scheme, workerImage, caHelper, &cfg.Worker, eventRecorder, nodeAPI,
+		workerPodManagerAPI).SetupWithManager(ctx, mgr); err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.NodeModulesConfigReconcilerName)
 	}
 
