@@ -1123,7 +1123,7 @@ k8s.io/client-go/util/homedir
 k8s.io/client-go/util/keyutil
 k8s.io/client-go/util/watchlist
 k8s.io/client-go/util/workqueue
-# k8s.io/component-base v0.32.1
+# k8s.io/component-base v0.32.2
 ## explicit; go 1.23.0
 k8s.io/component-base/cli/flag
 k8s.io/component-base/featuregate
@@ -1159,7 +1159,7 @@ k8s.io/kube-openapi/pkg/validation/errors
 k8s.io/kube-openapi/pkg/validation/spec
 k8s.io/kube-openapi/pkg/validation/strfmt
 k8s.io/kube-openapi/pkg/validation/strfmt/bson
-# k8s.io/kubectl v0.32.1
+# k8s.io/kubectl v0.32.2
 ## explicit; go 1.23.0
 k8s.io/kubectl/pkg/cmd/util/podcmd
 k8s.io/kubectl/pkg/util/podutils
