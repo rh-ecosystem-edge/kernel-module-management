@@ -165,6 +165,9 @@ spec:
                     image:
                       description: image
                       type: string
+                    kernelVersion:
+                      description: kernel version for which this image is targeted
+                      type: string
                     sign:
                       description: Sign contains sign instructions, in case image
                         needs signing
@@ -230,6 +233,7 @@ spec:
                   required:
                   - action
                   - image
+                  - kernelVersion
                   type: object
                 type: array
             required:
