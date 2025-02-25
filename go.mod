@@ -9,7 +9,7 @@ require (
 	github.com/budougumi0617/cmpmock v0.1.1
 	github.com/containers/image/v5 v5.34.0
 	github.com/go-logr/logr v1.4.2
-	github.com/google/go-cmp v0.6.0
+	github.com/google/go-cmp v0.7.0
 	github.com/google/go-containerregistry v0.20.3
 	github.com/google/go-containerregistry/pkg/authn/kubernetes v0.0.0-20230523181351-c3f8a49229d3
 	github.com/mitchellh/hashstructure/v2 v2.0.2
