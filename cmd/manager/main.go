@@ -31,8 +31,8 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta2"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	buildocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build/ocpbuild"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cmd"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/config"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
@@ -44,7 +44,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ocp/ca"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/preflight"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
 	signocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/sign/ocpbuild"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
@@ -132,7 +131,7 @@ func main() {
 
 	metricsAPI := metrics.New()
 	metricsAPI.Register()
-	buildHelperAPI := build.NewHelper()
+	buildSignHelperAPI := buildsign.NewHelper()
 	nodeAPI := node.NewNode(client)
 	registryAPI := registry.NewRegistry()
 	authFactory := auth.NewRegistryAuthGetterFactory(
@@ -142,7 +141,7 @@ func main() {
 		),
 	)
 
-	kernelAPI := module.NewKernelMapper(buildHelperAPI, sign.NewSignerHelper())
+	kernelAPI := module.NewKernelMapper(buildSignHelperAPI)
 	micAPI := mic.New(client, scheme)
 
 	dpc := controllers.NewDevicePluginReconciler(
@@ -215,7 +214,7 @@ func main() {
 	} else {
 		buildAPI := buildocpbuild.NewManager(
 			client,
-			buildocpbuild.NewMaker(client, buildHelperAPI, scheme, kernelOsDtkMapping),
+			buildocpbuild.NewMaker(client, buildSignHelperAPI, scheme, kernelOsDtkMapping),
 			ocpbuildutils.NewOCPBuildsHelper(client, buildocpbuild.BuildType),
 			authFactory,
 			registryAPI,
