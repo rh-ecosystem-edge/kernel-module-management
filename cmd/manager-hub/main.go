@@ -40,8 +40,8 @@ import (
 
 	"github.com/rh-ecosystem-edge/kernel-module-management/api-hub/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/build"
 	buildocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build/ocpbuild"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cluster"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cmd"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
@@ -53,7 +53,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/sign"
 	signocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/sign/ocpbuild"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
@@ -121,7 +120,7 @@ func main() {
 	metricsAPI := metrics.New()
 	metricsAPI.Register()
 
-	buildHelperAPI := build.NewHelper()
+	buildSignHelperAPI := buildsign.NewHelper()
 	registryAPI := registry.NewRegistry()
 
 	authFactory := auth.NewRegistryAuthGetterFactory(
@@ -133,7 +132,7 @@ func main() {
 
 	buildAPI := buildocpbuild.NewManager(
 		client,
-		buildocpbuild.NewMaker(client, buildHelperAPI, scheme, kernelOsDtkMapping),
+		buildocpbuild.NewMaker(client, buildSignHelperAPI, scheme, kernelOsDtkMapping),
 		ocpbuildutils.NewOCPBuildsHelper(client, buildocpbuild.BuildType),
 		authFactory,
 		registryAPI,
@@ -147,7 +146,7 @@ func main() {
 		registryAPI,
 	)
 
-	kernelAPI := module.NewKernelMapper(buildHelperAPI, sign.NewSignerHelper())
+	kernelAPI := module.NewKernelMapper(buildSignHelperAPI)
 
 	ctrlLogger := setupLogger.WithValues("name", hub.ManagedClusterModuleReconcilerName)
 	ctrlLogger.Info("Adding controller")
