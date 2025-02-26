@@ -3,7 +3,7 @@ kind: ClusterServiceVersion
 metadata:
   annotations:
     alm-examples: '[]'
-    capabilities: Basic Install
+    capabilities: Seamless Upgrades
     operatorframework.io/suggested-namespace: openshift-kmm-hub
     repository: https://github.com/rh-ecosystem-edge/kernel-module-management
   name: kernel-module-management-hub.v0.0.0

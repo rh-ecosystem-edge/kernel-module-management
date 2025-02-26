@@ -36,8 +36,8 @@ metadata:
           }
         }
       ]
-    capabilities: Basic Install
-    createdAt: "2025-02-09T09:29:55Z"
+    capabilities: Seamless Upgrades
+    createdAt: "2025-02-26T09:17:19Z"
     operatorframework.io/suggested-namespace: openshift-kmm-hub
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
