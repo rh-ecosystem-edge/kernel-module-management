@@ -160,6 +160,7 @@ func (m *maker) MakeBuildTemplate(
 				Output:         buildTarget,
 				NodeSelector:   selector,
 				MountTrustedCA: ptr.To(true),
+				Tolerations:    mld.Tolerations,
 			},
 		},
 	}

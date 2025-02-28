@@ -102,6 +102,10 @@ type CommonSpec struct {
 	// managed by the build container, and any changes to this directory or its subdirectories (for
 	// example - within a Dockerfile `RUN` instruction) are not persisted in the build's output image.
 	MountTrustedCA *bool `json:"mountTrustedCA,omitempty" protobuf:"varint,10,opt,name=mountTrustedCA"`
+
+    // If specified, the pod's tolerations.
+    // +optional
+    Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
 }
 
 // BuildTriggerCause holds information about a triggered build. It is used for
