@@ -1,11 +1,10 @@
 module github.com/rh-ecosystem-edge/kernel-module-management
 
 go 1.23.0
-
-toolchain go1.23.4
+toolchain go1.24.0
 
 require (
-	github.com/a8m/envsubst v1.4.2
+	github.com/a8m/envsubst v1.4.3
 	github.com/budougumi0617/cmpmock v0.1.1
 	github.com/containers/image/v5 v5.34.1
 	github.com/go-logr/logr v1.4.2
