@@ -33,7 +33,7 @@ github.com/cespare/xxhash/v2
 ## explicit; go 1.22.0
 github.com/containerd/stargz-snapshotter/estargz
 github.com/containerd/stargz-snapshotter/estargz/errorutil
-# github.com/containers/image/v5 v5.34.1
+# github.com/containers/image/v5 v5.34.2
 ## explicit; go 1.22.8
 github.com/containers/image/v5/docker/reference
 github.com/containers/image/v5/internal/multierr
@@ -42,7 +42,7 @@ github.com/containers/image/v5/pkg/compression/internal
 github.com/containers/image/v5/pkg/compression/types
 github.com/containers/image/v5/pkg/sysregistriesv2
 github.com/containers/image/v5/types
-# github.com/containers/storage v1.57.1
+# github.com/containers/storage v1.57.2
 ## explicit; go 1.22.0
 github.com/containers/storage/pkg/fileutils
 github.com/containers/storage/pkg/homedir
