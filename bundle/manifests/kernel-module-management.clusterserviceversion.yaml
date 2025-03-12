@@ -63,7 +63,7 @@ metadata:
         }
       ]
     capabilities: Seamless Upgrades
-    createdAt: "2025-03-20T11:15:21Z"
+    createdAt: "2025-04-30T11:06:55Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -209,6 +209,27 @@ spec:
         - apiGroups:
           - kmm.sigs.x-k8s.io
           resources:
+          - modulebuildsignconfigs
+          verbs:
+          - create
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - kmm.sigs.x-k8s.io
+          resources:
+          - modulebuildsignconfigs/status
+          - modules/status
+          - preflightvalidationsocp/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - kmm.sigs.x-k8s.io
+          resources:
           - moduleimagesconfigs
           - nodemodulesconfigs
           verbs:
@@ -237,15 +258,6 @@ spec:
           - preflightvalidations/finalizers
           - preflightvalidationsocp/finalizers
           verbs:
-          - update
-        - apiGroups:
-          - kmm.sigs.x-k8s.io
-          resources:
-          - modules/status
-          - preflightvalidationsocp/status
-          verbs:
-          - get
-          - patch
           - update
         - apiGroups:
           - kmm.sigs.x-k8s.io
