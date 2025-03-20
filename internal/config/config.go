@@ -78,6 +78,7 @@ func (c *Config) ManagerOptions(logger logr.Logger) *manager.Options {
 	metrics := server.Options{
 		BindAddress:   c.Metrics.BindAddress,
 		SecureServing: c.Metrics.SecureServing,
+		CertDir:       "/certs",
 	}
 
 	if c.Metrics.EnableAuthnAuthz {

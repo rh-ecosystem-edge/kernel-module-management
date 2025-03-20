@@ -37,7 +37,7 @@ metadata:
         }
       ]
     capabilities: Seamless Upgrades
-    createdAt: "2025-03-03T10:39:34Z"
+    createdAt: "2025-03-20T12:29:17Z"
     operatorframework.io/suggested-namespace: openshift-kmm-hub
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -247,6 +247,9 @@ spec:
                 - mountPath: /etc/pki/ca-trust/extracted/pem
                   name: trusted-ca
                   readOnly: true
+                - mountPath: /certs
+                  name: metrics-tls
+                  readOnly: true
                 - mountPath: /controller_config.yaml
                   name: manager-config
                   subPath: controller_config.yaml
@@ -276,6 +279,10 @@ spec:
                       - key: service-ca.crt
                         path: ocp-service-ca-bundle.pem
                       name: kmm-operator-hub-service-ca
+              - name: metrics-tls
+                secret:
+                  defaultMode: 420
+                  secretName: metrics-service-cert
               - configMap:
                   name: kmm-operator-hub-manager-config
                 name: manager-config
