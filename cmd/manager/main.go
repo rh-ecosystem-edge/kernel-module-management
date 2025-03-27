@@ -22,6 +22,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mbsc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mic"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/pod"
@@ -31,8 +32,8 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta2"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
-	buildocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build/ocpbuild"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign"
+	buildsignocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign/ocpbuild"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cmd"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/config"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
@@ -42,11 +43,8 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ocp/ca"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/preflight"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
-	signocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/sign/ocpbuild"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
-	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -143,6 +141,8 @@ func main() {
 
 	kernelAPI := module.NewKernelMapper(buildSignHelperAPI)
 	micAPI := mic.New(client, scheme)
+	mbscAPI := mbsc.New(client, scheme)
+	imagePullerAPI := pod.NewImagePuller(client, scheme)
 
 	dpc := controllers.NewDevicePluginReconciler(
 		client,
@@ -201,6 +201,10 @@ func main() {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.NodeLabelModuleVersionReconcilerName)
 	}
 
+	if err = controllers.NewMICReconciler(client, micAPI, mbscAPI, imagePullerAPI, scheme).SetupWithManager(mgr); err != nil {
+		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.MICReconcilerName)
+	}
+
 	if managed {
 		setupLogger.Info("Starting as managed")
 
@@ -212,30 +216,12 @@ func main() {
 			cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.NodeKernelClusterClaimReconcilerName)
 		}
 	} else {
-		buildAPI := buildocpbuild.NewManager(
-			client,
-			buildocpbuild.NewMaker(client, buildSignHelperAPI, scheme, kernelOsDtkMapping),
-			ocpbuildutils.NewOCPBuildsHelper(client, buildocpbuild.BuildType),
-			authFactory,
-			registryAPI,
-		)
+		signImage := cmd.GetEnvOrFatalError("RELATED_IMAGE_SIGN", setupLogger)
+		buildSignAPI := buildsignocpbuild.NewManager(client, buildSignHelperAPI, kernelOsDtkMapping, signImage, scheme)
 
-		signAPI := signocpbuild.NewManager(
-			client,
-			signocpbuild.NewMaker(client, cmd.GetEnvOrFatalError("RELATED_IMAGE_SIGN", setupLogger), scheme),
-			ocpbuildutils.NewOCPBuildsHelper(client, signocpbuild.BuildType),
-			authFactory,
-			registryAPI,
-		)
-		bsc := controllers.NewBuildSignReconciler(
-			client,
-			buildAPI,
-			signAPI,
-			kernelAPI,
-			filterAPI,
-			nodeAPI)
-		if err = bsc.SetupWithManager(mgr, constants.KernelLabel); err != nil {
-			cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.BuildSignReconcilerName)
+		mbscr := controllers.NewMBSCReconciler(client, buildSignAPI, mbscAPI)
+		if err = mbscr.SetupWithManager(mgr); err != nil {
+			cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.MBSCReconcilerName)
 		}
 
 		helper := controllers.NewJobEventReconcilerHelper(client)
@@ -248,24 +234,27 @@ func main() {
 			cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.JobGCReconcilerName)
 		}
 
-		preflightStatusUpdaterAPI := preflight.NewStatusUpdater(client)
-		preflightAPI := preflight.NewPreflightAPI(client, buildAPI, signAPI, registryAPI, kernelAPI, preflightStatusUpdaterAPI, authFactory)
+		//[TODO] - update the preflight flow with the MIC/MBSC implementation and then uncomment the preflight conroller
+		/*
+			preflightStatusUpdaterAPI := preflight.NewStatusUpdater(client)
+			preflightAPI := preflight.NewPreflightAPI(client, buildAPI, signAPI, registryAPI, kernelAPI, preflightStatusUpdaterAPI, authFactory)
 
-		if err = controllers.NewPreflightValidationReconciler(client, filterAPI, metricsAPI, preflightStatusUpdaterAPI, preflightAPI).SetupWithManager(mgr); err != nil {
-			cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.PreflightValidationReconcilerName)
-		}
+			if err = controllers.NewPreflightValidationReconciler(client, filterAPI, metricsAPI, preflightStatusUpdaterAPI, preflightAPI).SetupWithManager(mgr); err != nil {
+				cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.PreflightValidationReconcilerName)
+			}
 
-		preflightOCPStatusUpdaterAPI := preflight.NewOCPStatusUpdater(client)
+			preflightOCPStatusUpdaterAPI := preflight.NewOCPStatusUpdater(client)
 
-		if err = controllers.NewPreflightValidationOCPReconciler(client,
-			filterAPI,
-			registryAPI,
-			authFactory,
-			kernelOsDtkMapping,
-			preflightOCPStatusUpdaterAPI,
-			scheme).SetupWithManager(mgr); err != nil {
-			cmd.FatalError(setupLogger, err, "unable to create controller", "controller", controllers.PreflightValidationOCPReconcilerName)
-		}
+			if err = controllers.NewPreflightValidationOCPReconciler(client,
+				filterAPI,
+				registryAPI,
+				authFactory,
+				kernelOsDtkMapping,
+				preflightOCPStatusUpdaterAPI,
+				scheme).SetupWithManager(mgr); err != nil {
+				cmd.FatalError(setupLogger, err, "unable to create controller", "controller", controllers.PreflightValidationOCPReconcilerName)
+			}
+		*/
 	}
 
 	dtkNSN := types.NamespacedName{
