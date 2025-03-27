@@ -98,7 +98,18 @@ rules:
 - apiGroups:
   - kmm.sigs.x-k8s.io
   resources:
+  - modulebuildsignconfigs/finalizers
+  - moduleimagesconfigs/finalizers
+  - modules/finalizers
+  - preflightvalidations/finalizers
+  - preflightvalidationsocp/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - kmm.sigs.x-k8s.io
+  resources:
   - modulebuildsignconfigs/status
+  - moduleimagesconfigs/status
   - modules/status
   - preflightvalidationsocp/status
   verbs:
@@ -129,14 +140,6 @@ rules:
   - patch
   - update
   - watch
-- apiGroups:
-  - kmm.sigs.x-k8s.io
-  resources:
-  - modules/finalizers
-  - preflightvalidations/finalizers
-  - preflightvalidationsocp/finalizers
-  verbs:
-  - update
 - apiGroups:
   - kmm.sigs.x-k8s.io
   resources:

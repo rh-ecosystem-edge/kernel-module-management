@@ -53,7 +53,7 @@ func NewMBSCReconciler(
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *mbscReconciler) SetupWithManager(mgr ctrl.Manager, kernelLabel string) error {
+func (r *mbscReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&kmmv1beta1.ModuleBuildSignConfig{}).
 		Owns(&buildv1.Build{}).
@@ -65,6 +65,7 @@ func (r *mbscReconciler) SetupWithManager(mgr ctrl.Manager, kernelLabel string) 
 
 //+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=modulebuildsignconfigs,verbs=get;list;watch;update;patch;create
 //+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=modulebuildsignconfigs/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=modulebuildsignconfigs/finalizers,verbs=update
 //+kubebuilder:rbac:groups="core",resources=secrets,verbs=get;list;watch
 //+kubebuilder:rbac:groups="core",resources=configmaps,verbs=get;list;watch
 //+kubebuilder:rbac:groups="core",resources=pods,verbs=create;list;watch;delete
