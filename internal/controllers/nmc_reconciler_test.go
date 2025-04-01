@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"reflect"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -728,11 +727,8 @@ var _ = Describe("nmcReconcilerHelperImpl_ProcessModuleSpec", func() {
 	}
 	node := &v1.Node{}
 
-	now := metav1.Now()
-
 	status := &kmmv1beta1.NodeModuleStatus{
-		Config:             moduleConfig,
-		LastTransitionTime: metav1.Time{Time: now.Add(-1 * time.Minute)},
+		Config: moduleConfig,
 		ModuleItem: kmmv1beta1.ModuleItem{
 			Name:      name,
 			Namespace: namespace,
@@ -1257,8 +1253,7 @@ var _ = Describe("nmcReconcilerHelperImpl_SyncStatus", func() {
 				ServiceAccountName: serviceAccountName,
 				Tolerations:        []v1.Toleration{testToleration},
 			},
-			Config:             cfg,
-			LastTransitionTime: now,
+			Config: cfg,
 		}
 
 		Expect(nmc.Status.Modules[0]).To(BeComparableTo(expectedStatus))
