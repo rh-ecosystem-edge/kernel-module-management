@@ -577,10 +577,6 @@ func (h *nmcReconcilerHelperImpl) SyncStatus(ctx context.Context, nmcObj *kmmv1b
 			status.ServiceAccountName = p.Spec.ServiceAccountName
 			status.Tolerations = p.Spec.Tolerations
 
-			status.LastTransitionTime = GetContainerStatus(p.Status.ContainerStatuses, pod.WorkerContainerName).
-				State.
-				Terminated.
-				FinishedAt
 			status.BootId = node.Status.NodeInfo.BootID
 
 			nmc.SetModuleStatus(&nmcObj.Status.Modules, *status)
