@@ -744,6 +744,7 @@ var _ = Describe("enableModuleOnNode", func() {
 	const (
 		moduleNamespace = "moduleNamespace"
 		moduleName      = "moduleName"
+		containerImage  = "containerImage"
 	)
 
 	var (
@@ -752,7 +753,7 @@ var _ = Describe("enableModuleOnNode", func() {
 		clnt                 *client.MockClient
 		rgst                 *registry.MockRegistry
 		authFactory          *auth.MockRegistryAuthGetterFactory
-		authGetter           *auth.MockRegistryAuthGetter
+		mockMIC              *mic.MockMIC
 		mrh                  moduleReconcilerHelperAPI
 		helper               *nmc.MockHelper
 		mld                  *api.ModuleLoaderData
@@ -767,8 +768,8 @@ var _ = Describe("enableModuleOnNode", func() {
 		helper = nmc.NewMockHelper(ctrl)
 		rgst = registry.NewMockRegistry(ctrl)
 		authFactory = auth.NewMockRegistryAuthGetterFactory(ctrl)
-		authGetter = &auth.MockRegistryAuthGetter{}
-		mrh = newModuleReconcilerHelper(clnt, nil, rgst, nil, helper, authFactory, operatorNamespace, scheme)
+		mockMIC = mic.NewMockMIC(ctrl)
+		mrh = newModuleReconcilerHelper(clnt, nil, rgst, mockMIC, helper, authFactory, operatorNamespace, scheme)
 		node = v1.Node{
 			ObjectMeta: metav1.ObjectMeta{Name: "nodeName"},
 		}
@@ -779,7 +780,7 @@ var _ = Describe("enableModuleOnNode", func() {
 			Name:                  moduleName,
 			Namespace:             moduleNamespace,
 			InTreeModulesToRemove: []string{"InTreeModuleToRemove"},
-			ContainerImage:        "containerImage",
+			ContainerImage:        containerImage,
 		}
 
 		expectedModuleConfig = &kmmv1beta1.ModuleConfig{
@@ -790,34 +791,24 @@ var _ = Describe("enableModuleOnNode", func() {
 		}
 	})
 
-	It("Build configured and image does not exist", func() {
-		mld.Build = &kmmv1beta1.Build{}
+	It("should fail if we failed to get MIC", func() {
+
+		mockMIC.EXPECT().Get(ctx, moduleName, moduleNamespace).Return(nil, errors.New("some error"))
+
+		err := mrh.enableModuleOnNode(ctx, mld, &node)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to get moduleImagesConfig"))
+	})
+
+	It("should do nothing if the image doesn't exist", func() {
+
 		gomock.InOrder(
-			authFactory.EXPECT().NewRegistryAuthGetterFrom(mld).Return(authGetter),
-			rgst.EXPECT().ImageExists(ctx, mld.ContainerImage, gomock.Any(), authGetter).Return(false, nil),
+			mockMIC.EXPECT().Get(ctx, moduleName, moduleNamespace).Return(&kmmv1beta1.ModuleImagesConfig{}, nil),
+			mockMIC.EXPECT().GetImageState(gomock.Any(), containerImage).Return(kmmv1beta1.ImageDoesNotExist),
 		)
+
 		err := mrh.enableModuleOnNode(ctx, mld, &node)
 		Expect(err).NotTo(HaveOccurred())
-	})
-
-	It("Sign configured and image does not exist", func() {
-		mld.Sign = &kmmv1beta1.Sign{}
-		gomock.InOrder(
-			authFactory.EXPECT().NewRegistryAuthGetterFrom(mld).Return(authGetter),
-			rgst.EXPECT().ImageExists(ctx, mld.ContainerImage, gomock.Any(), authGetter).Return(false, fmt.Errorf("some error")),
-		)
-		err := mrh.enableModuleOnNode(ctx, mld, &node)
-		Expect(err).To(HaveOccurred())
-	})
-
-	It("Build configured and failed to check if image exists", func() {
-		mld.Build = &kmmv1beta1.Build{}
-		gomock.InOrder(
-			authFactory.EXPECT().NewRegistryAuthGetterFrom(mld).Return(authGetter),
-			rgst.EXPECT().ImageExists(ctx, mld.ContainerImage, gomock.Any(), authGetter).Return(false, fmt.Errorf("some error")),
-		)
-		err := mrh.enableModuleOnNode(ctx, mld, &node)
-		Expect(err).To(HaveOccurred())
 	})
 
 	It("NMC does not exist", func() {
@@ -826,6 +817,8 @@ var _ = Describe("enableModuleOnNode", func() {
 		}
 
 		gomock.InOrder(
+			mockMIC.EXPECT().Get(ctx, moduleName, moduleNamespace).Return(&kmmv1beta1.ModuleImagesConfig{}, nil),
+			mockMIC.EXPECT().GetImageState(gomock.Any(), containerImage).Return(kmmv1beta1.ImageExists),
 			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).Return(apierrors.NewNotFound(schema.GroupResource{}, "whatever")),
 			helper.EXPECT().SetModuleConfig(nmc, mld, expectedModuleConfig).Return(nil),
 			clnt.EXPECT().Create(ctx, gomock.Any()).Return(nil),
@@ -853,6 +846,8 @@ var _ = Describe("enableModuleOnNode", func() {
 		)
 
 		gomock.InOrder(
+			mockMIC.EXPECT().Get(ctx, moduleName, moduleNamespace).Return(&kmmv1beta1.ModuleImagesConfig{}, nil),
+			mockMIC.EXPECT().GetImageState(gomock.Any(), containerImage).Return(kmmv1beta1.ImageExists),
 			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ interface{}, _ interface{}, nmc *kmmv1beta1.NodeModulesConfig, _ ...ctrlclient.GetOption) error {
 					nmc.SetName(node.Name)
