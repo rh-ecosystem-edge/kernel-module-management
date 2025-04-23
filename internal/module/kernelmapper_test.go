@@ -29,6 +29,7 @@ var _ = Describe("GetModuleLoaderDataForKernel", func() {
 		kh = NewMockkernelMapperHelperAPI(ctrl)
 		km = &kernelMapper{helper: kh}
 		mod = kmmv1beta1.Module{}
+		mod.Spec.ModuleLoader = &kmmv1beta1.ModuleLoaderSpec{}
 	})
 
 	AfterEach(func() {
@@ -164,8 +165,8 @@ var _ = Describe("prepareModuleLoaderData", func() {
 		mockCombiner = NewMockCombiner(ctrl)
 		kh = newKernelMapperHelper(mockCombiner)
 		mod = kmmv1beta1.Module{}
-		mod.Spec.ModuleLoader.Container.ContainerImage = "spec container image"
-		mod.Spec.ModuleLoader.Container.ImagePullPolicy = "Always"
+		ModuleLoader := kmmv1beta1.ModuleLoaderSpec{Container: kmmv1beta1.ModuleLoaderContainerSpec{ContainerImage: "spec container image", ImagePullPolicy: "Always"}}
+		mod.Spec.ModuleLoader = &ModuleLoader
 		mapping = kmmv1beta1.KernelMapping{}
 	})
 

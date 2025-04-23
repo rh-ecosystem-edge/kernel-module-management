@@ -2732,7 +2732,6 @@ spec:
                       type: object
                     type: array
                 required:
-                - moduleLoader
                 - selector
                 type: object
               selector:
