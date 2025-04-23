@@ -37,7 +37,7 @@ metadata:
         }
       ]
     capabilities: Seamless Upgrades
-    createdAt: "2025-05-14T05:51:10Z"
+    createdAt: "2025-05-21T13:45:02Z"
     operatorframework.io/suggested-namespace: openshift-kmm-hub
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -313,17 +313,17 @@ spec:
             spec:
               affinity:
                 nodeAffinity:
-                  requiredDuringSchedulingIgnoredDuringExecution:
-                    nodeSelectorTerms:
-                    - matchExpressions:
+                  preferredDuringSchedulingIgnoredDuringExecution:
+                  - preference:
+                      matchExpressions:
                       - key: node-role.kubernetes.io/control-plane
                         operator: Exists
-                    - matchExpressions:
+                    weight: 1
+                  - preference:
+                      matchExpressions:
                       - key: node-role.kubernetes.io/master
                         operator: Exists
-                    - matchExpressions:
-                      - key: kmm.node.kubernetes.io/control-plane
-                        operator: Exists
+                    weight: 1
               containers:
               - args:
                 - --config=controller_config.yaml
