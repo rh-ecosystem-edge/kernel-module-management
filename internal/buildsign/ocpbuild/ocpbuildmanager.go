@@ -38,6 +38,7 @@ type ocpbuildManager interface {
 	createOCPBuild(ctx context.Context, build *buildv1.Build) error
 	deleteOCPBuild(ctx context.Context, build *buildv1.Build) error
 	ocpbuildLabels(modName, kernelVersion, ocpbuildType string) map[string]string
+	ocpbuildAnnotations(hash uint64) map[string]string
 }
 
 type ocpbuildManagerImpl struct {
@@ -147,6 +148,10 @@ func (omi *ocpbuildManagerImpl) ocpbuildLabels(modName, kernelVersion, ocpbuildT
 	labels["app.kubernetes.io/part-of"] = "kmm"
 
 	return labels
+}
+
+func (omi *ocpbuildManagerImpl) ocpbuildAnnotations(hash uint64) map[string]string {
+	return map[string]string{hashAnnotation: fmt.Sprintf("%d", hash)}
 }
 
 func filterOCPBuildsByOwner(builds []buildv1.Build, owner metav1.Object) []buildv1.Build {
