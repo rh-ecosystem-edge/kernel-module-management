@@ -23,526 +23,668 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	workv1 "open-cluster-management.io/api/work/v1"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/rh-ecosystem-edge/kernel-module-management/api-hub/v1beta1"
+	hubv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api-hub/v1beta1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cluster"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/manifestwork"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mic"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 )
 
 var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
+
+	const (
+		mcmName = "mcm-name"
+	)
+
 	var (
-		ctrl           *gomock.Controller
-		clnt           *client.MockClient
-		mockMW         *manifestwork.MockManifestWorkCreator
-		mockClusterAPI *cluster.MockClusterAPI
-		mockSU         *statusupdater.MockManagedClusterModuleStatusUpdater
+		ctx                   context.Context
+		ctrl                  *gomock.Controller
+		mockClient            *client.MockClient
+		mockManifestAPI       *manifestwork.MockManifestWorkCreator
+		mockClusterAPI        *cluster.MockClusterAPI
+		mockStatusupdaterAPI  *statusupdater.MockManagedClusterModuleStatusUpdater
+		mockMCMReconHelperAPI *MockmanagedClusterModuleReconcilerHelperAPI
 	)
 
 	BeforeEach(func() {
+		ctx = context.Background()
 		ctrl = gomock.NewController(GinkgoT())
-		clnt = client.NewMockClient(ctrl)
-		mockMW = manifestwork.NewMockManifestWorkCreator(ctrl)
+		mockClient = client.NewMockClient(ctrl)
+		mockManifestAPI = manifestwork.NewMockManifestWorkCreator(ctrl)
 		mockClusterAPI = cluster.NewMockClusterAPI(ctrl)
-		mockSU = statusupdater.NewMockManagedClusterModuleStatusUpdater(ctrl)
+		mockStatusupdaterAPI = statusupdater.NewMockManagedClusterModuleStatusUpdater(ctrl)
+		mockMCMReconHelperAPI = NewMockmanagedClusterModuleReconcilerHelperAPI(ctrl)
 	})
 
-	const (
-		defaultJobNamespace = "some-namespace"
+	It("should fail if we fail to get selected managed-clusters", func() {
+		mcm := &v1beta1.ManagedClusterModule{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: mcmName,
+			},
+			Spec: v1beta1.ManagedClusterModuleSpec{},
+		}
 
-		mcmName = "test-module"
-
-		kernelVersion = "1.2.3"
-	)
-
-	nsn := types.NamespacedName{
-		Name: mcmName,
-	}
-
-	req := reconcile.Request{NamespacedName: nsn}
-
-	ctx := context.Background()
-
-	It("should do nothing if the ManagedClusterModule is not available anymore", func() {
-		mockClusterAPI.EXPECT().RequestedManagedClusterModule(ctx, req.NamespacedName).
-			Return(
-				nil,
-				apierrors.NewNotFound(schema.GroupResource{}, mcmName),
-			)
+		mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, mcm).
+			Return(&clusterv1.ManagedClusterList{}, errors.New("some error"))
 
 		mcmr := NewManagedClusterModuleReconciler(
-			clnt,
+			nil,
 			nil,
 			mockClusterAPI,
 			nil,
 			nil,
-			defaultJobNamespace,
-		)
-		Expect(
-			mcmr.Reconcile(ctx, req),
-		).To(
-			Equal(reconcile.Result{}),
-		)
-	})
-
-	It("should return an error when fetching the requested ManagedClusterModule fails", func() {
-		mockClusterAPI.EXPECT().RequestedManagedClusterModule(ctx, req.NamespacedName).
-			Return(nil, errors.New("test"))
-
-		mr := NewManagedClusterModuleReconciler(
-			clnt,
 			nil,
-			mockClusterAPI,
-			nil,
-			nil,
-			defaultJobNamespace,
 		)
 
-		res, err := mr.Reconcile(ctx, req)
+		_, err := mcmr.Reconcile(context.Background(), mcm)
 		Expect(err).To(HaveOccurred())
-		Expect(res).To(Equal(reconcile.Result{}))
+		Expect(err.Error()).To(ContainSubstring("failed to get selected clusters"))
 	})
 
-	It("should return an error when fetching selected managed clusters fails", func() {
+	It("should fail if we fail to garbage collect", func() {
+
 		mcm := &v1beta1.ManagedClusterModule{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: mcmName,
 			},
-			Spec: v1beta1.ManagedClusterModuleSpec{
-				ModuleSpec: kmmv1beta1.ModuleSpec{},
-				Selector:   map[string]string{"key": "value"},
-			},
+			Spec: v1beta1.ManagedClusterModuleSpec{},
+		}
+
+		expectedClusters := &clusterv1.ManagedClusterList{
+			Items: []clusterv1.ManagedCluster{},
 		}
 
 		gomock.InOrder(
-			mockClusterAPI.EXPECT().RequestedManagedClusterModule(ctx, req.NamespacedName).Return(mcm, nil),
-			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, gomock.Any()).
-				Return(
-					&clusterv1.ManagedClusterList{},
-					apierrors.NewServiceUnavailable("Service unavailable"),
-				),
+			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, mcm).Return(expectedClusters, nil),
+			mockManifestAPI.EXPECT().GarbageCollect(ctx, *expectedClusters, *mcm).Return(errors.New("some error")),
 		)
 
-		mr := NewManagedClusterModuleReconciler(
-			clnt,
-			nil,
-			mockClusterAPI,
-			nil,
-			nil,
-			defaultJobNamespace,
-		)
+		mcmr := NewManagedClusterModuleReconciler(nil, mockManifestAPI, mockClusterAPI, nil, nil, nil)
 
-		res, err := mr.Reconcile(context.Background(), req)
+		_, err := mcmr.Reconcile(context.Background(), mcm)
 		Expect(err).To(HaveOccurred())
-		Expect(res).To(Equal(reconcile.Result{}))
+		Expect(err.Error()).To(ContainSubstring("failed to garbage collect ManifestWorks with no matching cluster selector"))
 	})
 
-	It("should do nothing but garbage collect any obsolete ManifestWorks and Builds when no managed clusters match the selector", func() {
+	It("should fail if we fail to get owned manifestwork", func() {
+
 		mcm := &v1beta1.ManagedClusterModule{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: mcmName,
 			},
-			Spec: v1beta1.ManagedClusterModuleSpec{
-				ModuleSpec: kmmv1beta1.ModuleSpec{},
-				Selector:   map[string]string{"key": "value"},
+			Spec: v1beta1.ManagedClusterModuleSpec{},
+		}
+
+		expectedClusters := &clusterv1.ManagedClusterList{
+			Items: []clusterv1.ManagedCluster{},
+		}
+
+		gomock.InOrder(
+			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, mcm).Return(expectedClusters, nil),
+			mockManifestAPI.EXPECT().GarbageCollect(ctx, *expectedClusters, *mcm).Return(nil),
+			mockManifestAPI.EXPECT().GetOwnedManifestWorks(ctx, *mcm).Return(nil, errors.New("some error")),
+		)
+
+		mcmr := NewManagedClusterModuleReconciler(nil, mockManifestAPI, mockClusterAPI, nil, nil, nil)
+
+		_, err := mcmr.Reconcile(context.Background(), mcm)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to fetch owned ManifestWorks of the ManagedClusterModule"))
+	})
+
+	It("should fail if we fail to update the MCM status", func() {
+
+		mcm := &v1beta1.ManagedClusterModule{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: mcmName,
+			},
+			Spec: v1beta1.ManagedClusterModuleSpec{},
+		}
+
+		expectedClusters := &clusterv1.ManagedClusterList{
+			Items: []clusterv1.ManagedCluster{},
+		}
+
+		expectedOwnManifestWork := &workv1.ManifestWorkList{
+			Items: []workv1.ManifestWork{},
+		}
+
+		gomock.InOrder(
+			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, mcm).Return(expectedClusters, nil),
+			mockManifestAPI.EXPECT().GarbageCollect(ctx, *expectedClusters, *mcm).Return(nil),
+			mockManifestAPI.EXPECT().GetOwnedManifestWorks(ctx, *mcm).Return(expectedOwnManifestWork, nil),
+			mockStatusupdaterAPI.EXPECT().ManagedClusterModuleUpdateStatus(ctx, mcm, expectedOwnManifestWork.Items).
+				Return(errors.New("some error")),
+		)
+
+		mcmr := NewManagedClusterModuleReconciler(nil, mockManifestAPI, mockClusterAPI, mockStatusupdaterAPI, nil, nil)
+
+		_, err := mcmr.Reconcile(context.Background(), mcm)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to update status of the ManagedClusterModule"))
+	})
+
+	It("should skip untargeted kernel versions", func() {
+
+		mcm := &v1beta1.ManagedClusterModule{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: mcmName,
+			},
+			Spec: v1beta1.ManagedClusterModuleSpec{},
+		}
+
+		expectedClusters := &clusterv1.ManagedClusterList{
+			Items: []clusterv1.ManagedCluster{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cluster-1",
+					},
+				},
 			},
 		}
 
-		clusterList := clusterv1.ManagedClusterList{}
-		manifestWorkList := workv1.ManifestWorkList{}
+		expectedOwnManifestWork := &workv1.ManifestWorkList{
+			Items: []workv1.ManifestWork{},
+		}
 
 		gomock.InOrder(
-			mockClusterAPI.EXPECT().RequestedManagedClusterModule(ctx, req.NamespacedName).Return(mcm, nil),
-			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, gomock.Any()).Return(&clusterList, nil),
-			mockMW.EXPECT().GarbageCollect(ctx, clusterList, *mcm),
-			mockClusterAPI.EXPECT().GarbageCollectBuildsAndSigns(ctx, *mcm),
-			mockMW.EXPECT().GetOwnedManifestWorks(ctx, *mcm).Return(&manifestWorkList, nil),
-			mockSU.EXPECT().ManagedClusterModuleUpdateStatus(ctx, mcm, manifestWorkList.Items).Return(nil),
+			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, mcm).Return(expectedClusters, nil),
+			mockClusterAPI.EXPECT().KernelVersions(expectedClusters.Items[0]).Return([]string{}, errors.New("some error")),
+			// we expecte all the loop to be skipped with no errors
+			mockManifestAPI.EXPECT().GarbageCollect(ctx, *expectedClusters, *mcm).Return(nil),
+			mockManifestAPI.EXPECT().GetOwnedManifestWorks(ctx, *mcm).Return(expectedOwnManifestWork, nil),
+			mockStatusupdaterAPI.EXPECT().ManagedClusterModuleUpdateStatus(ctx, mcm, expectedOwnManifestWork.Items).Return(nil),
 		)
 
-		mr := NewManagedClusterModuleReconciler(
-			clnt,
-			mockMW,
-			mockClusterAPI,
-			mockSU,
+		mcmr := NewManagedClusterModuleReconciler(
 			nil,
-			defaultJobNamespace,
+			mockManifestAPI,
+			mockClusterAPI,
+			mockStatusupdaterAPI,
+			nil,
+			nil,
 		)
 
-		res, err := mr.Reconcile(context.Background(), req)
+		_, err := mcmr.Reconcile(context.Background(), mcm)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(reconcile.Result{}))
 	})
 
-	It("should return an error when ManifestWork garbage collection fails", func() {
+	It("should skip clusters in which we failed to set MIC as desired", func() {
+
 		mcm := &v1beta1.ManagedClusterModule{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: mcmName,
 			},
-			Spec: v1beta1.ManagedClusterModuleSpec{
-				ModuleSpec: kmmv1beta1.ModuleSpec{},
-				Selector:   map[string]string{"key": "value"},
-			},
+			Spec: v1beta1.ManagedClusterModuleSpec{},
 		}
 
-		clusterList := clusterv1.ManagedClusterList{}
-
-		gomock.InOrder(
-			mockClusterAPI.EXPECT().RequestedManagedClusterModule(ctx, req.NamespacedName).Return(mcm, nil),
-			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, gomock.Any()).Return(&clusterList, nil),
-			mockMW.EXPECT().GarbageCollect(ctx, clusterList, *mcm).Return(errors.New("test")),
-		)
-
-		mr := NewManagedClusterModuleReconciler(
-			clnt,
-			mockMW,
-			mockClusterAPI,
-			nil,
-			nil,
-			defaultJobNamespace,
-		)
-
-		res, err := mr.Reconcile(context.Background(), req)
-		Expect(err).To(HaveOccurred())
-		Expect(res).To(Equal(reconcile.Result{}))
-	})
-
-	It("should return an error when Builds garbage collection fails", func() {
-		mcm := &v1beta1.ManagedClusterModule{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: mcmName,
-			},
-			Spec: v1beta1.ManagedClusterModuleSpec{
-				ModuleSpec: kmmv1beta1.ModuleSpec{},
-				Selector:   map[string]string{"key": "value"},
-			},
-		}
-
-		clusterList := clusterv1.ManagedClusterList{}
-
-		gomock.InOrder(
-			mockClusterAPI.EXPECT().RequestedManagedClusterModule(ctx, req.NamespacedName).Return(mcm, nil),
-			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, gomock.Any()).Return(&clusterList, nil),
-			mockMW.EXPECT().GarbageCollect(ctx, clusterList, *mcm),
-			mockClusterAPI.EXPECT().GarbageCollectBuildsAndSigns(ctx, *mcm).Return(nil, errors.New("test")),
-		)
-
-		mr := NewManagedClusterModuleReconciler(
-			clnt,
-			mockMW,
-			mockClusterAPI,
-			nil,
-			nil,
-			defaultJobNamespace,
-		)
-
-		res, err := mr.Reconcile(context.Background(), req)
-		Expect(err).To(HaveOccurred())
-		Expect(res).To(Equal(reconcile.Result{}))
-	})
-
-	It("should return an error when fetching the owned ManifestWorks fails", func() {
-		mcm := &v1beta1.ManagedClusterModule{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: mcmName,
-			},
-			Spec: v1beta1.ManagedClusterModuleSpec{
-				ModuleSpec: kmmv1beta1.ModuleSpec{},
-				Selector:   map[string]string{"key": "value"},
-			},
-		}
-
-		clusterList := clusterv1.ManagedClusterList{}
-
-		gomock.InOrder(
-			mockClusterAPI.EXPECT().RequestedManagedClusterModule(ctx, req.NamespacedName).Return(mcm, nil),
-			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, gomock.Any()).Return(&clusterList, nil),
-			mockMW.EXPECT().GarbageCollect(ctx, clusterList, *mcm),
-			mockClusterAPI.EXPECT().GarbageCollectBuildsAndSigns(ctx, *mcm),
-			mockMW.EXPECT().GetOwnedManifestWorks(ctx, *mcm).Return(nil, errors.New("generic-error")),
-		)
-
-		mr := NewManagedClusterModuleReconciler(
-			clnt,
-			mockMW,
-			mockClusterAPI,
-			nil,
-			nil,
-			defaultJobNamespace,
-		)
-
-		res, err := mr.Reconcile(context.Background(), req)
-		Expect(err).To(HaveOccurred())
-		Expect(res).To(Equal(reconcile.Result{}))
-	})
-
-	It("should return an error when status update fails", func() {
-		mcm := &v1beta1.ManagedClusterModule{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: mcmName,
-			},
-			Spec: v1beta1.ManagedClusterModuleSpec{
-				ModuleSpec: kmmv1beta1.ModuleSpec{},
-				Selector:   map[string]string{"key": "value"},
-			},
-		}
-
-		clusterList := clusterv1.ManagedClusterList{}
-		manifestWorkList := workv1.ManifestWorkList{}
-
-		gomock.InOrder(
-			mockClusterAPI.EXPECT().RequestedManagedClusterModule(ctx, req.NamespacedName).Return(mcm, nil),
-			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, gomock.Any()).Return(&clusterList, nil),
-			mockMW.EXPECT().GarbageCollect(ctx, clusterList, *mcm),
-			mockClusterAPI.EXPECT().GarbageCollectBuildsAndSigns(ctx, *mcm),
-			mockMW.EXPECT().GetOwnedManifestWorks(ctx, *mcm).Return(&manifestWorkList, nil),
-			mockSU.EXPECT().ManagedClusterModuleUpdateStatus(ctx, mcm, manifestWorkList.Items).Return(errors.New("generic-error")),
-		)
-
-		mr := NewManagedClusterModuleReconciler(
-			clnt,
-			mockMW,
-			mockClusterAPI,
-			mockSU,
-			nil,
-			defaultJobNamespace,
-		)
-
-		res, err := mr.Reconcile(context.Background(), req)
-		Expect(err).To(HaveOccurred())
-		Expect(res).To(Equal(reconcile.Result{}))
-	})
-
-	It("should not requeue the request when build is specified and not completed and a managed cluster matches the selector", func() {
-		mcm := v1beta1.ManagedClusterModule{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: mcmName,
-			},
-			Spec: v1beta1.ManagedClusterModuleSpec{
-				ModuleSpec: kmmv1beta1.ModuleSpec{
-					ModuleLoader: &kmmv1beta1.ModuleLoaderSpec{
-						Container: kmmv1beta1.ModuleLoaderContainerSpec{
-							Build: &kmmv1beta1.Build{},
-						},
-					},
-				},
-				Selector: map[string]string{"key": "value"},
-			},
-		}
-
-		clusterList := clusterv1.ManagedClusterList{
+		expectedClusters := &clusterv1.ManagedClusterList{
 			Items: []clusterv1.ManagedCluster{
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:   "default",
-						Labels: map[string]string{"key": "value"},
+						Name: "cluster-1",
 					},
 				},
 			},
 		}
 
-		manifestWorkList := workv1.ManifestWorkList{}
+		expectedKernelVersion := []string{"v1.2.3"}
 
-		gomock.InOrder(
-			mockClusterAPI.EXPECT().RequestedManagedClusterModule(ctx, req.NamespacedName).Return(&mcm, nil),
-			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, gomock.Any()).Return(&clusterList, nil),
-			mockClusterAPI.EXPECT().BuildAndSign(gomock.Any(), mcm, clusterList.Items[0]).Return(false, nil),
-			mockMW.EXPECT().GarbageCollect(ctx, clusterList, mcm),
-			mockClusterAPI.EXPECT().GarbageCollectBuildsAndSigns(ctx, mcm),
-			mockMW.EXPECT().GetOwnedManifestWorks(ctx, mcm).Return(&manifestWorkList, nil),
-			mockSU.EXPECT().ManagedClusterModuleUpdateStatus(ctx, &mcm, manifestWorkList.Items).Return(nil),
-		)
-
-		mr := NewManagedClusterModuleReconciler(
-			clnt,
-			mockMW,
-			mockClusterAPI,
-			mockSU,
-			nil,
-			defaultJobNamespace,
-		)
-
-		res, err := mr.Reconcile(context.Background(), req)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(res).To(Equal(reconcile.Result{Requeue: false}))
-	})
-
-	It("should not requeue the request when no kernel versions for the managed cluster are found", func() {
-		mcm := v1beta1.ManagedClusterModule{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: mcmName,
-			},
-			Spec: v1beta1.ManagedClusterModuleSpec{
-				ModuleSpec: kmmv1beta1.ModuleSpec{},
-				Selector:   map[string]string{"key": "value"},
-			},
-		}
-
-		clusterList := clusterv1.ManagedClusterList{
-			Items: []clusterv1.ManagedCluster{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "default",
-						Labels: map[string]string{"key": "value"},
-					},
-				},
-			},
-		}
-
-		manifestWorkList := workv1.ManifestWorkList{}
-
-		gomock.InOrder(
-			mockClusterAPI.EXPECT().RequestedManagedClusterModule(ctx, req.NamespacedName).Return(&mcm, nil),
-			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, gomock.Any()).Return(&clusterList, nil),
-			mockClusterAPI.EXPECT().BuildAndSign(gomock.Any(), mcm, clusterList.Items[0]).Return(true, nil),
-			mockClusterAPI.EXPECT().KernelVersions(clusterList.Items[0]).Return(nil, errors.New("no kernel versions")),
-			mockMW.EXPECT().GarbageCollect(ctx, clusterList, mcm).Return(nil),
-			mockClusterAPI.EXPECT().GarbageCollectBuildsAndSigns(ctx, mcm),
-			mockMW.EXPECT().GetOwnedManifestWorks(ctx, mcm).Return(&manifestWorkList, nil),
-			mockSU.EXPECT().ManagedClusterModuleUpdateStatus(ctx, &mcm, manifestWorkList.Items).Return(nil),
-		)
-
-		mr := NewManagedClusterModuleReconciler(
-			clnt,
-			mockMW,
-			mockClusterAPI,
-			mockSU,
-			nil,
-			defaultJobNamespace)
-
-		res, err := mr.Reconcile(context.Background(), req)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(res).To(Equal(reconcile.Result{Requeue: false}))
-	})
-
-	It("should create a ManifestWork if a managed cluster matches the selector and build/sign is completed", func() {
-		mcm := v1beta1.ManagedClusterModule{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: mcmName,
-			},
-			Spec: v1beta1.ManagedClusterModuleSpec{
-				ModuleSpec: kmmv1beta1.ModuleSpec{},
-				Selector:   map[string]string{"key": "value"},
-			},
-		}
-
-		clusterList := clusterv1.ManagedClusterList{
-			Items: []clusterv1.ManagedCluster{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "default",
-						Labels: map[string]string{"key": "value"},
-					},
-				},
-			},
-		}
-		manifestWorkList := workv1.ManifestWorkList{}
-
-		mw := workv1.ManifestWork{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      mcm.Name,
-				Namespace: clusterList.Items[0].Name,
-			},
+		expectedOwnManifestWork := &workv1.ManifestWorkList{
+			Items: []workv1.ManifestWork{},
 		}
 
 		gomock.InOrder(
-			mockClusterAPI.EXPECT().RequestedManagedClusterModule(ctx, req.NamespacedName).Return(&mcm, nil),
-			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, gomock.Any()).Return(&clusterList, nil),
-			mockClusterAPI.EXPECT().BuildAndSign(gomock.Any(), mcm, clusterList.Items[0]).Return(true, nil),
-			mockClusterAPI.EXPECT().KernelVersions(clusterList.Items[0]).Return([]string{kernelVersion}, nil),
-			clnt.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).Return(apierrors.NewNotFound(schema.GroupResource{}, "whatever")),
-			mockMW.EXPECT().SetManifestWorkAsDesired(context.Background(), &mw, gomock.AssignableToTypeOf(mcm), []string{kernelVersion}),
-			clnt.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil),
-			mockMW.EXPECT().GarbageCollect(ctx, clusterList, mcm),
-			mockClusterAPI.EXPECT().GarbageCollectBuildsAndSigns(ctx, mcm),
-			mockMW.EXPECT().GetOwnedManifestWorks(ctx, mcm).Return(&manifestWorkList, nil),
-			mockSU.EXPECT().ManagedClusterModuleUpdateStatus(ctx, &mcm, manifestWorkList.Items).Return(nil),
+			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, mcm).Return(expectedClusters, nil),
+			mockClusterAPI.EXPECT().KernelVersions(expectedClusters.Items[0]).Return(expectedKernelVersion, nil),
+			mockMCMReconHelperAPI.EXPECT().setMicAsDesired(ctx, mcm, "cluster-1", expectedKernelVersion).Return(errors.New("error")),
+			// we expecte all the loop to be skipped with no errors
+			mockManifestAPI.EXPECT().GarbageCollect(ctx, *expectedClusters, *mcm).Return(nil),
+			mockManifestAPI.EXPECT().GetOwnedManifestWorks(ctx, *mcm).Return(expectedOwnManifestWork, nil),
+			mockStatusupdaterAPI.EXPECT().ManagedClusterModuleUpdateStatus(ctx, mcm, expectedOwnManifestWork.Items).Return(nil),
 		)
 
-		mr := NewManagedClusterModuleReconciler(
-			clnt,
-			mockMW,
-			mockClusterAPI,
-			mockSU,
-			nil,
-			defaultJobNamespace,
-		)
+		mcmr := &ManagedClusterModuleReconciler{
+			manifestAPI:      mockManifestAPI,
+			clusterAPI:       mockClusterAPI,
+			statusupdaterAPI: mockStatusupdaterAPI,
+			reconHelper:      mockMCMReconHelperAPI,
+		}
 
-		res, err := mr.Reconcile(context.Background(), req)
+		_, err := mcmr.Reconcile(context.Background(), mcm)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(reconcile.Result{}))
 	})
 
-	It("should patch the ManifestWork if it already exists", func() {
-		mcm := v1beta1.ManagedClusterModule{
+	It("should skip clusters in which we failed to check if MIC is ready", func() {
+
+		mcm := &v1beta1.ManagedClusterModule{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: mcmName,
 			},
-			Spec: v1beta1.ManagedClusterModuleSpec{
-				ModuleSpec: kmmv1beta1.ModuleSpec{},
-				Selector:   map[string]string{"key": "value"},
-			},
+			Spec: v1beta1.ManagedClusterModuleSpec{},
 		}
 
-		clusterList := clusterv1.ManagedClusterList{
+		expectedClusters := &clusterv1.ManagedClusterList{
 			Items: []clusterv1.ManagedCluster{
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:   "default",
-						Labels: map[string]string{"key": "value"},
+						Name: "cluster-1",
 					},
 				},
 			},
 		}
 
-		manifestWorkList := workv1.ManifestWorkList{}
+		expectedKernelVersion := []string{"v1.2.3"}
 
-		mw := workv1.ManifestWork{
+		expectedOwnManifestWork := &workv1.ManifestWorkList{
+			Items: []workv1.ManifestWork{},
+		}
+
+		gomock.InOrder(
+			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, mcm).Return(expectedClusters, nil),
+			mockClusterAPI.EXPECT().KernelVersions(expectedClusters.Items[0]).Return(expectedKernelVersion, nil),
+			mockMCMReconHelperAPI.EXPECT().setMicAsDesired(ctx, mcm, "cluster-1", expectedKernelVersion).Return(nil),
+			mockMCMReconHelperAPI.EXPECT().areImagesReady(ctx, mcm.Name, "cluster-1").Return(false, errors.New("some error")),
+			// we expecte the rest of the loop to be skipped with no errors
+			mockManifestAPI.EXPECT().GarbageCollect(ctx, *expectedClusters, *mcm).Return(nil),
+			mockManifestAPI.EXPECT().GetOwnedManifestWorks(ctx, *mcm).Return(expectedOwnManifestWork, nil),
+			mockStatusupdaterAPI.EXPECT().ManagedClusterModuleUpdateStatus(ctx, mcm, expectedOwnManifestWork.Items).Return(nil),
+		)
+
+		mcmr := &ManagedClusterModuleReconciler{
+			manifestAPI:      mockManifestAPI,
+			clusterAPI:       mockClusterAPI,
+			statusupdaterAPI: mockStatusupdaterAPI,
+			reconHelper:      mockMCMReconHelperAPI,
+		}
+
+		_, err := mcmr.Reconcile(context.Background(), mcm)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should not create manifestWork for MIC that doesn't have all images in the exist state", func() {
+
+		mcm := &v1beta1.ManagedClusterModule{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      mcm.Name,
-				Namespace: clusterList.Items[0].Name,
+				Name: mcmName,
+			},
+			Spec: v1beta1.ManagedClusterModuleSpec{},
+		}
+
+		expectedClusters := &clusterv1.ManagedClusterList{
+			Items: []clusterv1.ManagedCluster{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cluster-1",
+					},
+				},
 			},
 		}
 
-		kernelVersions := []string{kernelVersion}
+		expectedKernelVersion := []string{"v1.2.3"}
+
+		expectedOwnManifestWork := &workv1.ManifestWorkList{
+			Items: []workv1.ManifestWork{},
+		}
 
 		gomock.InOrder(
-			mockClusterAPI.EXPECT().RequestedManagedClusterModule(ctx, req.NamespacedName).Return(&mcm, nil),
-			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, gomock.Any()).Return(&clusterList, nil),
-			mockClusterAPI.EXPECT().BuildAndSign(gomock.Any(), mcm, clusterList.Items[0]).Return(true, nil),
-			mockClusterAPI.EXPECT().KernelVersions(clusterList.Items[0]).Return(kernelVersions, nil),
-			clnt.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()),
-			mockMW.EXPECT().SetManifestWorkAsDesired(context.Background(), &mw, gomock.AssignableToTypeOf(mcm), kernelVersions).Do(
-				func(ctx context.Context, m *workv1.ManifestWork, _ v1beta1.ManagedClusterModule, _ []string) {
-					m.SetLabels(map[string]string{"test": "test"})
-				}),
-			clnt.EXPECT().Patch(gomock.Any(), gomock.Any(), gomock.Any()),
-			mockMW.EXPECT().GarbageCollect(ctx, clusterList, mcm),
-			mockClusterAPI.EXPECT().GarbageCollectBuildsAndSigns(ctx, mcm),
-			mockMW.EXPECT().GetOwnedManifestWorks(ctx, mcm).Return(&manifestWorkList, nil),
-			mockSU.EXPECT().ManagedClusterModuleUpdateStatus(ctx, &mcm, manifestWorkList.Items).Return(nil),
+			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, mcm).Return(expectedClusters, nil),
+			mockClusterAPI.EXPECT().KernelVersions(expectedClusters.Items[0]).Return(expectedKernelVersion, nil),
+			mockMCMReconHelperAPI.EXPECT().setMicAsDesired(ctx, mcm, "cluster-1", expectedKernelVersion).Return(nil),
+			mockMCMReconHelperAPI.EXPECT().areImagesReady(ctx, mcm.Name, "cluster-1").Return(false, nil),
+			// we expecte the rest of the loop to be skipped with no errors
+			mockManifestAPI.EXPECT().GarbageCollect(ctx, *expectedClusters, *mcm).Return(nil),
+			mockManifestAPI.EXPECT().GetOwnedManifestWorks(ctx, *mcm).Return(expectedOwnManifestWork, nil),
+			mockStatusupdaterAPI.EXPECT().ManagedClusterModuleUpdateStatus(ctx, mcm, expectedOwnManifestWork.Items).Return(nil),
 		)
 
-		mr := NewManagedClusterModuleReconciler(
-			clnt,
-			mockMW,
-			mockClusterAPI,
-			mockSU,
-			nil,
-			defaultJobNamespace,
-		)
+		mcmr := &ManagedClusterModuleReconciler{
+			manifestAPI:      mockManifestAPI,
+			clusterAPI:       mockClusterAPI,
+			statusupdaterAPI: mockStatusupdaterAPI,
+			reconHelper:      mockMCMReconHelperAPI,
+		}
 
-		res, err := mr.Reconcile(context.Background(), req)
+		_, err := mcmr.Reconcile(context.Background(), mcm)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(reconcile.Result{}))
+	})
+
+	It("should work as expected", func() {
+
+		mcm := &v1beta1.ManagedClusterModule{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: mcmName,
+			},
+			Spec: v1beta1.ManagedClusterModuleSpec{},
+		}
+
+		expectedClusters := &clusterv1.ManagedClusterList{
+			Items: []clusterv1.ManagedCluster{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cluster-1",
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cluster-2",
+					},
+				},
+			},
+		}
+
+		expectedKernelVersion := []string{"v1.2.3"}
+
+		expectedOwnManifestWork := &workv1.ManifestWorkList{
+			Items: []workv1.ManifestWork{},
+		}
+
+		mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, mcm).Return(expectedClusters, nil)
+		mockClusterAPI.EXPECT().KernelVersions(expectedClusters.Items[0]).Return(expectedKernelVersion, nil)
+		mockClusterAPI.EXPECT().KernelVersions(expectedClusters.Items[1]).Return(expectedKernelVersion, nil)
+		mockMCMReconHelperAPI.EXPECT().setMicAsDesired(ctx, mcm, "cluster-1", expectedKernelVersion).Return(nil)
+		mockMCMReconHelperAPI.EXPECT().areImagesReady(ctx, mcm.Name, "cluster-1").Return(true, nil)
+		mockMCMReconHelperAPI.EXPECT().setMicAsDesired(ctx, mcm, "cluster-2", expectedKernelVersion).Return(nil)
+		mockMCMReconHelperAPI.EXPECT().areImagesReady(ctx, mcm.Name, "cluster-2").Return(true, nil)
+		mockClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(2)
+		mockManifestAPI.EXPECT().SetManifestWorkAsDesired(ctx, gomock.Any(), *mcm, expectedKernelVersion).Return(nil).Times(2)
+		mockManifestAPI.EXPECT().GarbageCollect(ctx, *expectedClusters, *mcm).Return(nil)
+		mockManifestAPI.EXPECT().GetOwnedManifestWorks(ctx, *mcm).Return(expectedOwnManifestWork, nil)
+		mockStatusupdaterAPI.EXPECT().ManagedClusterModuleUpdateStatus(ctx, mcm, expectedOwnManifestWork.Items).Return(nil)
+
+		mcmr := &ManagedClusterModuleReconciler{
+			client:           mockClient,
+			manifestAPI:      mockManifestAPI,
+			clusterAPI:       mockClusterAPI,
+			statusupdaterAPI: mockStatusupdaterAPI,
+			reconHelper:      mockMCMReconHelperAPI,
+		}
+
+		_, err := mcmr.Reconcile(context.Background(), mcm)
+		Expect(err).NotTo(HaveOccurred())
+	})
+})
+
+var _ = Describe("managedClusterModuleReconcilerHelperAPI_setMicAsDesired", func() {
+
+	const (
+		mcmName     = "mcm-name"
+		clusterName = "cluster-name"
+		defaultNs   = "openshift-kmm"
+	)
+
+	var (
+		ctx               context.Context
+		ctrl              *gomock.Controller
+		mockClusterAPI    *cluster.MockClusterAPI
+		mockMIC           *mic.MockMIC
+		mcmReconHelperAPI managedClusterModuleReconcilerHelperAPI
+		micName           = mcmName + "-" + clusterName
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		ctrl = gomock.NewController(GinkgoT())
+		mockClusterAPI = cluster.NewMockClusterAPI(ctrl)
+		mockMIC = mic.NewMockMIC(ctrl)
+		mcmReconHelperAPI = newManagedClusterModuleReconcilerHelper(mockClusterAPI, mockMIC)
+	})
+
+	It("should return an error if we faild to get an MLD for a kernel", func() {
+
+		mcm := &hubv1beta1.ManagedClusterModule{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: mcmName,
+			},
+			Spec: hubv1beta1.ManagedClusterModuleSpec{
+				ModuleSpec: kmmv1beta1.ModuleSpec{},
+			},
+		}
+		kernelVersions := []string{"v1.1.1"}
+
+		mockClusterAPI.EXPECT().GetModuleLoaderDataForKernel(mcm, kernelVersions[0]).Return(nil, errors.New("some error"))
+
+		err := mcmReconHelperAPI.setMicAsDesired(ctx, mcm, clusterName, kernelVersions)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to get MLD for kernel"))
+	})
+
+	It("should return an error if we faild to create or patch the MIC", func() {
+
+		mcm := &hubv1beta1.ManagedClusterModule{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: mcmName,
+			},
+			Spec: hubv1beta1.ManagedClusterModuleSpec{
+				ModuleSpec: kmmv1beta1.ModuleSpec{},
+			},
+		}
+		kernelVersions := []string{"v1.1.1"}
+
+		gomock.InOrder(
+			mockClusterAPI.EXPECT().GetModuleLoaderDataForKernel(mcm, kernelVersions[0]).Return(&api.ModuleLoaderData{}, nil),
+			mockClusterAPI.EXPECT().GetDefaultArtifactsNamespace().Return(defaultNs),
+			mockMIC.EXPECT().CreateOrPatch(ctx, micName, defaultNs, gomock.Any(), nil, mcm).
+				Return(errors.New("some error")),
+		)
+
+		err := mcmReconHelperAPI.setMicAsDesired(ctx, mcm, clusterName, kernelVersions)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to createOrPatch MIC"))
+	})
+
+	It("should skip non targeted kernel versions", func() {
+
+		mcm := &hubv1beta1.ManagedClusterModule{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: mcmName,
+			},
+			Spec: hubv1beta1.ManagedClusterModuleSpec{
+				ModuleSpec: kmmv1beta1.ModuleSpec{},
+			},
+		}
+		kernelVersions := []string{"v1.1.1", "1.1.2"}
+
+		expectedMLD := &api.ModuleLoaderData{
+			ContainerImage: "some-image",
+			KernelVersion:  "v1.1.2",
+		}
+		expectedImages := []kmmv1beta1.ModuleImageSpec{
+			{
+				Image:         "some-image",
+				KernelVersion: "v1.1.2",
+			},
+		}
+
+		gomock.InOrder(
+			mockClusterAPI.EXPECT().GetModuleLoaderDataForKernel(mcm, kernelVersions[0]).Return(nil, module.ErrNoMatchingKernelMapping),
+			mockClusterAPI.EXPECT().GetModuleLoaderDataForKernel(mcm, kernelVersions[1]).Return(expectedMLD, nil),
+			mockClusterAPI.EXPECT().GetDefaultArtifactsNamespace().Return(defaultNs),
+			mockMIC.EXPECT().CreateOrPatch(ctx, micName, defaultNs, expectedImages, gomock.Any(), mcm).Return(nil),
+		)
+
+		err := mcmReconHelperAPI.setMicAsDesired(ctx, mcm, clusterName, kernelVersions)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should work as expected", func() {
+
+		mcm := &hubv1beta1.ManagedClusterModule{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: mcmName,
+			},
+			Spec: hubv1beta1.ManagedClusterModuleSpec{
+				ModuleSpec: kmmv1beta1.ModuleSpec{},
+			},
+		}
+		kernelVersions := []string{"v1.1.1", "1.1.2"}
+
+		expectedMLDs := []*api.ModuleLoaderData{
+			{
+				ContainerImage: "some-image",
+				KernelVersion:  "v1.1.1",
+			},
+			{
+				ContainerImage: "some-image",
+				KernelVersion:  "v1.1.2",
+			},
+		}
+		expectedImages := []kmmv1beta1.ModuleImageSpec{
+			{
+				Image:         "some-image",
+				KernelVersion: "v1.1.1",
+			},
+			{
+				Image:         "some-image",
+				KernelVersion: "v1.1.2",
+			},
+		}
+
+		gomock.InOrder(
+			mockClusterAPI.EXPECT().GetModuleLoaderDataForKernel(mcm, kernelVersions[0]).Return(expectedMLDs[0], nil),
+			mockClusterAPI.EXPECT().GetModuleLoaderDataForKernel(mcm, kernelVersions[1]).Return(expectedMLDs[1], nil),
+			mockClusterAPI.EXPECT().GetDefaultArtifactsNamespace().Return(defaultNs),
+			mockMIC.EXPECT().CreateOrPatch(ctx, micName, defaultNs, expectedImages, gomock.Any(), mcm).Return(nil),
+		)
+
+		err := mcmReconHelperAPI.setMicAsDesired(ctx, mcm, clusterName, kernelVersions)
+		Expect(err).NotTo(HaveOccurred())
+	})
+})
+
+var _ = Describe("managedClusterModuleReconcilerHelperAPI_isMicReady", func() {
+	const (
+		mcmName     = "mcm-name"
+		clusterName = "cluster-name"
+		defaultNs   = "openshift-kmm"
+	)
+
+	var (
+		ctx               context.Context
+		ctrl              *gomock.Controller
+		mockClusterAPI    *cluster.MockClusterAPI
+		mockMIC           *mic.MockMIC
+		mcmReconHelperAPI managedClusterModuleReconcilerHelperAPI
+		micName           = mcmName + "-" + clusterName
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		ctrl = gomock.NewController(GinkgoT())
+		mockClusterAPI = cluster.NewMockClusterAPI(ctrl)
+		mockMIC = mic.NewMockMIC(ctrl)
+		mcmReconHelperAPI = newManagedClusterModuleReconcilerHelper(mockClusterAPI, mockMIC)
+	})
+
+	It("should return an error if we faild to get the MIC", func() {
+
+		mcm := &hubv1beta1.ManagedClusterModule{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: mcmName,
+			},
+			Spec: hubv1beta1.ManagedClusterModuleSpec{
+				ModuleSpec: kmmv1beta1.ModuleSpec{},
+			},
+		}
+
+		gomock.InOrder(
+			mockClusterAPI.EXPECT().GetDefaultArtifactsNamespace().Return(defaultNs),
+			mockMIC.EXPECT().Get(ctx, micName, defaultNs).Return(nil, errors.New("some error")),
+		)
+
+		_, err := mcmReconHelperAPI.areImagesReady(ctx, mcm.Name, clusterName)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to get MIC"))
+	})
+
+	It("should return false if MIC isn't ready", func() {
+
+		mcm := &hubv1beta1.ManagedClusterModule{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: mcmName,
+			},
+			Spec: hubv1beta1.ManagedClusterModuleSpec{
+				ModuleSpec: kmmv1beta1.ModuleSpec{},
+			},
+		}
+
+		expectedImages := []kmmv1beta1.ModuleImageSpec{
+			{
+				Image:         "some-image",
+				KernelVersion: "v1.1.1",
+			},
+			{
+				Image:         "some-image",
+				KernelVersion: "v1.1.2",
+			},
+		}
+		expectedMIC := &kmmv1beta1.ModuleImagesConfig{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: micName,
+			},
+			Spec: kmmv1beta1.ModuleImagesConfigSpec{
+				Images: expectedImages,
+			},
+		}
+
+		gomock.InOrder(
+			mockClusterAPI.EXPECT().GetDefaultArtifactsNamespace().Return(defaultNs),
+			mockMIC.EXPECT().Get(ctx, micName, defaultNs).Return(expectedMIC, nil),
+			mockMIC.EXPECT().DoAllImagesExist(expectedMIC).Return(false),
+		)
+
+		allImagesExist, err := mcmReconHelperAPI.areImagesReady(ctx, mcm.Name, clusterName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(allImagesExist).To(BeFalse())
+	})
+
+	It("should return true if MIC is ready", func() {
+
+		mcm := &hubv1beta1.ManagedClusterModule{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: mcmName,
+			},
+			Spec: hubv1beta1.ManagedClusterModuleSpec{
+				ModuleSpec: kmmv1beta1.ModuleSpec{},
+			},
+		}
+
+		expectedImages := []kmmv1beta1.ModuleImageSpec{
+			{
+				Image:         "some-image",
+				KernelVersion: "v1.1.1",
+			},
+			{
+				Image:         "some-image",
+				KernelVersion: "v1.1.2",
+			},
+		}
+		expectedMIC := &kmmv1beta1.ModuleImagesConfig{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: micName,
+			},
+			Spec: kmmv1beta1.ModuleImagesConfigSpec{
+				Images: expectedImages,
+			},
+		}
+
+		gomock.InOrder(
+			mockClusterAPI.EXPECT().GetDefaultArtifactsNamespace().Return(defaultNs),
+			mockMIC.EXPECT().Get(ctx, micName, defaultNs).Return(expectedMIC, nil),
+			mockMIC.EXPECT().DoAllImagesExist(expectedMIC).Return(true),
+		)
+
+		allImagesExist, err := mcmReconHelperAPI.areImagesReady(ctx, mcm.Name, clusterName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(allImagesExist).To(BeTrue())
 	})
 })

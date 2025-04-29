@@ -39,7 +39,7 @@ if [ "$SKIP_MAKE_DEPLOY_HUB" == true ]; then
 else
   echo "Deploy KMMO-Hub..."
   make deploy-hub
-  oc wait --for=condition=Available --timeout=1m deployment/kmm-operator-hub-controller deployment/kmm-operator-hub-webhook -n ${HUB_OPERATOR_NAMESPACE}
+  oc wait --for=condition=Available --timeout=2m deployment/kmm-operator-hub-controller deployment/kmm-operator-hub-webhook -n ${HUB_OPERATOR_NAMESPACE}
 fi
 
 if [ "$SKIP_MAKE_DEPLOY" == true ]; then
@@ -47,7 +47,7 @@ if [ "$SKIP_MAKE_DEPLOY" == true ]; then
 else
   echo "Deploy KMM..."
   make deploy KUSTOMIZE_CONFIG_DEFAULT=ci/install-ci-spoke
-  oc wait --for=condition=Available --timeout=1m deployment/kmm-operator-controller deployment/kmm-operator-webhook -n ${OPERATOR_NAMESPACE}
+  oc wait --for=condition=Available --timeout=2m deployment/kmm-operator-controller deployment/kmm-operator-webhook -n ${OPERATOR_NAMESPACE}
 fi
 
 # Apply resources

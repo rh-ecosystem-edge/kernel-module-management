@@ -23,6 +23,9 @@ import (
 	buildv1 "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/config"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mbsc"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mic"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/pod"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -39,9 +42,10 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	"github.com/rh-ecosystem-edge/kernel-module-management/api-hub/v1beta1"
+	hubv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api-hub/v1beta1"
+	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
-	buildocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build/ocpbuild"
+	buildsignocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign/ocpbuild"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cluster"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cmd"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
@@ -53,10 +57,8 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
-	signocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/sign/ocpbuild"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
-	ocpbuildutils "github.com/rh-ecosystem-edge/kernel-module-management/internal/utils/ocpbuild"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -69,7 +71,8 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(v1beta1.AddToScheme(scheme))
+	utilruntime.Must(hubv1beta1.AddToScheme(scheme))
+	utilruntime.Must(kmmv1beta1.AddToScheme(scheme))
 	utilruntime.Must(buildv1.Install(scheme))
 	utilruntime.Must(clusterv1.Install(scheme))
 	utilruntime.Must(imagev1.Install(scheme))
@@ -130,21 +133,11 @@ func main() {
 		),
 	)
 
-	buildAPI := buildocpbuild.NewManager(
-		client,
-		buildocpbuild.NewMaker(client, buildSignCombiner, scheme, kernelOsDtkMapping),
-		ocpbuildutils.NewOCPBuildsHelper(client, buildocpbuild.BuildType),
-		authFactory,
-		registryAPI,
-	)
-
-	signAPI := signocpbuild.NewManager(
-		client,
-		signocpbuild.NewMaker(client, cmd.GetEnvOrFatalError("RELATED_IMAGE_SIGN", setupLogger), scheme),
-		ocpbuildutils.NewOCPBuildsHelper(client, signocpbuild.BuildType),
-		authFactory,
-		registryAPI,
-	)
+	micAPI := mic.New(client, scheme)
+	mbscAPI := mbsc.New(client, scheme)
+	imagePullerAPI := pod.NewImagePuller(client, scheme)
+	signImage := cmd.GetEnvOrFatalError("RELATED_IMAGE_SIGN", setupLogger)
+	buildSignAPI := buildsignocpbuild.NewManager(client, buildSignCombiner, kernelOsDtkMapping, signImage, scheme)
 
 	kernelAPI := module.NewKernelMapper(buildSignCombiner)
 
@@ -155,11 +148,19 @@ func main() {
 	mcmr := hub.NewManagedClusterModuleReconciler(
 		client,
 		manifestwork.NewCreator(client, scheme, kernelAPI, registryAPI, authFactory, operatorNamespace),
-		cluster.NewClusterAPI(client, kernelAPI, buildAPI, signAPI, operatorNamespace),
+		cluster.NewClusterAPI(client, kernelAPI, operatorNamespace),
 		statusupdater.NewManagedClusterModuleStatusUpdater(client),
 		filterAPI,
-		operatorNamespace,
+		micAPI,
 	)
+
+	if err = controllers.NewMICReconciler(client, micAPI, mbscAPI, imagePullerAPI, scheme).SetupWithManager(mgr); err != nil {
+		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.MICReconcilerName)
+	}
+
+	if err = controllers.NewMBSCReconciler(client, buildSignAPI, mbscAPI).SetupWithManager(mgr); err != nil {
+		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.MBSCReconcilerName)
+	}
 
 	if err = mcmr.SetupWithManager(mgr); err != nil {
 		cmd.FatalError(ctrlLogger, err, "unable to create controller")
