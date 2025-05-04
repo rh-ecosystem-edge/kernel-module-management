@@ -15,7 +15,6 @@ latest_published_bundle=$(grpcurl -d '{"pkgName": "kernel-module-management", "c
 # Deploy the current bundle
 ./bin/operator-sdk run bundle ${latest_published_bundle} \
     --namespace openshift-kmm \
-    --use-http \
     --timeout 5m0s
 oc wait --for=condition=Available -n openshift-kmm --timeout=1m deployment/kmm-operator-controller
 
