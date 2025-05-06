@@ -21,13 +21,13 @@ import (
 	"errors"
 	"fmt"
 
+	buildv1 "github.com/openshift/api/build/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/kernel"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mbsc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
-	v1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -56,7 +56,7 @@ func NewMBSCReconciler(
 func (r *mbscReconciler) SetupWithManager(mgr ctrl.Manager, kernelLabel string) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&kmmv1beta1.ModuleBuildSignConfig{}).
-		Owns(&v1.Pod{}).
+		Owns(&buildv1.Build{}).
 		Named(MBSCReconcilerName).
 		Complete(
 			reconcile.AsReconciler[*kmmv1beta1.ModuleBuildSignConfig](mgr.GetClient(), r),
