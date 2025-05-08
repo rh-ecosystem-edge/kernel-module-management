@@ -4,12 +4,24 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
+	"github.com/mitchellh/hashstructure/v2"
 	buildv1 "github.com/openshift/api/build/v1"
+	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
+	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 )
 
 type Status string
@@ -39,15 +51,23 @@ type ocpbuildManager interface {
 	deleteOCPBuild(ctx context.Context, build *buildv1.Build) error
 	ocpbuildLabels(modName, kernelVersion, ocpbuildType string) map[string]string
 	ocpbuildAnnotations(hash uint64) map[string]string
+	makeOCPBuildTemplate(ctx context.Context, mld *api.ModuleLoaderData, pushImage bool, owner metav1.Object) (*buildv1.Build, error)
 }
 
 type ocpbuildManagerImpl struct {
-	client client.Client
+	client             client.Client
+	combiner           module.Combiner
+	kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping
+	scheme             *runtime.Scheme
 }
 
-func newOCPBuildManager(client client.Client) ocpbuildManager {
+func newOCPBuildManager(client client.Client, combiner module.Combiner, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping,
+	scheme *runtime.Scheme) ocpbuildManager {
 	return &ocpbuildManagerImpl{
-		client: client,
+		client:             client,
+		combiner:           combiner,
+		kernelOsDtkMapping: kernelOsDtkMapping,
+		scheme:             scheme,
 	}
 }
 
@@ -175,4 +195,128 @@ func moduleLabels(modName, ocpbuildType string) map[string]string {
 		constants.ModuleNameLabel: modName,
 		constants.BuildTypeLabel:  ocpbuildType,
 	}
+}
+func (omi *ocpbuildManagerImpl) makeOCPBuildTemplate(ctx context.Context, mld *api.ModuleLoaderData, pushImage bool,
+	owner metav1.Object) (*buildv1.Build, error) {
+
+	kmmBuild := mld.Build
+	containerImage := mld.ContainerImage
+	kernelVersion := mld.KernelVersion
+
+	// if build AND sign are specified, then we will build an intermediate image
+	// and let sign produce the final image specified in spec.moduleLoader.container.km.containerImage
+	if module.ShouldBeSigned(mld) {
+		containerImage = module.IntermediateImageName(mld.Name, mld.Namespace, containerImage)
+	}
+
+	overrides := []kmmv1beta1.BuildArg{
+		{
+			Name:  "KERNEL_VERSION",
+			Value: kernelVersion,
+		},
+		{
+			Name:  "KERNEL_FULL_VERSION",
+			Value: kernelVersion,
+		},
+		{
+			Name:  "MOD_NAME",
+			Value: mld.Name,
+		},
+		{
+			Name:  "MOD_NAMESPACE",
+			Value: mld.Namespace,
+		},
+	}
+
+	dockerfileData, err := omi.getDockerfileData(ctx, kmmBuild, mld.Namespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get dockerfile data from configmap: %v", err)
+	}
+
+	if strings.Contains(dockerfileData, dtkBuildArg) {
+
+		dtkImage, err := omi.kernelOsDtkMapping.GetImage(kernelVersion)
+		if err != nil {
+			return nil, fmt.Errorf("could not get DTK image for kernel %v: %v", kernelVersion, err)
+		}
+		overrides = append(overrides, kmmv1beta1.BuildArg{Name: dtkBuildArg, Value: dtkImage})
+	}
+
+	buildArgs := omi.combiner.ApplyBuildArgOverrides(
+		kmmBuild.BuildArgs,
+		overrides...,
+	)
+
+	buildTarget := buildv1.BuildOutput{
+		To: &v1.ObjectReference{
+			Kind: "DockerImage",
+			Name: containerImage,
+		},
+		PushSecret: mld.ImageRepoSecret,
+	}
+	if !pushImage {
+		buildTarget = buildv1.BuildOutput{}
+	}
+
+	sourceConfig := buildv1.BuildSource{
+		Dockerfile: &dockerfileData,
+		Type:       buildv1.BuildSourceDockerfile,
+	}
+
+	sourceConfigHash, err := hashstructure.Hash(sourceConfig, hashstructure.FormatV2, nil)
+	if err != nil {
+		return nil, fmt.Errorf("could not hash Build's Buildsource template: %v", err)
+	}
+
+	selector := mld.Selector
+	if len(mld.Build.Selector) != 0 {
+		selector = mld.Build.Selector
+	}
+
+	bc := buildv1.Build{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: mld.Name + "-build-",
+			Namespace:    mld.Namespace,
+			Labels:       omi.ocpbuildLabels(mld.Name, mld.KernelNormalizedVersion, ocpbuildTypeBuild),
+			Annotations:  omi.ocpbuildAnnotations(sourceConfigHash),
+			Finalizers:   []string{constants.GCDelayFinalizer, constants.JobEventFinalizer},
+		},
+		Spec: buildv1.BuildSpec{
+			CommonSpec: buildv1.CommonSpec{
+				ServiceAccount: constants.OCPBuilderServiceAccountName,
+				Source:         sourceConfig,
+				Strategy: buildv1.BuildStrategy{
+					Type: buildv1.DockerBuildStrategyType,
+					DockerStrategy: &buildv1.DockerBuildStrategy{
+						BuildArgs:  envVarsFromKMMBuildArgs(buildArgs),
+						Volumes:    buildVolumesFromBuildSecrets(kmmBuild.Secrets),
+						PullSecret: mld.ImageRepoSecret,
+					},
+				},
+				Output:         buildTarget,
+				NodeSelector:   selector,
+				MountTrustedCA: ptr.To(true),
+			},
+		},
+	}
+
+	if err := controllerutil.SetControllerReference(owner, &bc, omi.scheme); err != nil {
+		return nil, fmt.Errorf("could not set the owner reference: %v", err)
+	}
+
+	return &bc, nil
+}
+
+func (omi *ocpbuildManagerImpl) getDockerfileData(ctx context.Context, buildConfig *kmmv1beta1.Build, namespace string) (string, error) {
+	dockerfileCM := &corev1.ConfigMap{}
+	namespacedName := types.NamespacedName{Name: buildConfig.DockerfileConfigMap.Name, Namespace: namespace}
+	err := omi.client.Get(ctx, namespacedName, dockerfileCM)
+	if err != nil {
+		return "", fmt.Errorf("failed to get dockerfile ConfigMap %s: %v", namespacedName, err)
+	}
+	data, ok := dockerfileCM.Data[constants.DockerfileCMKey]
+	if !ok {
+		return "", fmt.Errorf("invalid Dockerfile ConfigMap %s format, %s key is missing", namespacedName, constants.DockerfileCMKey)
+	}
+	return data, nil
 }
