@@ -32,7 +32,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta2"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign"
 	buildsignocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign/ocpbuild"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cmd"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/config"
@@ -129,7 +128,7 @@ func main() {
 
 	metricsAPI := metrics.New()
 	metricsAPI.Register()
-	buildSignHelperAPI := buildsign.NewHelper()
+	buildSignCombinerAPI := module.NewCombiner()
 	nodeAPI := node.NewNode(client)
 	registryAPI := registry.NewRegistry()
 	authFactory := auth.NewRegistryAuthGetterFactory(
@@ -139,7 +138,7 @@ func main() {
 		),
 	)
 
-	kernelAPI := module.NewKernelMapper(buildSignHelperAPI)
+	kernelAPI := module.NewKernelMapper(buildSignCombinerAPI)
 	micAPI := mic.New(client, scheme)
 	mbscAPI := mbsc.New(client, scheme)
 	imagePullerAPI := pod.NewImagePuller(client, scheme)
@@ -217,7 +216,7 @@ func main() {
 		}
 	} else {
 		signImage := cmd.GetEnvOrFatalError("RELATED_IMAGE_SIGN", setupLogger)
-		buildSignAPI := buildsignocpbuild.NewManager(client, buildSignHelperAPI, kernelOsDtkMapping, signImage, scheme)
+		buildSignAPI := buildsignocpbuild.NewManager(client, buildSignCombinerAPI, kernelOsDtkMapping, signImage, scheme)
 
 		mbscr := controllers.NewMBSCReconciler(client, buildSignAPI, mbscAPI)
 		if err = mbscr.SetupWithManager(mgr); err != nil {
