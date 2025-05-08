@@ -15,6 +15,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/kernel"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 )
@@ -27,12 +28,12 @@ type manager struct {
 }
 
 func NewManager(client client.Client,
-	helper buildsign.Helper,
+	combiner module.Combiner,
 	kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping,
 	signImage string,
 	scheme *runtime.Scheme) buildsign.Manager {
 	ocpbuildManager := newOCPBuildManager(client)
-	maker := newMaker(client, helper, ocpbuildManager, kernelOsDtkMapping, scheme)
+	maker := newMaker(client, combiner, ocpbuildManager, kernelOsDtkMapping, scheme)
 	signer := newSigner(client, signImage, ocpbuildManager, scheme)
 	return &manager{
 		client:          client,

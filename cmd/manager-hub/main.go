@@ -34,6 +34,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -41,7 +42,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/api-hub/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	buildocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build/ocpbuild"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cluster"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cmd"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
@@ -120,7 +120,7 @@ func main() {
 	metricsAPI := metrics.New()
 	metricsAPI.Register()
 
-	buildSignHelperAPI := buildsign.NewHelper()
+	buildSignCombiner := module.NewCombiner()
 	registryAPI := registry.NewRegistry()
 
 	authFactory := auth.NewRegistryAuthGetterFactory(
@@ -132,7 +132,7 @@ func main() {
 
 	buildAPI := buildocpbuild.NewManager(
 		client,
-		buildocpbuild.NewMaker(client, buildSignHelperAPI, scheme, kernelOsDtkMapping),
+		buildocpbuild.NewMaker(client, buildSignCombiner, scheme, kernelOsDtkMapping),
 		ocpbuildutils.NewOCPBuildsHelper(client, buildocpbuild.BuildType),
 		authFactory,
 		registryAPI,
@@ -146,7 +146,7 @@ func main() {
 		registryAPI,
 	)
 
-	kernelAPI := module.NewKernelMapper(buildSignHelperAPI)
+	kernelAPI := module.NewKernelMapper(buildSignCombiner)
 
 	ctrlLogger := setupLogger.WithValues("name", hub.ManagedClusterModuleReconcilerName)
 	ctrlLogger.Info("Adding controller")

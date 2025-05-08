@@ -19,9 +19,9 @@ import (
 
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 )
 
@@ -38,7 +38,7 @@ var _ = Describe("maker_makeBuildTemplate", func() {
 		ctrl                   *gomock.Controller
 		clnt                   *client.MockClient
 		maker                  maker
-		mockBuildSignHelper    *buildsign.MockHelper
+		mockCombiner           *module.MockCombiner
 		mockKernelOSDTKMapping *syncronizedmap.MockKernelOsDtkMapping
 		mockOCPBuildManager    *MockocpbuildManager
 		ctx                    context.Context
@@ -47,10 +47,10 @@ var _ = Describe("maker_makeBuildTemplate", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mockBuildSignHelper = buildsign.NewMockHelper(ctrl)
+		mockCombiner = module.NewMockCombiner(ctrl)
 		mockKernelOSDTKMapping = syncronizedmap.NewMockKernelOsDtkMapping(ctrl)
 		mockOCPBuildManager = NewMockocpbuildManager(ctrl)
-		maker = newMaker(clnt, mockBuildSignHelper, mockOCPBuildManager, mockKernelOSDTKMapping, scheme)
+		maker = newMaker(clnt, mockCombiner, mockOCPBuildManager, mockKernelOSDTKMapping, scheme)
 		ctx = context.Background()
 	})
 
@@ -189,7 +189,7 @@ var _ = Describe("maker_makeBuildTemplate", func() {
 					return nil
 				},
 			),
-			mockBuildSignHelper.EXPECT().ApplyBuildArgOverrides(buildArgs, overrides).Return(
+			mockCombiner.EXPECT().ApplyBuildArgOverrides(buildArgs, overrides).Return(
 				append(buildArgs,
 					kmmv1beta1.BuildArg{Name: "KERNEL_VERSION", Value: targetKernel},
 					kmmv1beta1.BuildArg{Name: "KERNEL_FULL_VERSION", Value: targetKernel},
@@ -284,7 +284,7 @@ var _ = Describe("maker_makeBuildTemplate", func() {
 					},
 				),
 				mockKernelOSDTKMapping.EXPECT().GetImage(gomock.Any()).Return(dtkImage, nil),
-				mockBuildSignHelper.EXPECT().ApplyBuildArgOverrides(gomock.Any(), gomock.Any()).Return(buildArgs),
+				mockCombiner.EXPECT().ApplyBuildArgOverrides(gomock.Any(), gomock.Any()).Return(buildArgs),
 				mockOCPBuildManager.EXPECT().ocpbuildLabels(gomock.Any(), gomock.Any(), ocpbuildTypeBuild),
 				mockOCPBuildManager.EXPECT().ocpbuildAnnotations(gomock.Any()),
 			)

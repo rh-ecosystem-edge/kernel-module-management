@@ -9,7 +9,6 @@ import (
 	buildv1 "github.com/openshift/api/build/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
@@ -40,20 +39,20 @@ type maker interface {
 
 type makerImpl struct {
 	client             client.Client
-	helper             buildsign.Helper
+	combiner           module.Combiner
 	ocpbuildManager    ocpbuildManager
 	kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping
 	scheme             *runtime.Scheme
 }
 
 func newMaker(client client.Client,
-	helper buildsign.Helper,
+	combiner module.Combiner,
 	ocpbuildManager ocpbuildManager,
 	kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping,
 	scheme *runtime.Scheme) maker {
 	return &makerImpl{
 		client:             client,
-		helper:             helper,
+		combiner:           combiner,
 		ocpbuildManager:    ocpbuildManager,
 		kernelOsDtkMapping: kernelOsDtkMapping,
 		scheme:             scheme,
@@ -110,7 +109,7 @@ func (m *makerImpl) makeBuildTemplate(
 		overrides = append(overrides, kmmv1beta1.BuildArg{Name: dtkBuildArg, Value: dtkImage})
 	}
 
-	buildArgs := m.helper.ApplyBuildArgOverrides(
+	buildArgs := m.combiner.ApplyBuildArgOverrides(
 		kmmBuild.BuildArgs,
 		overrides...,
 	)
