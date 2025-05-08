@@ -22,7 +22,6 @@ import (
 
 type manager struct {
 	client          client.Client
-	maker           maker
 	signer          signer
 	ocpbuildManager ocpbuildManager
 }
@@ -32,12 +31,10 @@ func NewManager(client client.Client,
 	kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping,
 	signImage string,
 	scheme *runtime.Scheme) buildsign.Manager {
-	ocpbuildManager := newOCPBuildManager(client)
-	maker := newMaker(client, combiner, ocpbuildManager, kernelOsDtkMapping, scheme)
+	ocpbuildManager := newOCPBuildManager(client, combiner, kernelOsDtkMapping, scheme)
 	signer := newSigner(client, signImage, ocpbuildManager, scheme)
 	return &manager{
 		client:          client,
-		maker:           maker,
 		signer:          signer,
 		ocpbuildManager: ocpbuildManager,
 	}
@@ -84,7 +81,7 @@ func (m *manager) Sync(ctx context.Context, mld *api.ModuleLoaderData, pushImage
 	case kmmv1beta1.BuildImage:
 		logger.Info("Building in-cluster")
 		ocpbuildType = ocpbuildTypeBuild
-		ocpbuildTemplate, err = m.maker.makeBuildTemplate(ctx, mld, pushImage, owner)
+		ocpbuildTemplate, err = m.ocpbuildManager.makeOCPBuildTemplate(ctx, mld, pushImage, owner)
 	case kmmv1beta1.SignImage:
 		logger.Info("Signing in-cluster")
 		ocpbuildType = ocpbuildTypeSign

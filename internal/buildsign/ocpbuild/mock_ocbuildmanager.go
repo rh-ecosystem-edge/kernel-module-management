@@ -13,6 +13,7 @@ import (
 	reflect "reflect"
 
 	v1 "github.com/openshift/api/build/v1"
+	api "github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	gomock "go.uber.org/mock/gomock"
 	v10 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -126,6 +127,21 @@ func (m *MockocpbuildManager) isOCPBuildChanged(existingBuild, newBuild *v1.Buil
 func (mr *MockocpbuildManagerMockRecorder) isOCPBuildChanged(existingBuild, newBuild any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "isOCPBuildChanged", reflect.TypeOf((*MockocpbuildManager)(nil).isOCPBuildChanged), existingBuild, newBuild)
+}
+
+// makeOCPBuildTemplate mocks base method.
+func (m *MockocpbuildManager) makeOCPBuildTemplate(ctx context.Context, mld *api.ModuleLoaderData, pushImage bool, owner v10.Object) (*v1.Build, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "makeOCPBuildTemplate", ctx, mld, pushImage, owner)
+	ret0, _ := ret[0].(*v1.Build)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// makeOCPBuildTemplate indicates an expected call of makeOCPBuildTemplate.
+func (mr *MockocpbuildManagerMockRecorder) makeOCPBuildTemplate(ctx, mld, pushImage, owner any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "makeOCPBuildTemplate", reflect.TypeOf((*MockocpbuildManager)(nil).makeOCPBuildTemplate), ctx, mld, pushImage, owner)
 }
 
 // ocpbuildAnnotations mocks base method.

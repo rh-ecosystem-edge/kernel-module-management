@@ -20,7 +20,6 @@ var _ = Describe("GetStatus", func() {
 	var (
 		ctrl                *gomock.Controller
 		clnt                *client.MockClient
-		mockMaker           *Mockmaker
 		mockSigner          *Mocksigner
 		mockOCPBuildManager *MockocpbuildManager
 		mgr                 *manager
@@ -34,12 +33,10 @@ var _ = Describe("GetStatus", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mockMaker = NewMockmaker(ctrl)
 		mockSigner = NewMocksigner(ctrl)
 		mockOCPBuildManager = NewMockocpbuildManager(ctrl)
 		mgr = &manager{
 			client:          clnt,
-			maker:           mockMaker,
 			signer:          mockSigner,
 			ocpbuildManager: mockOCPBuildManager,
 		}
@@ -105,7 +102,6 @@ var _ = Describe("Sync", func() {
 	var (
 		ctrl                *gomock.Controller
 		clnt                *client.MockClient
-		mockMaker           *Mockmaker
 		mockSigner          *Mocksigner
 		mockOCPBuildManager *MockocpbuildManager
 		mgr                 *manager
@@ -119,12 +115,10 @@ var _ = Describe("Sync", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mockMaker = NewMockmaker(ctrl)
 		mockSigner = NewMocksigner(ctrl)
 		mockOCPBuildManager = NewMockocpbuildManager(ctrl)
 		mgr = &manager{
 			client:          clnt,
-			maker:           mockMaker,
 			signer:          mockSigner,
 			ocpbuildManager: mockOCPBuildManager,
 		}
@@ -140,7 +134,7 @@ var _ = Describe("Sync", func() {
 
 	It("makeBuildTemplate failed", func() {
 		By("test build action")
-		mockMaker.EXPECT().makeBuildTemplate(ctx, testMLD, true, &testMBSC).Return(nil, fmt.Errorf("some error"))
+		mockOCPBuildManager.EXPECT().makeOCPBuildTemplate(ctx, testMLD, true, &testMBSC).Return(nil, fmt.Errorf("some error"))
 		err := mgr.Sync(ctx, testMLD, true, kmmv1beta1.BuildImage, &testMBSC)
 		Expect(err).To(HaveOccurred())
 
@@ -152,7 +146,7 @@ var _ = Describe("Sync", func() {
 
 	It("GetModulePodByKernel failed", func() {
 		gomock.InOrder(
-			mockMaker.EXPECT().makeBuildTemplate(ctx, testMLD, true, &testMBSC).Return(nil, nil),
+			mockOCPBuildManager.EXPECT().makeOCPBuildTemplate(ctx, testMLD, true, &testMBSC).Return(nil, nil),
 			mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, kernelVersion, ocpbuildTypeBuild, &testMBSC).
 				Return(nil, fmt.Errorf("some error")),
 		)
@@ -163,7 +157,7 @@ var _ = Describe("Sync", func() {
 	It("CreateOCPBuild failed", func() {
 		testTemplate := buildv1.Build{}
 		gomock.InOrder(
-			mockMaker.EXPECT().makeBuildTemplate(ctx, testMLD, true, &testMBSC).Return(&testTemplate, nil),
+			mockOCPBuildManager.EXPECT().makeOCPBuildTemplate(ctx, testMLD, true, &testMBSC).Return(&testTemplate, nil),
 			mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, kernelVersion, ocpbuildTypeBuild, &testMBSC).
 				Return(nil, ErrNoMatchingBuild),
 			mockOCPBuildManager.EXPECT().createOCPBuild(ctx, &testTemplate).Return(fmt.Errorf("some error")),
@@ -176,7 +170,7 @@ var _ = Describe("Sync", func() {
 		testTemplate := buildv1.Build{}
 		testBuild := buildv1.Build{}
 		gomock.InOrder(
-			mockMaker.EXPECT().makeBuildTemplate(ctx, testMLD, true, &testMBSC).Return(&testTemplate, nil),
+			mockOCPBuildManager.EXPECT().makeOCPBuildTemplate(ctx, testMLD, true, &testMBSC).Return(&testTemplate, nil),
 			mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, kernelVersion, ocpbuildTypeBuild, &testMBSC).
 				Return(&testBuild, nil),
 			mockOCPBuildManager.EXPECT().isOCPBuildChanged(&testBuild, &testTemplate).Return(false, fmt.Errorf("some error")),
@@ -189,7 +183,7 @@ var _ = Describe("Sync", func() {
 		testTemplate := buildv1.Build{}
 		testBuild := buildv1.Build{}
 		gomock.InOrder(
-			mockMaker.EXPECT().makeBuildTemplate(ctx, testMLD, true, &testMBSC).Return(&testTemplate, nil),
+			mockOCPBuildManager.EXPECT().makeOCPBuildTemplate(ctx, testMLD, true, &testMBSC).Return(&testTemplate, nil),
 			mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, kernelVersion, ocpbuildTypeBuild, &testMBSC).
 				Return(&testBuild, nil),
 			mockOCPBuildManager.EXPECT().isOCPBuildChanged(&testBuild, &testTemplate).Return(true, nil),
@@ -210,7 +204,7 @@ var _ = Describe("Sync", func() {
 		}
 
 		if buildAction {
-			mockMaker.EXPECT().makeBuildTemplate(ctx, testMLD, pushImage, &testMBSC).Return(&testBuildTemplate, nil)
+			mockOCPBuildManager.EXPECT().makeOCPBuildTemplate(ctx, testMLD, pushImage, &testMBSC).Return(&testBuildTemplate, nil)
 		} else {
 			mockSigner.EXPECT().makeBuildTemplate(ctx, testMLD, pushImage, &testMBSC).Return(&testBuildTemplate, nil)
 		}
@@ -246,7 +240,6 @@ var _ = Describe("GarbageCollect", func() {
 	var (
 		ctrl                *gomock.Controller
 		clnt                *client.MockClient
-		mockMaker           *Mockmaker
 		mockSigner          *Mocksigner
 		mockOCPBuildManager *MockocpbuildManager
 		mgr                 *manager
@@ -260,12 +253,10 @@ var _ = Describe("GarbageCollect", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mockMaker = NewMockmaker(ctrl)
 		mockSigner = NewMocksigner(ctrl)
 		mockOCPBuildManager = NewMockocpbuildManager(ctrl)
 		mgr = &manager{
 			client:          clnt,
-			maker:           mockMaker,
 			signer:          mockSigner,
 			ocpbuildManager: mockOCPBuildManager,
 		}
