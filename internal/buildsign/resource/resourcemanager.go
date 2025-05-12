@@ -20,17 +20,17 @@ import (
 
 type resourceManager struct {
 	client             client.Client
-	combiner           module.Combiner
+	buildArgOverrider  module.BuildArgOverrider
 	kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping
 	scheme             *runtime.Scheme
 }
 
-func NewResourceManager(client client.Client, combiner module.Combiner, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping,
+func NewResourceManager(client client.Client, buildArgOverrider module.BuildArgOverrider, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping,
 	scheme *runtime.Scheme) buildsign.ResourceManager {
 
 	return &resourceManager{
 		client:             client,
-		combiner:           combiner,
+		buildArgOverrider:  buildArgOverrider,
 		kernelOsDtkMapping: kernelOsDtkMapping,
 		scheme:             scheme,
 	}

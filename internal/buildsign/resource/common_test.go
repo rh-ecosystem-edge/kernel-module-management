@@ -37,7 +37,7 @@ var _ = Describe("makeBuildTemplate", func() {
 	var (
 		ctrl                   *gomock.Controller
 		clnt                   *client.MockClient
-		mockCombiner           *module.MockCombiner
+		mbao                   *module.MockBuildArgOverrider
 		mockKernelOSDTKMapping *syncronizedmap.MockKernelOsDtkMapping
 		ctx                    context.Context
 		rm                     *resourceManager
@@ -46,12 +46,12 @@ var _ = Describe("makeBuildTemplate", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mockCombiner = module.NewMockCombiner(ctrl)
+		mbao = module.NewMockBuildArgOverrider(ctrl)
 		mockKernelOSDTKMapping = syncronizedmap.NewMockKernelOsDtkMapping(ctrl)
 		ctx = context.Background()
 		rm = &resourceManager{
 			client:             clnt,
-			combiner:           mockCombiner,
+			buildArgOverrider:  mbao,
 			kernelOsDtkMapping: mockKernelOSDTKMapping,
 			scheme:             scheme,
 		}
@@ -192,7 +192,7 @@ var _ = Describe("makeBuildTemplate", func() {
 					return nil
 				},
 			),
-			mockCombiner.EXPECT().ApplyBuildArgOverrides(buildArgs, overrides).Return(
+			mbao.EXPECT().ApplyBuildArgOverrides(buildArgs, overrides).Return(
 				append(buildArgs,
 					kmmv1beta1.BuildArg{Name: "KERNEL_VERSION", Value: targetKernel},
 					kmmv1beta1.BuildArg{Name: "KERNEL_FULL_VERSION", Value: targetKernel},
@@ -285,7 +285,7 @@ var _ = Describe("makeBuildTemplate", func() {
 					},
 				),
 				mockKernelOSDTKMapping.EXPECT().GetImage(gomock.Any()).Return(dtkImage, nil),
-				mockCombiner.EXPECT().ApplyBuildArgOverrides(gomock.Any(), gomock.Any()).Return(buildArgs),
+				mbao.EXPECT().ApplyBuildArgOverrides(gomock.Any(), gomock.Any()).Return(buildArgs),
 			)
 
 			mld := api.ModuleLoaderData{

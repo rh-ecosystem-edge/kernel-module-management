@@ -25,16 +25,16 @@ var _ = Describe("GetResourceByKernel", func() {
 	var (
 		mockKubeClient         *client.MockClient
 		rm                     buildsign.ResourceManager
-		mockCombiner           *module.MockCombiner
+		mockBuildArgOverrider  *module.MockBuildArgOverrider
 		mockKernelOSDTKMapping *syncronizedmap.MockKernelOsDtkMapping
 	)
 
 	BeforeEach(func() {
 		ctrl := gomock.NewController(GinkgoT())
 		mockKubeClient = client.NewMockClient(ctrl)
-		mockCombiner = module.NewMockCombiner(ctrl)
+		mockBuildArgOverrider = module.NewMockBuildArgOverrider(ctrl)
 		mockKernelOSDTKMapping = syncronizedmap.NewMockKernelOsDtkMapping(ctrl)
-		rm = NewResourceManager(mockKubeClient, mockCombiner, mockKernelOSDTKMapping, scheme)
+		rm = NewResourceManager(mockKubeClient, mockBuildArgOverrider, mockKernelOSDTKMapping, scheme)
 
 	})
 
@@ -109,7 +109,7 @@ var _ = Describe("GetModuleResources", func() {
 	var (
 		mockKubeClient         *client.MockClient
 		rm                     buildsign.ResourceManager
-		mockCombiner           *module.MockCombiner
+		mockBuildArgOverrider  *module.MockBuildArgOverrider
 		mockKernelOSDTKMapping *syncronizedmap.MockKernelOsDtkMapping
 	)
 
@@ -117,7 +117,7 @@ var _ = Describe("GetModuleResources", func() {
 		ctrl := gomock.NewController(GinkgoT())
 		mockKubeClient = client.NewMockClient(ctrl)
 		mockKernelOSDTKMapping = syncronizedmap.NewMockKernelOsDtkMapping(ctrl)
-		rm = NewResourceManager(mockKubeClient, mockCombiner, mockKernelOSDTKMapping, scheme)
+		rm = NewResourceManager(mockKubeClient, mockBuildArgOverrider, mockKernelOSDTKMapping, scheme)
 
 	})
 
@@ -184,7 +184,7 @@ var _ = Describe("DeleteResource", func() {
 		ctrl                   *gomock.Controller
 		mockKubeClient         *client.MockClient
 		rm                     buildsign.ResourceManager
-		mockCombiner           *module.MockCombiner
+		mockBuildArgOverrider  *module.MockBuildArgOverrider
 		mockKernelOSDTKMapping *syncronizedmap.MockKernelOsDtkMapping
 	)
 
@@ -192,7 +192,7 @@ var _ = Describe("DeleteResource", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		mockKubeClient = client.NewMockClient(ctrl)
 		mockKernelOSDTKMapping = syncronizedmap.NewMockKernelOsDtkMapping(ctrl)
-		rm = NewResourceManager(mockKubeClient, mockCombiner, mockKernelOSDTKMapping, scheme)
+		rm = NewResourceManager(mockKubeClient, mockBuildArgOverrider, mockKernelOSDTKMapping, scheme)
 	})
 
 	ctx := context.Background()
@@ -228,7 +228,7 @@ var _ = Describe("CreateResource", func() {
 		ctrl                   *gomock.Controller
 		mockKubeClient         *client.MockClient
 		rm                     buildsign.ResourceManager
-		mockCombiner           *module.MockCombiner
+		mockBuildArgOverrider  *module.MockBuildArgOverrider
 		mockKernelOSDTKMapping *syncronizedmap.MockKernelOsDtkMapping
 	)
 
@@ -236,7 +236,7 @@ var _ = Describe("CreateResource", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		mockKubeClient = client.NewMockClient(ctrl)
 		mockKernelOSDTKMapping = syncronizedmap.NewMockKernelOsDtkMapping(ctrl)
-		rm = NewResourceManager(mockKubeClient, mockCombiner, mockKernelOSDTKMapping, scheme)
+		rm = NewResourceManager(mockKubeClient, mockBuildArgOverrider, mockKernelOSDTKMapping, scheme)
 	})
 
 	It("good flow", func() {
@@ -268,7 +268,7 @@ var _ = Describe("GetResourceStatus", func() {
 		ctrl                   *gomock.Controller
 		mockKubeClient         *client.MockClient
 		rm                     buildsign.ResourceManager
-		mockCombiner           *module.MockCombiner
+		mockBuildArgOverrider  *module.MockBuildArgOverrider
 		mockKernelOSDTKMapping *syncronizedmap.MockKernelOsDtkMapping
 	)
 
@@ -276,7 +276,7 @@ var _ = Describe("GetResourceStatus", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		mockKubeClient = client.NewMockClient(ctrl)
 		mockKernelOSDTKMapping = syncronizedmap.NewMockKernelOsDtkMapping(ctrl)
-		rm = NewResourceManager(mockKubeClient, mockCombiner, mockKernelOSDTKMapping, scheme)
+		rm = NewResourceManager(mockKubeClient, mockBuildArgOverrider, mockKernelOSDTKMapping, scheme)
 	})
 
 	DescribeTable("should return the correct status depending on the build status",
@@ -312,7 +312,7 @@ var _ = Describe("IsResourceChanged", func() {
 		ctrl                   *gomock.Controller
 		mockKubeClient         *client.MockClient
 		rm                     buildsign.ResourceManager
-		mockCombiner           *module.MockCombiner
+		mockBuildArgOverrider  *module.MockBuildArgOverrider
 		mockKernelOSDTKMapping *syncronizedmap.MockKernelOsDtkMapping
 	)
 
@@ -320,7 +320,7 @@ var _ = Describe("IsResourceChanged", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		mockKubeClient = client.NewMockClient(ctrl)
 		mockKernelOSDTKMapping = syncronizedmap.NewMockKernelOsDtkMapping(ctrl)
-		rm = NewResourceManager(mockKubeClient, mockCombiner, mockKernelOSDTKMapping, scheme)
+		rm = NewResourceManager(mockKubeClient, mockBuildArgOverrider, mockKernelOSDTKMapping, scheme)
 	})
 
 	DescribeTable("should detect if a build has changed",
