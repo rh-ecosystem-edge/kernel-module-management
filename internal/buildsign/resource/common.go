@@ -56,7 +56,7 @@ func (rm *resourceManager) buildSpec(mld *api.ModuleLoaderData, dockerfileData, 
 		}
 		overrides = append(overrides, kmmv1beta1.BuildArg{Name: dtkBuildArg, Value: dtkImage})
 	}
-	buildArgs := rm.combiner.ApplyBuildArgOverrides(
+	buildArgs := rm.buildArgOverrider.ApplyBuildArgOverrides(
 		buildConfig.BuildArgs,
 		overrides...,
 	)
