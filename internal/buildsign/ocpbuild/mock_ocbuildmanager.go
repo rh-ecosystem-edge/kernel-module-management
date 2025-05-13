@@ -129,19 +129,34 @@ func (mr *MockocpbuildManagerMockRecorder) isOCPBuildChanged(existingBuild, newB
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "isOCPBuildChanged", reflect.TypeOf((*MockocpbuildManager)(nil).isOCPBuildChanged), existingBuild, newBuild)
 }
 
-// makeOCPBuildTemplate mocks base method.
-func (m *MockocpbuildManager) makeOCPBuildTemplate(ctx context.Context, mld *api.ModuleLoaderData, pushImage bool, owner v10.Object) (*v1.Build, error) {
+// makeOcpbuildBuildTemplate mocks base method.
+func (m *MockocpbuildManager) makeOcpbuildBuildTemplate(ctx context.Context, mld *api.ModuleLoaderData, pushImage bool, owner v10.Object) (*v1.Build, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "makeOCPBuildTemplate", ctx, mld, pushImage, owner)
+	ret := m.ctrl.Call(m, "makeOcpbuildBuildTemplate", ctx, mld, pushImage, owner)
 	ret0, _ := ret[0].(*v1.Build)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// makeOCPBuildTemplate indicates an expected call of makeOCPBuildTemplate.
-func (mr *MockocpbuildManagerMockRecorder) makeOCPBuildTemplate(ctx, mld, pushImage, owner any) *gomock.Call {
+// makeOcpbuildBuildTemplate indicates an expected call of makeOcpbuildBuildTemplate.
+func (mr *MockocpbuildManagerMockRecorder) makeOcpbuildBuildTemplate(ctx, mld, pushImage, owner any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "makeOCPBuildTemplate", reflect.TypeOf((*MockocpbuildManager)(nil).makeOCPBuildTemplate), ctx, mld, pushImage, owner)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "makeOcpbuildBuildTemplate", reflect.TypeOf((*MockocpbuildManager)(nil).makeOcpbuildBuildTemplate), ctx, mld, pushImage, owner)
+}
+
+// makeOcpbuildSignTemplate mocks base method.
+func (m *MockocpbuildManager) makeOcpbuildSignTemplate(ctx context.Context, mld *api.ModuleLoaderData, pushImage bool, owner v10.Object) (*v1.Build, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "makeOcpbuildSignTemplate", ctx, mld, pushImage, owner)
+	ret0, _ := ret[0].(*v1.Build)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// makeOcpbuildSignTemplate indicates an expected call of makeOcpbuildSignTemplate.
+func (mr *MockocpbuildManagerMockRecorder) makeOcpbuildSignTemplate(ctx, mld, pushImage, owner any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "makeOcpbuildSignTemplate", reflect.TypeOf((*MockocpbuildManager)(nil).makeOcpbuildSignTemplate), ctx, mld, pushImage, owner)
 }
 
 // ocpbuildAnnotations mocks base method.

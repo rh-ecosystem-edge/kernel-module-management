@@ -1,6 +1,7 @@
 package ocpbuild
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -51,22 +52,25 @@ type ocpbuildManager interface {
 	deleteOCPBuild(ctx context.Context, build *buildv1.Build) error
 	ocpbuildLabels(modName, kernelVersion, ocpbuildType string) map[string]string
 	ocpbuildAnnotations(hash uint64) map[string]string
-	makeOCPBuildTemplate(ctx context.Context, mld *api.ModuleLoaderData, pushImage bool, owner metav1.Object) (*buildv1.Build, error)
+	makeOcpbuildBuildTemplate(ctx context.Context, mld *api.ModuleLoaderData, pushImage bool, owner metav1.Object) (*buildv1.Build, error)
+	makeOcpbuildSignTemplate(ctx context.Context, mld *api.ModuleLoaderData, pushImage bool, owner metav1.Object) (*buildv1.Build, error)
 }
 
 type ocpbuildManagerImpl struct {
 	client             client.Client
 	combiner           module.Combiner
 	kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping
+	signImage          string
 	scheme             *runtime.Scheme
 }
 
 func newOCPBuildManager(client client.Client, combiner module.Combiner, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping,
-	scheme *runtime.Scheme) ocpbuildManager {
+	signImage string, scheme *runtime.Scheme) ocpbuildManager {
 	return &ocpbuildManagerImpl{
 		client:             client,
 		combiner:           combiner,
 		kernelOsDtkMapping: kernelOsDtkMapping,
+		signImage:          signImage,
 		scheme:             scheme,
 	}
 }
@@ -196,7 +200,7 @@ func moduleLabels(modName, ocpbuildType string) map[string]string {
 		constants.BuildTypeLabel:  ocpbuildType,
 	}
 }
-func (omi *ocpbuildManagerImpl) makeOCPBuildTemplate(ctx context.Context, mld *api.ModuleLoaderData, pushImage bool,
+func (omi *ocpbuildManagerImpl) makeOcpbuildBuildTemplate(ctx context.Context, mld *api.ModuleLoaderData, pushImage bool,
 	owner metav1.Object) (*buildv1.Build, error) {
 
 	kmmBuild := mld.Build
@@ -319,4 +323,117 @@ func (omi *ocpbuildManagerImpl) getDockerfileData(ctx context.Context, buildConf
 		return "", fmt.Errorf("invalid Dockerfile ConfigMap %s format, %s key is missing", namespacedName, constants.DockerfileCMKey)
 	}
 	return data, nil
+}
+
+func (omi *ocpbuildManagerImpl) makeOcpbuildSignTemplate(ctx context.Context, mld *api.ModuleLoaderData, pushImage bool,
+	owner metav1.Object) (*buildv1.Build, error) {
+
+	signConfig := mld.Sign
+
+	var buf bytes.Buffer
+
+	td := TemplateData{
+		FilesToSign: mld.Sign.FilesToSign,
+		SignImage:   omi.signImage,
+	}
+
+	imageToSign := ""
+	if module.ShouldBeBuilt(mld) {
+		imageToSign = module.IntermediateImageName(mld.Name, mld.Namespace, mld.ContainerImage)
+	}
+
+	if imageToSign != "" {
+		td.UnsignedImage = imageToSign
+	} else if signConfig.UnsignedImage != "" {
+		td.UnsignedImage = signConfig.UnsignedImage
+	} else {
+		return nil, fmt.Errorf("no image to sign given")
+	}
+
+	if err := tmpl.Execute(&buf, td); err != nil {
+		return nil, fmt.Errorf("could not render Dockerfile: %v", err)
+	}
+
+	dockerfile := buf.String()
+
+	buildTarget := buildv1.BuildOutput{
+		To: &v1.ObjectReference{
+			Kind: "DockerImage",
+			Name: mld.ContainerImage,
+		},
+		PushSecret: mld.ImageRepoSecret,
+	}
+	if !pushImage {
+		buildTarget = buildv1.BuildOutput{}
+	}
+
+	sourceConfig := buildv1.BuildSource{
+		Dockerfile: &dockerfile,
+		Type:       buildv1.BuildSourceDockerfile,
+	}
+
+	spec := buildv1.BuildSpec{
+		CommonSpec: buildv1.CommonSpec{
+			ServiceAccount: constants.OCPBuilderServiceAccountName,
+			Source:         sourceConfig,
+			Strategy: buildv1.BuildStrategy{
+				Type: buildv1.DockerBuildStrategyType,
+				DockerStrategy: &buildv1.DockerBuildStrategy{
+					Volumes: []buildv1.BuildVolume{
+						{
+							Name: "key",
+							Source: buildv1.BuildVolumeSource{
+								Type: buildv1.BuildVolumeSourceTypeSecret,
+								Secret: &v1.SecretVolumeSource{
+									SecretName: signConfig.KeySecret.Name,
+									Optional:   ptr.To(false),
+								},
+							},
+							Mounts: []buildv1.BuildVolumeMount{
+								{DestinationPath: "/run/secrets/key"},
+							},
+						},
+						{
+							Name: "cert",
+							Source: buildv1.BuildVolumeSource{
+								Type: buildv1.BuildVolumeSourceTypeSecret,
+								Secret: &v1.SecretVolumeSource{
+									SecretName: signConfig.CertSecret.Name,
+									Optional:   ptr.To(false),
+								},
+							},
+							Mounts: []buildv1.BuildVolumeMount{
+								{DestinationPath: "/run/secrets/cert"},
+							},
+						},
+					},
+				},
+			},
+			Output:         buildTarget,
+			NodeSelector:   mld.Selector,
+			MountTrustedCA: ptr.To(true),
+		},
+	}
+
+	hash, err := omi.hash(ctx, &spec, mld.Namespace, signConfig.KeySecret.Name, signConfig.CertSecret.Name)
+	if err != nil {
+		return nil, fmt.Errorf("could not hash Build spec: %v", err)
+	}
+
+	build := &buildv1.Build{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: mld.Name + "-sign-",
+			Namespace:    mld.Namespace,
+			Labels:       omi.ocpbuildLabels(mld.Name, mld.KernelNormalizedVersion, ocpbuildTypeSign),
+			Annotations:  omi.ocpbuildAnnotations(hash),
+			Finalizers:   []string{constants.GCDelayFinalizer, constants.JobEventFinalizer},
+		},
+		Spec: spec,
+	}
+
+	if err := controllerutil.SetControllerReference(owner, build, omi.scheme); err != nil {
+		return nil, fmt.Errorf("could not set the owner reference: %v", err)
+	}
+
+	return build, nil
 }
