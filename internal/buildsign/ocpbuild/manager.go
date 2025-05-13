@@ -22,7 +22,6 @@ import (
 
 type manager struct {
 	client          client.Client
-	signer          signer
 	ocpbuildManager ocpbuildManager
 }
 
@@ -31,11 +30,9 @@ func NewManager(client client.Client,
 	kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping,
 	signImage string,
 	scheme *runtime.Scheme) buildsign.Manager {
-	ocpbuildManager := newOCPBuildManager(client, combiner, kernelOsDtkMapping, scheme)
-	signer := newSigner(client, signImage, ocpbuildManager, scheme)
+	ocpbuildManager := newOCPBuildManager(client, combiner, kernelOsDtkMapping, signImage, scheme)
 	return &manager{
 		client:          client,
-		signer:          signer,
 		ocpbuildManager: ocpbuildManager,
 	}
 }
@@ -81,11 +78,11 @@ func (m *manager) Sync(ctx context.Context, mld *api.ModuleLoaderData, pushImage
 	case kmmv1beta1.BuildImage:
 		logger.Info("Building in-cluster")
 		ocpbuildType = ocpbuildTypeBuild
-		ocpbuildTemplate, err = m.ocpbuildManager.makeOCPBuildTemplate(ctx, mld, pushImage, owner)
+		ocpbuildTemplate, err = m.ocpbuildManager.makeOcpbuildBuildTemplate(ctx, mld, pushImage, owner)
 	case kmmv1beta1.SignImage:
 		logger.Info("Signing in-cluster")
 		ocpbuildType = ocpbuildTypeSign
-		ocpbuildTemplate, err = m.signer.makeBuildTemplate(ctx, mld, pushImage, owner)
+		ocpbuildTemplate, err = m.ocpbuildManager.makeOcpbuildSignTemplate(ctx, mld, pushImage, owner)
 	default:
 		return fmt.Errorf("invalid action %s", action)
 	}
