@@ -65,13 +65,6 @@ func NewBuildSignReconciler(
 	}
 }
 
-//+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=modules,verbs=get;list;watch;update;patch
-//+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=modules/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups="core",resources=nodes,verbs=get;list;watch
-//+kubebuilder:rbac:groups="core",resources=secrets,verbs=get;list;watch
-//+kubebuilder:rbac:groups="core",resources=configmaps,verbs=get;list;delete;watch
-//+kubebuilder:rbac:groups="build.openshift.io",resources=builds,verbs=get;list;create;delete;watch;patch
-
 // Reconcile lists all nodes and looks for kernels that match its mappings.
 // For each mapping that matches at least one node in the cluster, it creates a DaemonSet running the container image
 // on the nodes with a compatible kernel.
