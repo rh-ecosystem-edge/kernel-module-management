@@ -7,13 +7,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mitchellh/hashstructure/v2"
 	buildv1 "github.com/openshift/api/build/v1"
-	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -35,8 +32,6 @@ const (
 	StatusCreated    Status = "created"
 	StatusInProgress Status = "in progress"
 	StatusFailed     Status = "failed"
-
-	hashAnnotation = "kmm.node.kubernetes.io/last-hash"
 )
 
 var ErrNoMatchingBuild = errors.New("no matching Build")
@@ -51,7 +46,6 @@ type ocpbuildManager interface {
 	createOCPBuild(ctx context.Context, build *buildv1.Build) error
 	deleteOCPBuild(ctx context.Context, build *buildv1.Build) error
 	ocpbuildLabels(modName, kernelVersion, ocpbuildType string) map[string]string
-	ocpbuildAnnotations(hash uint64) map[string]string
 	makeOcpbuildBuildTemplate(ctx context.Context, mld *api.ModuleLoaderData, pushImage bool, owner metav1.Object) (*buildv1.Build, error)
 	makeOcpbuildSignTemplate(ctx context.Context, mld *api.ModuleLoaderData, pushImage bool, owner metav1.Object) (*buildv1.Build, error)
 }
@@ -81,7 +75,7 @@ func (omi *ocpbuildManagerImpl) isOCPBuildChanged(existingBuild *buildv1.Build, 
 	if existingAnnotations == nil {
 		return false, fmt.Errorf("annotations are not present in the existing build %s", existingBuild.Name)
 	}
-	if existingAnnotations[hashAnnotation] == newAnnotations[hashAnnotation] {
+	if existingAnnotations[constants.HashAnnotation] == newAnnotations[constants.HashAnnotation] {
 		return false, nil
 	}
 	return true, nil
@@ -174,32 +168,6 @@ func (omi *ocpbuildManagerImpl) ocpbuildLabels(modName, kernelVersion, ocpbuildT
 	return labels
 }
 
-func (omi *ocpbuildManagerImpl) ocpbuildAnnotations(hash uint64) map[string]string {
-	return map[string]string{hashAnnotation: fmt.Sprintf("%d", hash)}
-}
-
-func filterOCPBuildsByOwner(builds []buildv1.Build, owner metav1.Object) []buildv1.Build {
-	ownedBuilds := []buildv1.Build{}
-	for _, build := range builds {
-		if metav1.IsControlledBy(&build, owner) {
-			ownedBuilds = append(ownedBuilds, build)
-		}
-	}
-	return ownedBuilds
-}
-
-func moduleKernelLabels(modName, kernelVersion, ocpbuildType string) map[string]string {
-	labels := moduleLabels(modName, ocpbuildType)
-	labels[constants.TargetKernelTarget] = kernelVersion
-	return labels
-}
-
-func moduleLabels(modName, ocpbuildType string) map[string]string {
-	return map[string]string{
-		constants.ModuleNameLabel: modName,
-		constants.BuildTypeLabel:  ocpbuildType,
-	}
-}
 func (omi *ocpbuildManagerImpl) makeOcpbuildBuildTemplate(ctx context.Context, mld *api.ModuleLoaderData, pushImage bool,
 	owner metav1.Object) (*buildv1.Build, error) {
 
@@ -267,9 +235,9 @@ func (omi *ocpbuildManagerImpl) makeOcpbuildBuildTemplate(ctx context.Context, m
 		Type:       buildv1.BuildSourceDockerfile,
 	}
 
-	sourceConfigHash, err := hashstructure.Hash(sourceConfig, hashstructure.FormatV2, nil)
+	sourceConfigHash, err := omi.getBuildHashAnnotationValue(ctx, dockerfileData)
 	if err != nil {
-		return nil, fmt.Errorf("could not hash Build's Buildsource template: %v", err)
+		return nil, fmt.Errorf("failed to get build annotation value: %v", err)
 	}
 
 	selector := mld.Selector
@@ -309,20 +277,6 @@ func (omi *ocpbuildManagerImpl) makeOcpbuildBuildTemplate(ctx context.Context, m
 	}
 
 	return &bc, nil
-}
-
-func (omi *ocpbuildManagerImpl) getDockerfileData(ctx context.Context, buildConfig *kmmv1beta1.Build, namespace string) (string, error) {
-	dockerfileCM := &corev1.ConfigMap{}
-	namespacedName := types.NamespacedName{Name: buildConfig.DockerfileConfigMap.Name, Namespace: namespace}
-	err := omi.client.Get(ctx, namespacedName, dockerfileCM)
-	if err != nil {
-		return "", fmt.Errorf("failed to get dockerfile ConfigMap %s: %v", namespacedName, err)
-	}
-	data, ok := dockerfileCM.Data[constants.DockerfileCMKey]
-	if !ok {
-		return "", fmt.Errorf("invalid Dockerfile ConfigMap %s format, %s key is missing", namespacedName, constants.DockerfileCMKey)
-	}
-	return data, nil
 }
 
 func (omi *ocpbuildManagerImpl) makeOcpbuildSignTemplate(ctx context.Context, mld *api.ModuleLoaderData, pushImage bool,
@@ -415,7 +369,7 @@ func (omi *ocpbuildManagerImpl) makeOcpbuildSignTemplate(ctx context.Context, ml
 		},
 	}
 
-	hash, err := omi.hash(ctx, &spec, mld.Namespace, signConfig.KeySecret.Name, signConfig.CertSecret.Name)
+	buildSpecHash, err := omi.getSignHashAnnotationValue(ctx, signConfig.KeySecret.Name, signConfig.CertSecret.Name, mld.Namespace, &spec)
 	if err != nil {
 		return nil, fmt.Errorf("could not hash Build spec: %v", err)
 	}
@@ -425,7 +379,7 @@ func (omi *ocpbuildManagerImpl) makeOcpbuildSignTemplate(ctx context.Context, ml
 			GenerateName: mld.Name + "-sign-",
 			Namespace:    mld.Namespace,
 			Labels:       omi.ocpbuildLabels(mld.Name, mld.KernelNormalizedVersion, ocpbuildTypeSign),
-			Annotations:  omi.ocpbuildAnnotations(hash),
+			Annotations:  omi.ocpbuildAnnotations(buildSpecHash),
 			Finalizers:   []string{constants.GCDelayFinalizer, constants.JobEventFinalizer},
 		},
 		Spec: spec,
