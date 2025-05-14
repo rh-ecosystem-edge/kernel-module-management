@@ -34,10 +34,30 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-//+kubebuilder:rbac:groups="core",resources=namespaces,verbs=get;list;patch;watch
-//+kubebuilder:rbac:groups="core",resources=nodes,verbs=get;watch
-//+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=nodemodulesconfigs,verbs=get;list;watch;patch;create;delete
-//+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=modules/finalizers,verbs=update
+// +kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=create;delete;get;list;patch;watch
+// +kubebuilder:rbac:groups=build.openshift.io,resources=builds,verbs=create;delete;get;list;patch;watch
+// +kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=clusterclaims,resourceNames=kernel-versions.kmm.node.kubernetes.io,verbs=delete;patch;update
+// +kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=clusterclaims,verbs=create;get;list;watch
+// +kubebuilder:rbac:groups=core,resources=configmaps,verbs=delete;get;list;watch
+// +kubebuilder:rbac:groups=core,resources=namespaces,verbs=get;list;patch;watch
+// +kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;patch;watch
+// +kubebuilder:rbac:groups=core,resources=pods,verbs=create;delete;get;list;patch;watch
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch
+// +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=modulebuildsignconfigs,verbs=create;get;list;patch;update;watch
+// +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=modulebuildsignconfigs/status,verbs=get;patch;update
+// +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=modulebuildsignconfigs/finalizers,verbs=update
+
+// +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=moduleimagesconfigs,verbs=create;delete;get;list;patch;watch
+// +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=moduleimagesconfigs/status,verbs=get;patch;update
+// +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=moduleimagesconfigs/finalizers,verbs=update
+
+// +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=modules,verbs=get;list;patch;update;watch
+// +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=modules/status,verbs=get;patch;update
+// +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=modules/finalizers,verbs=update
+// +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=nodemodulesconfigs,verbs=create;delete;get;list;patch;watch
+// +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=nodemodulesconfigs/status,verbs=patch
+// +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=nodemodulesconfigs/finalizers,verbs=patch;update
 
 const (
 	ModuleReconcilerName = "ModuleReconciler"

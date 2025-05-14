@@ -22,10 +22,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 )
 
-//+kubebuilder:rbac:groups="core",resources=nodes,verbs=get;patch;list;watch
-//+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=clusterclaims,verbs=create;get;list;watch
-//+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=clusterclaims,resourceNames=kernel-versions.kmm.node.kubernetes.io,verbs=delete;patch;update
-
 const (
 	NodeKernelClusterClaimReconcilerName = "NodeKernelClusterClaim"
 )
