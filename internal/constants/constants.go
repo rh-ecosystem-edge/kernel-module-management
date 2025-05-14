@@ -9,6 +9,7 @@ const (
 	TargetKernelTarget   = "kmm.node.kubernetes.io/target-kernel"
 	KernelLabel          = "kmm.node.kubernetes.io/kernel-version.full"
 	BuildTypeLabel       = "kmm.openshift.io/build.type"
+	HashAnnotation       = "kmm.node.kubernetes.io/last-hash"
 	NamespaceLabelKey    = "kmm.node.k8s.io/contains-modules"
 
 	WorkerPodVersionLabelPrefix    = "beta.kmm.node.kubernetes.io/version-worker-pod"

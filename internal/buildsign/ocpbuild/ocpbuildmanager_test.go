@@ -332,7 +332,7 @@ var _ = Describe("isOCPBuildChanged", func() {
 			}
 			newBuild := buildv1.Build{
 				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{hashAnnotation: "some hash"},
+					Annotations: map[string]string{constants.HashAnnotation: "some hash"},
 				},
 			}
 
@@ -346,8 +346,8 @@ var _ = Describe("isOCPBuildChanged", func() {
 		},
 
 		Entry("should error if build has no annotations", nil, false, true),
-		Entry("should return true if build has changed", map[string]string{hashAnnotation: "some other hash"}, true, false),
-		Entry("should return false is build has not changed ", map[string]string{hashAnnotation: "some hash"}, false, false),
+		Entry("should return true if build has changed", map[string]string{constants.HashAnnotation: "some other hash"}, true, false),
+		Entry("should return false is build has not changed ", map[string]string{constants.HashAnnotation: "some hash"}, false, false),
 	)
 })
 
@@ -539,7 +539,7 @@ var _ = Describe("makeOcpbuildBuildTemplate", func() {
 		hash, err := hashstructure.Hash(expected.Spec.CommonSpec.Source, hashstructure.FormatV2, nil)
 		Expect(err).NotTo(HaveOccurred())
 
-		annotations := map[string]string{hashAnnotation: fmt.Sprintf("%d", hash)}
+		annotations := map[string]string{constants.HashAnnotation: fmt.Sprintf("%d", hash)}
 		expected.SetAnnotations(annotations)
 
 		gomock.InOrder(
@@ -824,7 +824,7 @@ COPY --from=signimage /signroot/modules/simple-kmod.ko:/modules/simple-procfs-km
 				),
 		)
 
-		hash, err := omi.hash(ctx, &expected.Spec, mld.Namespace, mld.Sign.KeySecret.Name, mld.Sign.CertSecret.Name)
+		hash, err := omi.getSignHashAnnotationValue(ctx, mld.Sign.KeySecret.Name, mld.Sign.CertSecret.Name, mld.Namespace, &expected.Spec)
 		Expect(err).NotTo(HaveOccurred())
 		annotations := omi.ocpbuildAnnotations(hash)
 		expected.SetAnnotations(annotations)
@@ -878,8 +878,20 @@ COPY --from=signimage /signroot/modules/simple-kmod.ko:/modules/simple-procfs-km
 		mld.RegistryTLS = &kmmv1beta1.TLSOptions{}
 
 		gomock.InOrder(
-			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.CertSecret.Name, Namespace: mld.Namespace}, gomock.Any()),
-			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.KeySecret.Name, Namespace: mld.Namespace}, gomock.Any()),
+			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.CertSecret.Name, Namespace: mld.Namespace}, gomock.Any()).
+				DoAndReturn(
+					func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
+						secret.Data = publicSignData
+						return nil
+					},
+				),
+			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.KeySecret.Name, Namespace: mld.Namespace}, gomock.Any()).
+				DoAndReturn(
+					func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
+						secret.Data = privateSignData
+						return nil
+					},
+				),
 		)
 
 		actual, err := omi.makeOcpbuildSignTemplate(ctx, &mld, false, mld.Owner)
