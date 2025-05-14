@@ -159,20 +159,6 @@ func (mr *MockocpbuildManagerMockRecorder) makeOcpbuildSignTemplate(ctx, mld, pu
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "makeOcpbuildSignTemplate", reflect.TypeOf((*MockocpbuildManager)(nil).makeOcpbuildSignTemplate), ctx, mld, pushImage, owner)
 }
 
-// ocpbuildAnnotations mocks base method.
-func (m *MockocpbuildManager) ocpbuildAnnotations(hash uint64) map[string]string {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ocpbuildAnnotations", hash)
-	ret0, _ := ret[0].(map[string]string)
-	return ret0
-}
-
-// ocpbuildAnnotations indicates an expected call of ocpbuildAnnotations.
-func (mr *MockocpbuildManagerMockRecorder) ocpbuildAnnotations(hash any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ocpbuildAnnotations", reflect.TypeOf((*MockocpbuildManager)(nil).ocpbuildAnnotations), hash)
-}
-
 // ocpbuildLabels mocks base method.
 func (m *MockocpbuildManager) ocpbuildLabels(modName, kernelVersion, ocpbuildType string) map[string]string {
 	m.ctrl.T.Helper()
