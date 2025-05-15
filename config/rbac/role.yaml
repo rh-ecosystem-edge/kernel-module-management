@@ -101,8 +101,6 @@ rules:
   - modulebuildsignconfigs/finalizers
   - moduleimagesconfigs/finalizers
   - modules/finalizers
-  - preflightvalidations/finalizers
-  - preflightvalidationsocp/finalizers
   verbs:
   - update
 - apiGroups:
@@ -111,7 +109,6 @@ rules:
   - modulebuildsignconfigs/status
   - moduleimagesconfigs/status
   - modules/status
-  - preflightvalidationsocp/status
   verbs:
   - get
   - patch
@@ -132,8 +129,6 @@ rules:
   - kmm.sigs.x-k8s.io
   resources:
   - modules
-  - preflightvalidations/status
-  - preflightvalidationsocp
   verbs:
   - get
   - list
@@ -153,15 +148,3 @@ rules:
   - nodemodulesconfigs/status
   verbs:
   - patch
-- apiGroups:
-  - kmm.sigs.x-k8s.io
-  resources:
-  - preflightvalidations
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
