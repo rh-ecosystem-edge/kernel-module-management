@@ -29,7 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2/textlogger"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -44,7 +43,6 @@ import (
 
 	hubv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api-hub/v1beta1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	buildsignresource "github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign/resource"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cluster"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cmd"
@@ -56,7 +54,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 
@@ -126,15 +123,7 @@ func main() {
 	metricsAPI.Register()
 
 	buildSignCombiner := module.NewCombiner()
-	registryAPI := registry.NewRegistry()
 	resourceManager := buildsignresource.NewResourceManager(client, buildSignCombiner, kernelOsDtkMapping, scheme)
-
-	authFactory := auth.NewRegistryAuthGetterFactory(
-		client,
-		kubernetes.NewForConfigOrDie(
-			ctrl.GetConfigOrDie(),
-		),
-	)
 
 	micAPI := mic.New(client, scheme)
 	mbscAPI := mbsc.New(client, scheme)
@@ -149,7 +138,7 @@ func main() {
 	ctx := ctrl.SetupSignalHandler()
 	mcmr := hub.NewManagedClusterModuleReconciler(
 		client,
-		manifestwork.NewCreator(client, scheme, kernelAPI, registryAPI, authFactory, operatorNamespace),
+		manifestwork.NewCreator(client, scheme, kernelAPI, operatorNamespace),
 		cluster.NewClusterAPI(client, kernelAPI, operatorNamespace),
 		statusupdater.NewManagedClusterModuleStatusUpdater(client),
 		filterAPI,

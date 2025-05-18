@@ -32,7 +32,6 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta2"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	buildsignresource "github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign/resource"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cmd"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/config"
@@ -43,13 +42,11 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ocp/ca"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2/textlogger"
 	clusterv1alpha1 "open-cluster-management.io/api/cluster/v1alpha1"
@@ -129,16 +126,10 @@ func main() {
 
 	metricsAPI := metrics.New()
 	metricsAPI.Register()
+
 	buildSignCombinerAPI := module.NewCombiner()
 	resourceManager := buildsignresource.NewResourceManager(client, buildSignCombinerAPI, kernelOsDtkMapping, scheme)
 	nodeAPI := node.NewNode(client)
-	registryAPI := registry.NewRegistry()
-	authFactory := auth.NewRegistryAuthGetterFactory(
-		client,
-		kubernetes.NewForConfigOrDie(
-			ctrl.GetConfigOrDie(),
-		),
-	)
 
 	kernelAPI := module.NewKernelMapper(buildSignCombinerAPI)
 	micAPI := mic.New(client, scheme)
@@ -165,12 +156,10 @@ func main() {
 	mnc := controllers.NewModuleReconciler(
 		client,
 		kernelAPI,
-		registryAPI,
 		micAPI,
 		nmcHelper,
 		filterAPI,
 		nodeAPI,
-		authFactory,
 		operatorNamespace,
 		scheme,
 	)
