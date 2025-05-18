@@ -9,7 +9,6 @@ import (
 	. "github.com/onsi/gomega"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/meta"
@@ -17,7 +16,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
@@ -247,7 +245,7 @@ var _ = Describe("setFinalizerAndStatus", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
 		statusWriter = client.NewMockStatusWriter(ctrl)
-		mrh = newModuleReconcilerHelper(clnt, nil, nil, nil, nil, nil, operatorNamespace, scheme)
+		mrh = newModuleReconcilerHelper(clnt, nil, nil, nil, operatorNamespace, scheme)
 		mod = kmmv1beta1.Module{}
 		expectedMod = mod.DeepCopy()
 	})
@@ -310,7 +308,7 @@ var _ = Describe("finalizeModule", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
 		helper = nmc.NewMockHelper(ctrl)
-		mrh = newModuleReconcilerHelper(clnt, nil, nil, nil, helper, nil, operatorNamespace, scheme)
+		mrh = newModuleReconcilerHelper(clnt, nil, nil, helper, operatorNamespace, scheme)
 		mod = &kmmv1beta1.Module{
 			ObjectMeta: metav1.ObjectMeta{Name: moduleName, Namespace: moduleNamespace},
 		}
@@ -436,7 +434,7 @@ var _ = Describe("handleMIC", func() {
 		mockKernelMapper = module.NewMockKernelMapper(ctrl)
 		mockMICAPI = mic.NewMockMIC(ctrl)
 		helper = nmc.NewMockHelper(ctrl)
-		mrh = newModuleReconcilerHelper(clnt, mockKernelMapper, nil, mockMICAPI, helper, nil, operatorNamespace, scheme)
+		mrh = newModuleReconcilerHelper(clnt, mockKernelMapper, mockMICAPI, helper, operatorNamespace, scheme)
 		mod = &kmmv1beta1.Module{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      moduleName,
@@ -521,7 +519,7 @@ var _ = Describe("getNMCsByModuleSet", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mrh = newModuleReconcilerHelper(clnt, nil, nil, nil, nil, nil, operatorNamespace, scheme)
+		mrh = newModuleReconcilerHelper(clnt, nil, nil, nil, operatorNamespace, scheme)
 	})
 
 	ctx := context.Background()
@@ -586,7 +584,7 @@ var _ = Describe("prepareSchedulingData", func() {
 		clnt = client.NewMockClient(ctrl)
 		mockKernel = module.NewMockKernelMapper(ctrl)
 		mockHelper = nmc.NewMockHelper(ctrl)
-		mrh = newModuleReconcilerHelper(clnt, mockKernel, nil, nil, mockHelper, nil, operatorNamespace, scheme)
+		mrh = newModuleReconcilerHelper(clnt, mockKernel, nil, mockHelper, operatorNamespace, scheme)
 		node = v1.Node{
 			ObjectMeta: metav1.ObjectMeta{Name: nodeName},
 			Status: v1.NodeStatus{
@@ -769,8 +767,6 @@ var _ = Describe("enableModuleOnNode", func() {
 		ctx                  context.Context
 		ctrl                 *gomock.Controller
 		clnt                 *client.MockClient
-		rgst                 *registry.MockRegistry
-		authFactory          *auth.MockRegistryAuthGetterFactory
 		mockMIC              *mic.MockMIC
 		mrh                  moduleReconcilerHelperAPI
 		helper               *nmc.MockHelper
@@ -784,10 +780,8 @@ var _ = Describe("enableModuleOnNode", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
 		helper = nmc.NewMockHelper(ctrl)
-		rgst = registry.NewMockRegistry(ctrl)
-		authFactory = auth.NewMockRegistryAuthGetterFactory(ctrl)
 		mockMIC = mic.NewMockMIC(ctrl)
-		mrh = newModuleReconcilerHelper(clnt, nil, rgst, mockMIC, helper, authFactory, operatorNamespace, scheme)
+		mrh = newModuleReconcilerHelper(clnt, nil, mockMIC, helper, operatorNamespace, scheme)
 		node = v1.Node{
 			ObjectMeta: metav1.ObjectMeta{Name: "nodeName"},
 		}
@@ -898,7 +892,7 @@ var _ = Describe("disableModuleOnNode", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
 		helper = nmc.NewMockHelper(ctrl)
-		mrh = newModuleReconcilerHelper(clnt, nil, nil, nil, helper, nil, operatorNamespace, scheme)
+		mrh = newModuleReconcilerHelper(clnt, nil, nil, helper, operatorNamespace, scheme)
 		nodeName = "node name"
 		moduleName = "moduleName"
 		moduleNamespace = "moduleNamespace"
