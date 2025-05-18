@@ -20,10 +20,8 @@ import (
 	hubv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api-hub/v1beta1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 )
 
 var moduleStatusJSONPaths = []workv1.JsonPath{
@@ -65,8 +63,6 @@ type manifestWorkGenerator struct {
 	client            client.Client
 	scheme            *runtime.Scheme
 	kernelAPI         module.KernelMapper
-	registryAPI       registry.Registry
-	authFactory       auth.RegistryAuthGetterFactory
 	operatorNamespace string
 }
 
@@ -74,15 +70,11 @@ func NewCreator(
 	client client.Client,
 	scheme *runtime.Scheme,
 	kernelAPI module.KernelMapper,
-	registryAPI registry.Registry,
-	authFactory auth.RegistryAuthGetterFactory,
 	operatorNamespace string) ManifestWorkCreator {
 	return &manifestWorkGenerator{
 		client:            client,
 		scheme:            scheme,
 		kernelAPI:         kernelAPI,
-		registryAPI:       registryAPI,
-		authFactory:       authFactory,
 		operatorNamespace: operatorNamespace,
 	}
 }

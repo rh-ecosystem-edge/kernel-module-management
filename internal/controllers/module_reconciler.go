@@ -10,7 +10,6 @@ import (
 	buildv1 "github.com/openshift/api/build/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/meta"
@@ -18,7 +17,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -81,21 +79,17 @@ type ModuleReconciler struct {
 
 func NewModuleReconciler(client client.Client,
 	kernelAPI module.KernelMapper,
-	registryAPI registry.Registry,
 	micAPI mic.MIC,
 	nmcHelper nmc.Helper,
 	filter *filter.Filter,
 	nodeAPI node.Node,
-	authFactory auth.RegistryAuthGetterFactory,
 	operatorNamespace string,
 	scheme *runtime.Scheme) *ModuleReconciler {
 	reconHelper := newModuleReconcilerHelper(
 		client,
 		kernelAPI,
-		registryAPI,
 		micAPI,
 		nmcHelper,
-		authFactory,
 		operatorNamespace,
 		scheme,
 	)
@@ -221,31 +215,27 @@ type moduleReconcilerHelperAPI interface {
 }
 
 type moduleReconcilerHelper struct {
-	client            client.Client
-	kernelAPI         module.KernelMapper
-	registryAPI       registry.Registry
+	client    client.Client
+	kernelAPI module.KernelMapper
+
 	micAPI            mic.MIC
 	nmcHelper         nmc.Helper
-	authFactory       auth.RegistryAuthGetterFactory
 	operatorNamespace string
 	scheme            *runtime.Scheme
 }
 
 func newModuleReconcilerHelper(client client.Client,
 	kernelAPI module.KernelMapper,
-	registryAPI registry.Registry,
 	micAPI mic.MIC,
 	nmcHelper nmc.Helper,
-	authFactory auth.RegistryAuthGetterFactory,
 	operatorNamespace string,
 	scheme *runtime.Scheme) moduleReconcilerHelperAPI {
 	return &moduleReconcilerHelper{
-		client:            client,
-		kernelAPI:         kernelAPI,
-		registryAPI:       registryAPI,
+		client:    client,
+		kernelAPI: kernelAPI,
+
 		micAPI:            micAPI,
 		nmcHelper:         nmcHelper,
-		authFactory:       authFactory,
 		operatorNamespace: operatorNamespace,
 		scheme:            scheme,
 	}
