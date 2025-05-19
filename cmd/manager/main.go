@@ -27,6 +27,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mic"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/pod"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/preflight"
 
 	buildv1 "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
@@ -223,27 +224,11 @@ func main() {
 			cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.JobGCReconcilerName)
 		}
 
-		//[TODO] - update the preflight flow with the MIC/MBSC implementation and then uncomment the preflight conroller
-		/*
-			preflightStatusUpdaterAPI := preflight.NewStatusUpdater(client)
-			preflightAPI := preflight.NewPreflightAPI(client, buildAPI, signAPI, registryAPI, kernelAPI, preflightStatusUpdaterAPI, authFactory)
+		preflightAPI := preflight.NewPreflightAPI()
 
-			if err = controllers.NewPreflightValidationReconciler(client, filterAPI, metricsAPI, preflightStatusUpdaterAPI, preflightAPI).SetupWithManager(mgr); err != nil {
-				cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.PreflightValidationReconcilerName)
-			}
-
-			preflightOCPStatusUpdaterAPI := preflight.NewOCPStatusUpdater(client)
-
-			if err = controllers.NewPreflightValidationOCPReconciler(client,
-				filterAPI,
-				registryAPI,
-				authFactory,
-				kernelOsDtkMapping,
-				preflightOCPStatusUpdaterAPI,
-				scheme).SetupWithManager(mgr); err != nil {
-				cmd.FatalError(setupLogger, err, "unable to create controller", "controller", controllers.PreflightValidationOCPReconcilerName)
-			}
-		*/
+		if err = controllers.NewPreflightValidationReconciler(client, filterAPI, metricsAPI, micAPI, kernelAPI, preflightAPI).SetupWithManager(mgr); err != nil {
+			cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.PreflightValidationReconcilerName)
+		}
 	}
 
 	dtkNSN := types.NamespacedName{
