@@ -245,7 +245,8 @@ func (omi *ocpbuildManagerImpl) signSpec(mld *api.ModuleLoaderData, dockerfileDa
 			Strategy: buildv1.BuildStrategy{
 				Type: buildv1.DockerBuildStrategyType,
 				DockerStrategy: &buildv1.DockerBuildStrategy{
-					Volumes: volumes,
+					Volumes:    volumes,
+					PullSecret: mld.ImageRepoSecret,
 				},
 			},
 			Output:         buildTarget,
