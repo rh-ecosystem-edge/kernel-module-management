@@ -44,7 +44,8 @@ var _ = Describe("GetStatus", func() {
 
 	It("failed flow, getModuleOCPBuildByKernel fails", func() {
 		normalizedKernel := kernel.NormalizeVersion(kernelVersion)
-		mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, normalizedKernel, ocpbuildTypeBuild, &testMBSC).
+		mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, normalizedKernel,
+			string(kmmv1beta1.BuildImage), &testMBSC).
 			Return(nil, fmt.Errorf("some error"))
 
 		status, err := mgr.GetStatus(ctx, mbscName, mbscNamespace, kernelVersion, kmmv1beta1.BuildImage, &testMBSC)
@@ -54,7 +55,8 @@ var _ = Describe("GetStatus", func() {
 
 	It("getModuleOCPBuildByKernel returns pod does not exists", func() {
 		normalizedKernel := kernel.NormalizeVersion(kernelVersion)
-		mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, normalizedKernel, ocpbuildTypeBuild, &testMBSC).
+		mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, normalizedKernel,
+			string(kmmv1beta1.BuildImage), &testMBSC).
 			Return(nil, ErrNoMatchingBuild)
 
 		status, err := mgr.GetStatus(ctx, mbscName, mbscNamespace, kernelVersion, kmmv1beta1.BuildImage, &testMBSC)
@@ -66,7 +68,8 @@ var _ = Describe("GetStatus", func() {
 		foundBuild := buildv1.Build{}
 		normalizedKernel := kernel.NormalizeVersion(kernelVersion)
 		gomock.InOrder(
-			mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, normalizedKernel, ocpbuildTypeBuild, &testMBSC).
+			mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, normalizedKernel,
+				string(kmmv1beta1.BuildImage), &testMBSC).
 				Return(&foundBuild, nil),
 			mockOCPBuildManager.EXPECT().getOCPBuildStatus(&foundBuild).Return(Status(""), fmt.Errorf("some error")),
 		)
@@ -80,7 +83,8 @@ var _ = Describe("GetStatus", func() {
 		foundBuild := buildv1.Build{}
 		normalizedKernel := kernel.NormalizeVersion(kernelVersion)
 		gomock.InOrder(
-			mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, normalizedKernel, ocpbuildTypeBuild, &testMBSC).
+			mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, normalizedKernel,
+				string(kmmv1beta1.BuildImage), &testMBSC).
 				Return(&foundBuild, nil),
 			mockOCPBuildManager.EXPECT().getOCPBuildStatus(&foundBuild).Return(buildStatus, nil),
 		)
@@ -141,7 +145,8 @@ var _ = Describe("Sync", func() {
 	It("GetModulePodByKernel failed", func() {
 		gomock.InOrder(
 			mockOCPBuildManager.EXPECT().makeOcpbuildBuildTemplate(ctx, testMLD, true, &testMBSC).Return(nil, nil),
-			mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, kernelVersion, ocpbuildTypeBuild, &testMBSC).
+			mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, kernelVersion,
+				string(kmmv1beta1.BuildImage), &testMBSC).
 				Return(nil, fmt.Errorf("some error")),
 		)
 		err := mgr.Sync(ctx, testMLD, true, kmmv1beta1.BuildImage, &testMBSC)
@@ -152,7 +157,8 @@ var _ = Describe("Sync", func() {
 		testTemplate := buildv1.Build{}
 		gomock.InOrder(
 			mockOCPBuildManager.EXPECT().makeOcpbuildBuildTemplate(ctx, testMLD, true, &testMBSC).Return(&testTemplate, nil),
-			mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, kernelVersion, ocpbuildTypeBuild, &testMBSC).
+			mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, kernelVersion,
+				string(kmmv1beta1.BuildImage), &testMBSC).
 				Return(nil, ErrNoMatchingBuild),
 			mockOCPBuildManager.EXPECT().createOCPBuild(ctx, &testTemplate).Return(fmt.Errorf("some error")),
 		)
@@ -165,7 +171,8 @@ var _ = Describe("Sync", func() {
 		testBuild := buildv1.Build{}
 		gomock.InOrder(
 			mockOCPBuildManager.EXPECT().makeOcpbuildBuildTemplate(ctx, testMLD, true, &testMBSC).Return(&testTemplate, nil),
-			mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, kernelVersion, ocpbuildTypeBuild, &testMBSC).
+			mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, kernelVersion,
+				string(kmmv1beta1.BuildImage), &testMBSC).
 				Return(&testBuild, nil),
 			mockOCPBuildManager.EXPECT().isOCPBuildChanged(&testBuild, &testTemplate).Return(false, fmt.Errorf("some error")),
 		)
@@ -178,7 +185,8 @@ var _ = Describe("Sync", func() {
 		testBuild := buildv1.Build{}
 		gomock.InOrder(
 			mockOCPBuildManager.EXPECT().makeOcpbuildBuildTemplate(ctx, testMLD, true, &testMBSC).Return(&testTemplate, nil),
-			mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, kernelVersion, ocpbuildTypeBuild, &testMBSC).
+			mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, kernelVersion,
+				string(kmmv1beta1.BuildImage), &testMBSC).
 				Return(&testBuild, nil),
 			mockOCPBuildManager.EXPECT().isOCPBuildChanged(&testBuild, &testTemplate).Return(true, nil),
 			mockOCPBuildManager.EXPECT().deleteOCPBuild(ctx, &testBuild).Return(fmt.Errorf("some error")),
@@ -188,12 +196,10 @@ var _ = Describe("Sync", func() {
 	})
 
 	DescribeTable("check good flow", func(buildAction, buildExists, buildChanged, pushImage bool) {
-		testAction := kmmv1beta1.BuildImage
 		testBuildTemplate := buildv1.Build{}
 		existingTestBuild := buildv1.Build{}
-		buildType := ocpbuildTypeBuild
+		testAction := kmmv1beta1.BuildImage
 		if !buildAction {
-			buildType = ocpbuildTypeSign
 			testAction = kmmv1beta1.SignImage
 		}
 
@@ -206,8 +212,8 @@ var _ = Describe("Sync", func() {
 		if !buildExists {
 			getBuildError = ErrNoMatchingBuild
 		}
-		mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, kernelVersion, buildType, &testMBSC).
-			Return(&existingTestBuild, getBuildError)
+		mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, kernelVersion, string(testAction),
+			&testMBSC).Return(&existingTestBuild, getBuildError)
 		if !buildExists {
 			mockOCPBuildManager.EXPECT().createOCPBuild(ctx, &testBuildTemplate).Return(nil)
 			goto executeTestFunction
@@ -257,9 +263,10 @@ var _ = Describe("GarbageCollect", func() {
 	testMBSC := kmmv1beta1.ModuleBuildSignConfig{}
 
 	It("failed to get module buildss", func() {
-		mockOCPBuildManager.EXPECT().getModuleOCPBuilds(ctx, mbscName, mbscNamespace, ocpbuildTypeBuild, &testMBSC).Return(nil, fmt.Errorf("some error"))
+		mockOCPBuildManager.EXPECT().getModuleOCPBuilds(ctx, mbscName, mbscNamespace, string(kmmv1beta1.BuildImage),
+			&testMBSC).Return(nil, fmt.Errorf("some error"))
 
-		_, err := mgr.GarbageCollect(ctx, mbscName, mbscNamespace, ocpbuildTypeBuild, &testMBSC)
+		_, err := mgr.GarbageCollect(ctx, mbscName, mbscNamespace, kmmv1beta1.BuildImage, &testMBSC)
 		Expect(err).To(HaveOccurred())
 	})
 
@@ -270,12 +277,12 @@ var _ = Describe("GarbageCollect", func() {
 			},
 		}
 		gomock.InOrder(
-			mockOCPBuildManager.EXPECT().getModuleOCPBuilds(ctx, mbscName, mbscNamespace, ocpbuildTypeBuild, &testMBSC).
+			mockOCPBuildManager.EXPECT().getModuleOCPBuilds(ctx, mbscName, mbscNamespace, string(kmmv1beta1.BuildImage), &testMBSC).
 				Return([]buildv1.Build{testBuild}, nil),
 			mockOCPBuildManager.EXPECT().deleteOCPBuild(ctx, &testBuild).Return(fmt.Errorf("some error")),
 		)
 
-		_, err := mgr.GarbageCollect(ctx, mbscName, mbscNamespace, ocpbuildTypeBuild, &testMBSC)
+		_, err := mgr.GarbageCollect(ctx, mbscName, mbscNamespace, kmmv1beta1.BuildImage, &testMBSC)
 		Expect(err).To(HaveOccurred())
 	})
 
@@ -302,12 +309,12 @@ var _ = Describe("GarbageCollect", func() {
 		}
 		returnedBuilds := []buildv1.Build{testBuildSuccess, testBuildFailure, testBuildRunning, testBuildError, testBuildPending}
 		gomock.InOrder(
-			mockOCPBuildManager.EXPECT().getModuleOCPBuilds(ctx, mbscName, mbscNamespace, ocpbuildTypeBuild, &testMBSC).
+			mockOCPBuildManager.EXPECT().getModuleOCPBuilds(ctx, mbscName, mbscNamespace, string(kmmv1beta1.BuildImage), &testMBSC).
 				Return(returnedBuilds, nil),
 			mockOCPBuildManager.EXPECT().deleteOCPBuild(ctx, &testBuildSuccess).Return(nil),
 		)
 
-		res, err := mgr.GarbageCollect(ctx, mbscName, mbscNamespace, ocpbuildTypeBuild, &testMBSC)
+		res, err := mgr.GarbageCollect(ctx, mbscName, mbscNamespace, kmmv1beta1.BuildImage, &testMBSC)
 		Expect(err).To(BeNil())
 		Expect(res).To(Equal([]string{"buildSuccess"}))
 	})

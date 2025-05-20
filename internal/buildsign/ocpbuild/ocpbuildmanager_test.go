@@ -56,7 +56,7 @@ var _ = Describe("getModuleOCPBuildByKernel", func() {
 			List(ctx, &buildv1.BuildList{}, gomock.Any(), gomock.Any()).
 			Return(errors.New("random error"))
 
-		_, err := obm.getModuleOCPBuildByKernel(ctx, "moduleName", "moduleNamespace", targetKernel, ocpbuildTypeBuild, &mod)
+		_, err := obm.getModuleOCPBuildByKernel(ctx, "moduleName", "moduleNamespace", targetKernel, string(kmmv1beta1.BuildImage), &mod)
 
 		Expect(err).To(HaveOccurred())
 	})
@@ -81,7 +81,7 @@ var _ = Describe("getModuleOCPBuildByKernel", func() {
 				bcs.Items = make([]buildv1.Build, 2)
 			})
 
-		_, err = obm.getModuleOCPBuildByKernel(ctx, "moduleName", "moduleNamespace", targetKernel, ocpbuildTypeSign, &mod)
+		_, err = obm.getModuleOCPBuildByKernel(ctx, "moduleName", "moduleNamespace", targetKernel, string(kmmv1beta1.SignImage), &mod)
 
 		Expect(err).To(HaveOccurred())
 	})
@@ -100,7 +100,8 @@ var _ = Describe("getModuleOCPBuildByKernel", func() {
 				bcs.Items = []buildv1.Build{build}
 			})
 
-		res, err := obm.getModuleOCPBuildByKernel(ctx, "moduleName", "moduleNamespace", targetKernel, ocpbuildTypeBuild, &mod)
+		res, err := obm.getModuleOCPBuildByKernel(ctx, "moduleName", "moduleNamespace", targetKernel,
+			string(kmmv1beta1.BuildImage), &mod)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(Equal(&build))
@@ -139,7 +140,7 @@ var _ = Describe("getModuleOCPBuilds", func() {
 			List(ctx, &buildv1.BuildList{}, gomock.Any(), gomock.Any()).
 			Return(errors.New("random error"))
 
-		_, err := obm.getModuleOCPBuilds(ctx, moduleName, moduleNamespace, ocpbuildTypeBuild, &mod)
+		_, err := obm.getModuleOCPBuilds(ctx, moduleName, moduleNamespace, string(kmmv1beta1.BuildImage), &mod)
 
 		Expect(err).To(HaveOccurred())
 	})
@@ -163,7 +164,7 @@ var _ = Describe("getModuleOCPBuilds", func() {
 				bcs.Items = []buildv1.Build{build1, build2}
 			})
 
-		res, err := obm.getModuleOCPBuilds(ctx, moduleName, moduleNamespace, ocpbuildTypeSign, &mod)
+		res, err := obm.getModuleOCPBuilds(ctx, moduleName, moduleNamespace, string(kmmv1beta1.SignImage), &mod)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res[0]).To(Equal(build1))
@@ -372,15 +373,15 @@ var _ = Describe("ocpbuildLabels", func() {
 		mod := kmmv1beta1.Module{
 			ObjectMeta: metav1.ObjectMeta{Name: "moduleName"},
 		}
-		labels := obm.ocpbuildLabels(mod.Name, "targetKernel", ocpbuildTypeBuild)
+		labels := obm.ocpbuildLabels(mod.Name, "targetKernel", string(kmmv1beta1.BuildImage))
 
 		expected := map[string]string{
 			"app.kubernetes.io/name":      "kmm",
-			"app.kubernetes.io/component": ocpbuildTypeBuild,
+			"app.kubernetes.io/component": string(kmmv1beta1.BuildImage),
 			"app.kubernetes.io/part-of":   "kmm",
 			constants.ModuleNameLabel:     "moduleName",
 			constants.TargetKernelTarget:  "targetKernel",
-			constants.BuildTypeLabel:      ocpbuildTypeBuild,
+			constants.BuildTypeLabel:      string(kmmv1beta1.BuildImage),
 		}
 
 		Expect(labels).To(Equal(expected))
@@ -487,7 +488,7 @@ var _ = Describe("makeOcpbuildBuildTemplate", func() {
 					},
 				},
 				Finalizers: []string{constants.GCDelayFinalizer, constants.JobEventFinalizer},
-				Labels:     obm.ocpbuildLabels(mld.Name, mld.KernelNormalizedVersion, ocpbuildTypeBuild),
+				Labels:     obm.ocpbuildLabels(mld.Name, mld.KernelNormalizedVersion, string(kmmv1beta1.BuildImage)),
 			},
 			Spec: buildv1.BuildSpec{
 				CommonSpec: buildv1.CommonSpec{
@@ -742,7 +743,7 @@ COPY --from=signimage /signroot/modules/simple-kmod.ko:/modules/simple-procfs-km
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace:    namespace,
 				GenerateName: moduleName + "-sign-",
-				Labels:       omi.ocpbuildLabels(moduleName, kernelVersion, ocpbuildTypeSign),
+				Labels:       omi.ocpbuildLabels(moduleName, kernelVersion, string(kmmv1beta1.SignImage)),
 				OwnerReferences: []metav1.OwnerReference{
 					{
 						APIVersion:         "kmm.sigs.x-k8s.io/v1beta1",

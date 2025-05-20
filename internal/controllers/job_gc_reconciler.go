@@ -5,9 +5,8 @@ import (
 	"time"
 
 	buildv1 "github.com/openshift/api/build/v1"
-	buildocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build/ocpbuild"
+	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
-	signocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/sign/ocpbuild"
 	"k8s.io/apimachinery/pkg/util/sets"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -59,7 +58,7 @@ func (r *JobGCReconciler) Reconcile(ctx context.Context, build *buildv1.Build) (
 }
 
 func (r *JobGCReconciler) SetupWithManager(mgr manager.Manager) error {
-	podTypes := sets.New(buildocpbuild.BuildType, signocpbuild.BuildType)
+	podTypes := sets.New(string(kmmv1beta1.BuildImage), string(kmmv1beta1.SignImage))
 
 	p := predicate.NewPredicateFuncs(func(object client.Object) bool {
 		return podTypes.Has(
