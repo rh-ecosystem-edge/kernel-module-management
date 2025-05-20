@@ -6,10 +6,9 @@ import (
 	"fmt"
 
 	buildv1 "github.com/openshift/api/build/v1"
-	ocpbuildbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build/ocpbuild"
+	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/meta"
-	ocpbuildsign "github.com/rh-ecosystem-edge/kernel-module-management/internal/sign/ocpbuild"
 	"golang.org/x/exp/maps"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -178,7 +177,7 @@ func (r *JobEventReconciler) Reconcile(ctx context.Context, build *buildv1.Build
 var jobEventPredicate = predicate.NewPredicateFuncs(func(obj client.Object) bool {
 	label := obj.GetLabels()[constants.BuildTypeLabel]
 
-	return (label == ocpbuildbuild.BuildType || label == ocpbuildsign.BuildType) &&
+	return (label == string(kmmv1beta1.BuildImage) || label == string(kmmv1beta1.SignImage)) &&
 		controllerutil.ContainsFinalizer(obj, constants.JobEventFinalizer)
 })
 

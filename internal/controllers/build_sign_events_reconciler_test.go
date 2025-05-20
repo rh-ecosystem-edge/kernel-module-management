@@ -9,11 +9,9 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/api-hub/v1beta1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	kmmv1beta2 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta2"
-	ocpbuildbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/build/ocpbuild"
 	testclient "github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/meta"
-	ocpbuildsign "github.com/rh-ecosystem-edge/kernel-module-management/internal/sign/ocpbuild"
 	"go.uber.org/mock/gomock"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -162,7 +160,7 @@ var _ = Describe("JobEventReconciler_Reconcile", func() {
 		build := &buildv1.Build{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: map[string]string{
-					constants.BuildTypeLabel:     ocpbuildbuild.BuildType,
+					constants.BuildTypeLabel:     string(kmmv1beta1.BuildImage),
 					constants.TargetKernelTarget: kernelVersion,
 				},
 				OwnerReferences: []metav1.OwnerReference{or},
@@ -186,7 +184,7 @@ var _ = Describe("JobEventReconciler_Reconcile", func() {
 
 		events := closeAndGetAllEvents(fakeRecorder.Events)
 		Expect(events).To(HaveLen(1))
-		Expect(events[0]).To(ContainSubstring("Normal BuildCreated Build created for kernel " + kernelVersion))
+		Expect(events[0]).To(ContainSubstring("Normal BuildimageCreated Buildimage created for kernel " + kernelVersion))
 	})
 
 	It("should do nothing if the annotation is already there and the Build is still running", func() {
@@ -195,7 +193,7 @@ var _ = Describe("JobEventReconciler_Reconcile", func() {
 		pod := &buildv1.Build{
 			ObjectMeta: metav1.ObjectMeta{
 				Annotations:     map[string]string{createdAnnotationKey: ""},
-				Labels:          map[string]string{constants.BuildTypeLabel: ocpbuildsign.BuildType},
+				Labels:          map[string]string{constants.BuildTypeLabel: string(kmmv1beta1.SignImage)},
 				Namespace:       namespace,
 				OwnerReferences: []metav1.OwnerReference{or},
 			},
@@ -218,7 +216,7 @@ var _ = Describe("JobEventReconciler_Reconcile", func() {
 
 		build := &buildv1.Build{
 			ObjectMeta: metav1.ObjectMeta{
-				Labels:          map[string]string{constants.BuildTypeLabel: ocpbuildbuild.BuildType},
+				Labels:          map[string]string{constants.BuildTypeLabel: string(kmmv1beta1.BuildImage)},
 				Finalizers:      []string{constants.JobEventFinalizer},
 				Namespace:       namespace,
 				OwnerReferences: []metav1.OwnerReference{or},
@@ -425,11 +423,11 @@ var _ = Describe("jobEventPredicate", func() {
 				Equal(expectedResult),
 			)
 		},
-		Entry(nil, ocpbuildbuild.BuildType, true, true),
-		Entry(nil, ocpbuildsign.BuildType, true, true),
+		Entry(nil, string(kmmv1beta1.BuildImage), true, true),
+		Entry(nil, string(kmmv1beta1.SignImage), true, true),
 		Entry(nil, "random", true, false),
 		Entry(nil, "", true, false),
-		Entry("finalizer", ocpbuildbuild.BuildType, true, true),
-		Entry("no finalizer", ocpbuildbuild.BuildType, false, false),
+		Entry("finalizer", string(kmmv1beta1.BuildImage), true, true),
+		Entry("no finalizer", string(kmmv1beta1.BuildImage), false, false),
 	)
 })

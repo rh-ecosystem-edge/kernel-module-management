@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
+	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
@@ -21,9 +22,6 @@ import (
 type Status string
 
 const (
-	ocpbuildTypeBuild = "build"
-	ocpbuildTypeSign  = "sign"
-
 	StatusCompleted  Status = "completed"
 	StatusCreated    Status = "created"
 	StatusInProgress Status = "in progress"
@@ -192,7 +190,7 @@ func (omi *ocpbuildManagerImpl) makeOcpbuildBuildTemplate(ctx context.Context, m
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: mld.Name + "-build-",
 			Namespace:    mld.Namespace,
-			Labels:       omi.ocpbuildLabels(mld.Name, mld.KernelNormalizedVersion, ocpbuildTypeBuild),
+			Labels:       omi.ocpbuildLabels(mld.Name, mld.KernelNormalizedVersion, string(kmmv1beta1.BuildImage)),
 			Annotations:  omi.ocpbuildAnnotations(sourceConfigHash),
 			Finalizers:   []string{constants.GCDelayFinalizer, constants.JobEventFinalizer},
 		},
@@ -246,7 +244,7 @@ func (omi *ocpbuildManagerImpl) makeOcpbuildSignTemplate(ctx context.Context, ml
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: mld.Name + "-sign-",
 			Namespace:    mld.Namespace,
-			Labels:       omi.ocpbuildLabels(mld.Name, mld.KernelNormalizedVersion, ocpbuildTypeSign),
+			Labels:       omi.ocpbuildLabels(mld.Name, mld.KernelNormalizedVersion, string(kmmv1beta1.SignImage)),
 			Annotations:  omi.ocpbuildAnnotations(buildSpecHash),
 			Finalizers:   []string{constants.GCDelayFinalizer, constants.JobEventFinalizer},
 		},
