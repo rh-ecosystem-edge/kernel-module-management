@@ -506,7 +506,7 @@ var _ = Describe("makeOcpbuildBuildTemplate", func() {
 								v1.EnvVar{Name: "MOD_NAME", Value: moduleName},
 								v1.EnvVar{Name: "MOD_NAMESPACE", Value: namespace},
 							),
-							Volumes:    buildVolumesFromBuildSecrets(buildSecrets),
+							Volumes:    makeBuildResourceVolumes(mld.Build),
 							PullSecret: &irs,
 						},
 					},
@@ -533,7 +533,7 @@ var _ = Describe("makeOcpbuildBuildTemplate", func() {
 
 			mld.Build.Secrets = buildSecrets
 
-			expected.Spec.CommonSpec.Strategy.DockerStrategy.Volumes = buildVolumesFromBuildSecrets(buildSecrets)
+			expected.Spec.CommonSpec.Strategy.DockerStrategy.Volumes = makeBuildResourceVolumes(mld.Build)
 		}
 
 		hash, err := hashstructure.Hash(expected.Spec.CommonSpec.Source, hashstructure.FormatV2, nil)
