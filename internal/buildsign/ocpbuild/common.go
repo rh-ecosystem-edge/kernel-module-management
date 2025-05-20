@@ -5,14 +5,17 @@ import (
 	"embed"
 	"fmt"
 	"html/template"
+	"strings"
 
 	"github.com/mitchellh/hashstructure/v2"
 	buildv1 "github.com/openshift/api/build/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 )
 
 const dtkBuildArg = "DTK_AUTO"
@@ -148,4 +151,108 @@ func (omi *ocpbuildManagerImpl) getSignHashAnnotationValue(ctx context.Context, 
 	}
 
 	return hashValue, nil
+}
+
+func (omi *ocpbuildManagerImpl) buildSpec(mld *api.ModuleLoaderData, dockerfileData, destinationImg string,
+	pushImage bool) (*buildv1.BuildSpec, error) {
+
+	kernelVersion := mld.KernelVersion
+	buildConfig := mld.Build
+
+	overrides := []kmmv1beta1.BuildArg{
+		{Name: "KERNEL_VERSION", Value: kernelVersion},
+		{Name: "KERNEL_FULL_VERSION", Value: kernelVersion},
+		{Name: "MOD_NAME", Value: mld.Name},
+		{Name: "MOD_NAMESPACE", Value: mld.Namespace},
+	}
+	if strings.Contains(dockerfileData, dtkBuildArg) {
+		dtkImage, err := omi.kernelOsDtkMapping.GetImage(kernelVersion)
+		if err != nil {
+			return nil, fmt.Errorf("could not get DTK image for kernel %v: %v", kernelVersion, err)
+		}
+		overrides = append(overrides, kmmv1beta1.BuildArg{Name: dtkBuildArg, Value: dtkImage})
+	}
+	buildArgs := omi.combiner.ApplyBuildArgOverrides(
+		buildConfig.BuildArgs,
+		overrides...,
+	)
+	envArgs := envVarsFromKMMBuildArgs(buildArgs)
+
+	buildTarget := buildv1.BuildOutput{}
+	if pushImage {
+		buildTarget = buildv1.BuildOutput{
+			To: &v1.ObjectReference{
+				Kind: "DockerImage",
+				Name: destinationImg,
+			},
+			PushSecret: mld.ImageRepoSecret,
+		}
+	}
+
+	selector := mld.Selector
+	if len(mld.Build.Selector) != 0 {
+		selector = mld.Build.Selector
+	}
+
+	volumes := makeBuildResourceVolumes(buildConfig)
+
+	spec := &buildv1.BuildSpec{
+		CommonSpec: buildv1.CommonSpec{
+			ServiceAccount: constants.OCPBuilderServiceAccountName,
+			Source: buildv1.BuildSource{
+				Dockerfile: &dockerfileData,
+				Type:       buildv1.BuildSourceDockerfile,
+			},
+			Strategy: buildv1.BuildStrategy{
+				Type: buildv1.DockerBuildStrategyType,
+				DockerStrategy: &buildv1.DockerBuildStrategy{
+					BuildArgs:  envArgs,
+					Volumes:    volumes,
+					PullSecret: mld.ImageRepoSecret,
+				},
+			},
+			Output:         buildTarget,
+			NodeSelector:   selector,
+			MountTrustedCA: ptr.To(true),
+		},
+	}
+
+	return spec, nil
+}
+
+func (omi *ocpbuildManagerImpl) signSpec(mld *api.ModuleLoaderData, dockerfileData string, pushImage bool) buildv1.BuildSpec {
+
+	buildTarget := buildv1.BuildOutput{}
+	if pushImage {
+		buildTarget = buildv1.BuildOutput{
+			To: &v1.ObjectReference{
+				Kind: "DockerImage",
+				Name: mld.ContainerImage,
+			},
+			PushSecret: mld.ImageRepoSecret,
+		}
+	}
+
+	volumes := makeSignResourceVolumes(mld.Sign)
+
+	spec := buildv1.BuildSpec{
+		CommonSpec: buildv1.CommonSpec{
+			ServiceAccount: constants.OCPBuilderServiceAccountName,
+			Source: buildv1.BuildSource{
+				Dockerfile: &dockerfileData,
+				Type:       buildv1.BuildSourceDockerfile,
+			},
+			Strategy: buildv1.BuildStrategy{
+				Type: buildv1.DockerBuildStrategyType,
+				DockerStrategy: &buildv1.DockerBuildStrategy{
+					Volumes: volumes,
+				},
+			},
+			Output:         buildTarget,
+			NodeSelector:   mld.Selector,
+			MountTrustedCA: ptr.To(true),
+		},
+	}
+
+	return spec
 }
