@@ -13,7 +13,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/ptr"
 )
 
 const dtkBuildArg = "DTK_AUTO"
@@ -45,34 +44,6 @@ func envVarsFromKMMBuildArgs(args []kmmv1beta1.BuildArg) []v1.EnvVar {
 	}
 
 	return ev
-}
-
-func buildVolumesFromBuildSecrets(secrets []v1.LocalObjectReference) []buildv1.BuildVolume {
-	if secrets == nil {
-		return nil
-	}
-
-	vols := make([]buildv1.BuildVolume, 0, len(secrets))
-
-	for _, s := range secrets {
-		bv := buildv1.BuildVolume{
-			Name: "secret-" + s.Name,
-			Source: buildv1.BuildVolumeSource{
-				Type: buildv1.BuildVolumeSourceTypeSecret,
-				Secret: &v1.SecretVolumeSource{
-					SecretName: s.Name,
-					Optional:   ptr.To(false),
-				},
-			},
-			Mounts: []buildv1.BuildVolumeMount{
-				{DestinationPath: "/run/secrets/" + s.Name},
-			},
-		}
-
-		vols = append(vols, bv)
-	}
-
-	return vols
 }
 
 func (omi *ocpbuildManagerImpl) getSecretData(ctx context.Context, secretName, secretDataKey, namespace string) ([]byte, error) {

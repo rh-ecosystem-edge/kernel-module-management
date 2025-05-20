@@ -261,7 +261,7 @@ func (omi *ocpbuildManagerImpl) makeOcpbuildBuildTemplate(ctx context.Context, m
 					Type: buildv1.DockerBuildStrategyType,
 					DockerStrategy: &buildv1.DockerBuildStrategy{
 						BuildArgs:  envVarsFromKMMBuildArgs(buildArgs),
-						Volumes:    buildVolumesFromBuildSecrets(kmmBuild.Secrets),
+						Volumes:    makeBuildResourceVolumes(kmmBuild),
 						PullSecret: mld.ImageRepoSecret,
 					},
 				},
@@ -333,34 +333,7 @@ func (omi *ocpbuildManagerImpl) makeOcpbuildSignTemplate(ctx context.Context, ml
 			Strategy: buildv1.BuildStrategy{
 				Type: buildv1.DockerBuildStrategyType,
 				DockerStrategy: &buildv1.DockerBuildStrategy{
-					Volumes: []buildv1.BuildVolume{
-						{
-							Name: "key",
-							Source: buildv1.BuildVolumeSource{
-								Type: buildv1.BuildVolumeSourceTypeSecret,
-								Secret: &v1.SecretVolumeSource{
-									SecretName: signConfig.KeySecret.Name,
-									Optional:   ptr.To(false),
-								},
-							},
-							Mounts: []buildv1.BuildVolumeMount{
-								{DestinationPath: "/run/secrets/key"},
-							},
-						},
-						{
-							Name: "cert",
-							Source: buildv1.BuildVolumeSource{
-								Type: buildv1.BuildVolumeSourceTypeSecret,
-								Secret: &v1.SecretVolumeSource{
-									SecretName: signConfig.CertSecret.Name,
-									Optional:   ptr.To(false),
-								},
-							},
-							Mounts: []buildv1.BuildVolumeMount{
-								{DestinationPath: "/run/secrets/cert"},
-							},
-						},
-					},
+					Volumes: makeSignResourceVolumes(signConfig),
 				},
 			},
 			Output:         buildTarget,
