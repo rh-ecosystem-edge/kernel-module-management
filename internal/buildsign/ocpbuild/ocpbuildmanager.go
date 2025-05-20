@@ -5,17 +5,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	buildv1 "github.com/openshift/api/build/v1"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
@@ -171,78 +167,25 @@ func (omi *ocpbuildManagerImpl) ocpbuildLabels(modName, kernelVersion, ocpbuildT
 func (omi *ocpbuildManagerImpl) makeOcpbuildBuildTemplate(ctx context.Context, mld *api.ModuleLoaderData, pushImage bool,
 	owner metav1.Object) (*buildv1.Build, error) {
 
-	kmmBuild := mld.Build
 	containerImage := mld.ContainerImage
-	kernelVersion := mld.KernelVersion
-
 	// if build AND sign are specified, then we will build an intermediate image
 	// and let sign produce the final image specified in spec.moduleLoader.container.km.containerImage
 	if module.ShouldBeSigned(mld) {
 		containerImage = module.IntermediateImageName(mld.Name, mld.Namespace, containerImage)
 	}
 
-	overrides := []kmmv1beta1.BuildArg{
-		{
-			Name:  "KERNEL_VERSION",
-			Value: kernelVersion,
-		},
-		{
-			Name:  "KERNEL_FULL_VERSION",
-			Value: kernelVersion,
-		},
-		{
-			Name:  "MOD_NAME",
-			Value: mld.Name,
-		},
-		{
-			Name:  "MOD_NAMESPACE",
-			Value: mld.Namespace,
-		},
-	}
-
-	dockerfileData, err := omi.getDockerfileData(ctx, kmmBuild, mld.Namespace)
+	dockerfileData, err := omi.getDockerfileData(ctx, mld.Build, mld.Namespace)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get dockerfile data from configmap: %v", err)
 	}
 
-	if strings.Contains(dockerfileData, dtkBuildArg) {
-
-		dtkImage, err := omi.kernelOsDtkMapping.GetImage(kernelVersion)
-		if err != nil {
-			return nil, fmt.Errorf("could not get DTK image for kernel %v: %v", kernelVersion, err)
-		}
-		overrides = append(overrides, kmmv1beta1.BuildArg{Name: dtkBuildArg, Value: dtkImage})
+	buildSpec, err := omi.buildSpec(mld, dockerfileData, containerImage, pushImage)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate Build spec: %v", err)
 	}
-
-	buildArgs := omi.combiner.ApplyBuildArgOverrides(
-		kmmBuild.BuildArgs,
-		overrides...,
-	)
-
-	buildTarget := buildv1.BuildOutput{
-		To: &v1.ObjectReference{
-			Kind: "DockerImage",
-			Name: containerImage,
-		},
-		PushSecret: mld.ImageRepoSecret,
-	}
-	if !pushImage {
-		buildTarget = buildv1.BuildOutput{}
-	}
-
-	sourceConfig := buildv1.BuildSource{
-		Dockerfile: &dockerfileData,
-		Type:       buildv1.BuildSourceDockerfile,
-	}
-
 	sourceConfigHash, err := omi.getBuildHashAnnotationValue(ctx, dockerfileData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get build annotation value: %v", err)
-	}
-
-	selector := mld.Selector
-	if len(mld.Build.Selector) != 0 {
-		selector = mld.Build.Selector
 	}
 
 	bc := buildv1.Build{
@@ -253,23 +196,7 @@ func (omi *ocpbuildManagerImpl) makeOcpbuildBuildTemplate(ctx context.Context, m
 			Annotations:  omi.ocpbuildAnnotations(sourceConfigHash),
 			Finalizers:   []string{constants.GCDelayFinalizer, constants.JobEventFinalizer},
 		},
-		Spec: buildv1.BuildSpec{
-			CommonSpec: buildv1.CommonSpec{
-				ServiceAccount: constants.OCPBuilderServiceAccountName,
-				Source:         sourceConfig,
-				Strategy: buildv1.BuildStrategy{
-					Type: buildv1.DockerBuildStrategyType,
-					DockerStrategy: &buildv1.DockerBuildStrategy{
-						BuildArgs:  envVarsFromKMMBuildArgs(buildArgs),
-						Volumes:    makeBuildResourceVolumes(kmmBuild),
-						PullSecret: mld.ImageRepoSecret,
-					},
-				},
-				Output:         buildTarget,
-				NodeSelector:   selector,
-				MountTrustedCA: ptr.To(true),
-			},
-		},
+		Spec: *buildSpec,
 	}
 
 	if err := controllerutil.SetControllerReference(owner, &bc, omi.scheme); err != nil {
@@ -307,41 +234,9 @@ func (omi *ocpbuildManagerImpl) makeOcpbuildSignTemplate(ctx context.Context, ml
 	if err := tmpl.Execute(&buf, td); err != nil {
 		return nil, fmt.Errorf("could not render Dockerfile: %v", err)
 	}
+	dockerfileData := buf.String()
 
-	dockerfile := buf.String()
-
-	buildTarget := buildv1.BuildOutput{
-		To: &v1.ObjectReference{
-			Kind: "DockerImage",
-			Name: mld.ContainerImage,
-		},
-		PushSecret: mld.ImageRepoSecret,
-	}
-	if !pushImage {
-		buildTarget = buildv1.BuildOutput{}
-	}
-
-	sourceConfig := buildv1.BuildSource{
-		Dockerfile: &dockerfile,
-		Type:       buildv1.BuildSourceDockerfile,
-	}
-
-	spec := buildv1.BuildSpec{
-		CommonSpec: buildv1.CommonSpec{
-			ServiceAccount: constants.OCPBuilderServiceAccountName,
-			Source:         sourceConfig,
-			Strategy: buildv1.BuildStrategy{
-				Type: buildv1.DockerBuildStrategyType,
-				DockerStrategy: &buildv1.DockerBuildStrategy{
-					Volumes: makeSignResourceVolumes(signConfig),
-				},
-			},
-			Output:         buildTarget,
-			NodeSelector:   mld.Selector,
-			MountTrustedCA: ptr.To(true),
-		},
-	}
-
+	spec := omi.signSpec(mld, dockerfileData, pushImage)
 	buildSpecHash, err := omi.getSignHashAnnotationValue(ctx, signConfig.KeySecret.Name, signConfig.CertSecret.Name, mld.Namespace, &spec)
 	if err != nil {
 		return nil, fmt.Errorf("could not hash Build spec: %v", err)
