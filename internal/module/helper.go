@@ -1,13 +1,9 @@
 package module
 
 import (
-	"context"
-	"fmt"
 	"strings"
 
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/api"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 )
 
 // AppendToTag adds the specified tag to the image name cleanly, i.e. by avoiding messing up
@@ -35,36 +31,4 @@ func ShouldBeBuilt(mld *api.ModuleLoaderData) bool {
 // Module should be signed or not.
 func ShouldBeSigned(mld *api.ModuleLoaderData) bool {
 	return mld.Sign != nil
-}
-
-func ImageDigest(
-	ctx context.Context,
-	authFactory auth.RegistryAuthGetterFactory,
-	reg registry.Registry,
-	mld *api.ModuleLoaderData,
-	imageName string) (string, error) {
-
-	registryAuthGetter := authFactory.NewRegistryAuthGetterFrom(mld)
-	digest, err := reg.GetDigest(ctx, imageName, mld.RegistryTLS, registryAuthGetter)
-	if err != nil {
-		return "", fmt.Errorf("could not get image digest: %v", err)
-	}
-
-	return digest, nil
-}
-
-func ImageExists(
-	ctx context.Context,
-	authFactory auth.RegistryAuthGetterFactory,
-	reg registry.Registry,
-	mld *api.ModuleLoaderData,
-	imageName string) (bool, error) {
-
-	registryAuthGetter := authFactory.NewRegistryAuthGetterFrom(mld)
-	exists, err := reg.ImageExists(ctx, imageName, mld.RegistryTLS, registryAuthGetter)
-	if err != nil {
-		return false, fmt.Errorf("could not check if the image is available: %v", err)
-	}
-
-	return exists, nil
 }
