@@ -1,4 +1,4 @@
-package ocpbuild
+package resource
 
 import (
 	"context"
@@ -23,372 +23,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-var _ = Describe("getModuleOCPBuildByKernel", func() {
-	const targetKernel = "target-kernels"
-
-	var (
-		mockKubeClient         *client.MockClient
-		obm                    ocpbuildManager
-		mockCombiner           *module.MockCombiner
-		mockKernelOSDTKMapping *syncronizedmap.MockKernelOsDtkMapping
-	)
-
-	BeforeEach(func() {
-		ctrl := gomock.NewController(GinkgoT())
-		mockKubeClient = client.NewMockClient(ctrl)
-		mockCombiner = module.NewMockCombiner(ctrl)
-		mockKernelOSDTKMapping = syncronizedmap.NewMockKernelOsDtkMapping(ctrl)
-		obm = newOCPBuildManager(mockKubeClient, mockCombiner, mockKernelOSDTKMapping, "", scheme)
-
-	})
-
-	ctx := context.Background()
-	mod := kmmv1beta1.Module{
-		ObjectMeta: metav1.ObjectMeta{Name: "moduleName", Namespace: "moduleNamespace"},
-	}
-
-	It("should return an error if an error occurred", func() {
-		mockKubeClient.
-			EXPECT().
-			List(ctx, &buildv1.BuildList{}, gomock.Any(), gomock.Any()).
-			Return(errors.New("random error"))
-
-		_, err := obm.getModuleOCPBuildByKernel(ctx, "moduleName", "moduleNamespace", targetKernel, string(kmmv1beta1.BuildImage), &mod)
-
-		Expect(err).To(HaveOccurred())
-	})
-
-	It("should return an error if there are two Builds with the same labels and owner", func() {
-		build1 := buildv1.Build{
-			ObjectMeta: metav1.ObjectMeta{Name: "buildName", Namespace: "moduleNamespace"},
-		}
-		build2 := buildv1.Build{
-			ObjectMeta: metav1.ObjectMeta{Name: "buildName", Namespace: "moduleNamespace"},
-		}
-
-		err := controllerutil.SetControllerReference(&mod, &build1, scheme)
-		Expect(err).NotTo(HaveOccurred())
-		err = controllerutil.SetControllerReference(&mod, &build2, scheme)
-		Expect(err).NotTo(HaveOccurred())
-
-		mockKubeClient.
-			EXPECT().
-			List(ctx, &buildv1.BuildList{}, gomock.Any(), gomock.Any()).
-			Do(func(_ context.Context, bcs *buildv1.BuildList, _ ...ctrlclient.ListOption) {
-				bcs.Items = make([]buildv1.Build, 2)
-			})
-
-		_, err = obm.getModuleOCPBuildByKernel(ctx, "moduleName", "moduleNamespace", targetKernel, string(kmmv1beta1.SignImage), &mod)
-
-		Expect(err).To(HaveOccurred())
-	})
-
-	It("should work as expected", func() {
-		build := buildv1.Build{
-			ObjectMeta: metav1.ObjectMeta{Name: "buildName", Namespace: "moduleNamespace"},
-		}
-		err := controllerutil.SetControllerReference(&mod, &build, scheme)
-		Expect(err).NotTo(HaveOccurred())
-
-		mockKubeClient.
-			EXPECT().
-			List(ctx, &buildv1.BuildList{}, gomock.Any(), gomock.Any()).
-			Do(func(_ context.Context, bcs *buildv1.BuildList, _ ...ctrlclient.ListOption) {
-				bcs.Items = []buildv1.Build{build}
-			})
-
-		res, err := obm.getModuleOCPBuildByKernel(ctx, "moduleName", "moduleNamespace", targetKernel,
-			string(kmmv1beta1.BuildImage), &mod)
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(&build))
-	})
-})
-
-var _ = Describe("getModuleOCPBuilds", func() {
-	const (
-		moduleName      = "moduleName"
-		moduleNamespace = "moduleNamespace"
-	)
-
-	var (
-		mockKubeClient         *client.MockClient
-		obm                    ocpbuildManager
-		mockCombiner           *module.MockCombiner
-		mockKernelOSDTKMapping *syncronizedmap.MockKernelOsDtkMapping
-	)
-
-	BeforeEach(func() {
-		ctrl := gomock.NewController(GinkgoT())
-		mockKubeClient = client.NewMockClient(ctrl)
-		mockKernelOSDTKMapping = syncronizedmap.NewMockKernelOsDtkMapping(ctrl)
-		obm = newOCPBuildManager(mockKubeClient, mockCombiner, mockKernelOSDTKMapping, "", scheme)
-
-	})
-
-	ctx := context.Background()
-	mod := kmmv1beta1.Module{
-		ObjectMeta: metav1.ObjectMeta{Name: moduleName, Namespace: moduleNamespace},
-	}
-
-	It("should return an error if an error occurred", func() {
-		mockKubeClient.
-			EXPECT().
-			List(ctx, &buildv1.BuildList{}, gomock.Any(), gomock.Any()).
-			Return(errors.New("random error"))
-
-		_, err := obm.getModuleOCPBuilds(ctx, moduleName, moduleNamespace, string(kmmv1beta1.BuildImage), &mod)
-
-		Expect(err).To(HaveOccurred())
-	})
-
-	It("should work as expected", func() {
-		build1 := buildv1.Build{
-			ObjectMeta: metav1.ObjectMeta{Name: "buildName1", Namespace: moduleNamespace},
-		}
-		build2 := buildv1.Build{
-			ObjectMeta: metav1.ObjectMeta{Name: "buildName2", Namespace: moduleNamespace},
-		}
-		err := controllerutil.SetControllerReference(&mod, &build1, scheme)
-		Expect(err).NotTo(HaveOccurred())
-		err = controllerutil.SetControllerReference(&mod, &build2, scheme)
-		Expect(err).NotTo(HaveOccurred())
-
-		mockKubeClient.
-			EXPECT().
-			List(ctx, &buildv1.BuildList{}, gomock.Any(), gomock.Any()).
-			Do(func(_ context.Context, bcs *buildv1.BuildList, _ ...ctrlclient.ListOption) {
-				bcs.Items = []buildv1.Build{build1, build2}
-			})
-
-		res, err := obm.getModuleOCPBuilds(ctx, moduleName, moduleNamespace, string(kmmv1beta1.SignImage), &mod)
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res[0]).To(Equal(build1))
-		Expect(res[1]).To(Equal(build2))
-	})
-
-	It("zero builds found", func() {
-		mockKubeClient.
-			EXPECT().
-			List(ctx, &buildv1.BuildList{}, gomock.Any(), gomock.Any()).
-			Do(func(_ context.Context, bcs *buildv1.BuildList, _ ...ctrlclient.ListOption) {
-				bcs.Items = []buildv1.Build{}
-			})
-
-		res, err := obm.getModuleOCPBuilds(ctx, moduleName, moduleNamespace, "build", &mod)
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(len(res)).To(Equal(0))
-	})
-})
-
-var _ = Describe("deleteOCPBuild", func() {
-
-	var (
-		ctrl                   *gomock.Controller
-		mockKubeClient         *client.MockClient
-		obm                    ocpbuildManager
-		mockCombiner           *module.MockCombiner
-		mockKernelOSDTKMapping *syncronizedmap.MockKernelOsDtkMapping
-	)
-
-	BeforeEach(func() {
-		ctrl = gomock.NewController(GinkgoT())
-		mockKubeClient = client.NewMockClient(ctrl)
-		mockKernelOSDTKMapping = syncronizedmap.NewMockKernelOsDtkMapping(ctrl)
-		obm = newOCPBuildManager(mockKubeClient, mockCombiner, mockKernelOSDTKMapping, "", scheme)
-	})
-
-	ctx := context.Background()
-
-	It("good flow", func() {
-		build := buildv1.Build{}
-		opts := []ctrlclient.DeleteOption{
-			ctrlclient.PropagationPolicy(metav1.DeletePropagationBackground),
-		}
-		mockKubeClient.EXPECT().Delete(ctx, &build, opts).Return(nil)
-
-		err := obm.deleteOCPBuild(ctx, &build)
-
-		Expect(err).NotTo(HaveOccurred())
-	})
-
-	It("error flow", func() {
-		build := buildv1.Build{}
-
-		opts := []ctrlclient.DeleteOption{
-			ctrlclient.PropagationPolicy(metav1.DeletePropagationBackground),
-		}
-		mockKubeClient.EXPECT().Delete(ctx, &build, opts).Return(errors.New("random error"))
-
-		err := obm.deleteOCPBuild(ctx, &build)
-
-		Expect(err).To(HaveOccurred())
-	})
-})
-
-var _ = Describe("createOCPBuild", func() {
-	var (
-		ctrl                   *gomock.Controller
-		mockKubeClient         *client.MockClient
-		obm                    ocpbuildManager
-		mockCombiner           *module.MockCombiner
-		mockKernelOSDTKMapping *syncronizedmap.MockKernelOsDtkMapping
-	)
-
-	BeforeEach(func() {
-		ctrl = gomock.NewController(GinkgoT())
-		mockKubeClient = client.NewMockClient(ctrl)
-		mockKernelOSDTKMapping = syncronizedmap.NewMockKernelOsDtkMapping(ctrl)
-		obm = newOCPBuildManager(mockKubeClient, mockCombiner, mockKernelOSDTKMapping, "", scheme)
-	})
-
-	It("good flow", func() {
-		ctx := context.Background()
-
-		build := buildv1.Build{}
-		mockKubeClient.EXPECT().Create(ctx, &build).Return(nil)
-
-		err := obm.createOCPBuild(ctx, &build)
-
-		Expect(err).NotTo(HaveOccurred())
-	})
-
-	It("error flow", func() {
-		ctx := context.Background()
-
-		build := buildv1.Build{}
-		mockKubeClient.EXPECT().Create(ctx, &build).Return(errors.New("random error"))
-
-		err := obm.createOCPBuild(ctx, &build)
-
-		Expect(err).To(HaveOccurred())
-
-	})
-})
-
-var _ = Describe("getOCPBuildStatus", func() {
-	var (
-		ctrl                   *gomock.Controller
-		mockKubeClient         *client.MockClient
-		obm                    ocpbuildManager
-		mockCombiner           *module.MockCombiner
-		mockKernelOSDTKMapping *syncronizedmap.MockKernelOsDtkMapping
-	)
-
-	BeforeEach(func() {
-		ctrl = gomock.NewController(GinkgoT())
-		mockKubeClient = client.NewMockClient(ctrl)
-		mockKernelOSDTKMapping = syncronizedmap.NewMockKernelOsDtkMapping(ctrl)
-		obm = newOCPBuildManager(mockKubeClient, mockCombiner, mockKernelOSDTKMapping, "", scheme)
-	})
-
-	DescribeTable("should return the correct status depending on the build status",
-		func(b *buildv1.Build, expectedStatus Status, expectsErr bool) {
-
-			res, err := obm.getOCPBuildStatus(b)
-			if expectsErr {
-				Expect(err).To(HaveOccurred())
-				return
-			}
-
-			Expect(res).To(Equal(expectedStatus))
-		},
-		Entry("succeeded", &buildv1.Build{Status: buildv1.BuildStatus{Phase: buildv1.BuildPhaseComplete}}, StatusCompleted, false),
-		Entry("in progress", &buildv1.Build{Status: buildv1.BuildStatus{Phase: buildv1.BuildPhaseRunning}}, StatusInProgress, false),
-		Entry("pending", &buildv1.Build{Status: buildv1.BuildStatus{Phase: buildv1.BuildPhasePending}}, StatusInProgress, false),
-		Entry("failed", &buildv1.Build{Status: buildv1.BuildStatus{Phase: buildv1.BuildPhaseFailed}}, StatusFailed, false),
-		Entry("error", &buildv1.Build{Status: buildv1.BuildStatus{Phase: buildv1.BuildPhaseError}}, StatusFailed, false),
-		Entry("cancelled", &buildv1.Build{Status: buildv1.BuildStatus{Phase: buildv1.BuildPhaseCancelled}}, StatusFailed, false),
-		Entry("unknown", &buildv1.Build{Status: buildv1.BuildStatus{Phase: "unknown"}}, StatusFailed, true),
-	)
-})
-
-var _ = Describe("isOCPBuildChanged", func() {
-	var (
-		ctrl                   *gomock.Controller
-		mockKubeClient         *client.MockClient
-		obm                    ocpbuildManager
-		mockCombiner           *module.MockCombiner
-		mockKernelOSDTKMapping *syncronizedmap.MockKernelOsDtkMapping
-	)
-
-	BeforeEach(func() {
-		ctrl = gomock.NewController(GinkgoT())
-		mockKubeClient = client.NewMockClient(ctrl)
-		mockKernelOSDTKMapping = syncronizedmap.NewMockKernelOsDtkMapping(ctrl)
-		obm = newOCPBuildManager(mockKubeClient, mockCombiner, mockKernelOSDTKMapping, "", scheme)
-	})
-
-	DescribeTable("should detect if a build has changed",
-		func(annotation map[string]string, expectchanged bool, expectsErr bool) {
-			existingBuild := buildv1.Build{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: annotation,
-				},
-			}
-			newBuild := buildv1.Build{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{constants.HashAnnotation: "some hash"},
-				},
-			}
-
-			changed, err := obm.isOCPBuildChanged(&existingBuild, &newBuild)
-
-			if expectsErr {
-				Expect(err).To(HaveOccurred())
-				return
-			}
-			Expect(expectchanged).To(Equal(changed))
-		},
-
-		Entry("should error if build has no annotations", nil, false, true),
-		Entry("should return true if build has changed", map[string]string{constants.HashAnnotation: "some other hash"}, true, false),
-		Entry("should return false is build has not changed ", map[string]string{constants.HashAnnotation: "some hash"}, false, false),
-	)
-})
-
-var _ = Describe("ocpbuildLabels", func() {
-	var (
-		ctrl                   *gomock.Controller
-		mockKubeClient         *client.MockClient
-		obm                    ocpbuildManager
-		mockCombiner           *module.MockCombiner
-		mockKernelOSDTKMapping *syncronizedmap.MockKernelOsDtkMapping
-	)
-
-	BeforeEach(func() {
-		ctrl = gomock.NewController(GinkgoT())
-		mockKubeClient = client.NewMockClient(ctrl)
-		mockCombiner = module.NewMockCombiner(ctrl)
-		mockKernelOSDTKMapping = syncronizedmap.NewMockKernelOsDtkMapping(ctrl)
-		obm = newOCPBuildManager(mockKubeClient, mockCombiner, mockKernelOSDTKMapping, "", scheme)
-	})
-
-	It("get build labels", func() {
-		mod := kmmv1beta1.Module{
-			ObjectMeta: metav1.ObjectMeta{Name: "moduleName"},
-		}
-		labels := obm.ocpbuildLabels(mod.Name, "targetKernel", string(kmmv1beta1.BuildImage))
-
-		expected := map[string]string{
-			"app.kubernetes.io/name":      "kmm",
-			"app.kubernetes.io/component": string(kmmv1beta1.BuildImage),
-			"app.kubernetes.io/part-of":   "kmm",
-			constants.ModuleNameLabel:     "moduleName",
-			constants.TargetKernelTarget:  "targetKernel",
-			constants.BuildTypeLabel:      string(kmmv1beta1.BuildImage),
-		}
-
-		Expect(labels).To(Equal(expected))
-	})
-})
-
-var _ = Describe("makeOcpbuildBuildTemplate", func() {
+var _ = Describe("makeBuildTemplate", func() {
 	const (
 		containerImage = "container-image"
 		dockerFile     = "FROM some-image"
@@ -403,7 +40,7 @@ var _ = Describe("makeOcpbuildBuildTemplate", func() {
 		mockCombiner           *module.MockCombiner
 		mockKernelOSDTKMapping *syncronizedmap.MockKernelOsDtkMapping
 		ctx                    context.Context
-		obm                    ocpbuildManager
+		rm                     *resourceManager
 	)
 
 	BeforeEach(func() {
@@ -412,7 +49,12 @@ var _ = Describe("makeOcpbuildBuildTemplate", func() {
 		mockCombiner = module.NewMockCombiner(ctrl)
 		mockKernelOSDTKMapping = syncronizedmap.NewMockKernelOsDtkMapping(ctrl)
 		ctx = context.Background()
-		obm = newOCPBuildManager(clnt, mockCombiner, mockKernelOSDTKMapping, "", scheme)
+		rm = &resourceManager{
+			client:             clnt,
+			combiner:           mockCombiner,
+			kernelOsDtkMapping: mockKernelOSDTKMapping,
+			scheme:             scheme,
+		}
 	})
 
 	AfterEach(func() {
@@ -488,7 +130,7 @@ var _ = Describe("makeOcpbuildBuildTemplate", func() {
 					},
 				},
 				Finalizers: []string{constants.GCDelayFinalizer, constants.JobEventFinalizer},
-				Labels:     obm.ocpbuildLabels(mld.Name, mld.KernelNormalizedVersion, string(kmmv1beta1.BuildImage)),
+				Labels:     resourceLabels(mld.Name, mld.KernelNormalizedVersion, kmmv1beta1.BuildImage),
 			},
 			Spec: buildv1.BuildSpec{
 				CommonSpec: buildv1.CommonSpec{
@@ -540,7 +182,7 @@ var _ = Describe("makeOcpbuildBuildTemplate", func() {
 		hash, err := hashstructure.Hash(expected.Spec.CommonSpec.Source, hashstructure.FormatV2, nil)
 		Expect(err).NotTo(HaveOccurred())
 
-		annotations := map[string]string{constants.HashAnnotation: fmt.Sprintf("%d", hash)}
+		annotations := map[string]string{constants.ResourceHashAnnotation: fmt.Sprintf("%d", hash)}
 		expected.SetAnnotations(annotations)
 
 		gomock.InOrder(
@@ -559,7 +201,7 @@ var _ = Describe("makeOcpbuildBuildTemplate", func() {
 			),
 		)
 
-		bc, err := obm.makeOcpbuildBuildTemplate(ctx, &mld, true, mld.Owner)
+		bc, err := rm.makeBuildTemplate(ctx, &mld, mld.Owner, true)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(
@@ -581,7 +223,7 @@ var _ = Describe("makeOcpbuildBuildTemplate", func() {
 			true,
 		),
 		Entry(
-			"only buildSecrets",
+			"only buidSecrets",
 			[]v1.LocalObjectReference{{Name: "s1"}},
 			nil,
 			false,
@@ -619,7 +261,7 @@ var _ = Describe("makeOcpbuildBuildTemplate", func() {
 					DockerfileConfigMap: &dockerfileConfigMap,
 				},
 			}
-			_, err := obm.makeOcpbuildBuildTemplate(ctx, &mld, false, mld.Owner)
+			_, err := rm.makeBuildTemplate(ctx, &mld, mld.Owner, false)
 			Expect(err).To(HaveOccurred())
 		})
 
@@ -652,8 +294,10 @@ var _ = Describe("makeOcpbuildBuildTemplate", func() {
 				},
 				Owner: &kmmv1beta1.Module{},
 			}
-			bct, err := obm.makeOcpbuildBuildTemplate(ctx, &mld, false, mld.Owner)
+			buildObj, err := rm.makeBuildTemplate(ctx, &mld, mld.Owner, false)
 			Expect(err).NotTo(HaveOccurred())
+			bct, ok := buildObj.(*buildv1.Build)
+			Expect(ok).To(BeTrue())
 			Expect(len(bct.Spec.CommonSpec.Strategy.DockerStrategy.BuildArgs)).To(Equal(1))
 			Expect(bct.Spec.CommonSpec.Strategy.DockerStrategy.BuildArgs[0].Name).To(Equal(buildArgs[0].Name))
 			Expect(bct.Spec.CommonSpec.Strategy.DockerStrategy.BuildArgs[0].Value).To(Equal(buildArgs[0].Value))
@@ -661,8 +305,7 @@ var _ = Describe("makeOcpbuildBuildTemplate", func() {
 	})
 })
 
-var _ = Describe("makeOcpbuildSignTemplate", func() {
-
+var _ = Describe("makeSignTemplate", func() {
 	const (
 		unsignedImage  = "my.registry/my/image"
 		signedImage    = "my.registry/my/image-signed"
@@ -680,19 +323,17 @@ var _ = Describe("makeOcpbuildSignTemplate", func() {
 	var (
 		ctrl *gomock.Controller
 		clnt *client.MockClient
-		omi  *ocpbuildManagerImpl
+		rm   *resourceManager
 		mld  api.ModuleLoaderData
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		omi = &ocpbuildManagerImpl{
-			client:    clnt,
-			signImage: signerImage,
-			scheme:    scheme,
+		rm = &resourceManager{
+			client: clnt,
+			scheme: scheme,
 		}
-
 		mld = api.ModuleLoaderData{
 			Name:      moduleName,
 			Namespace: namespace,
@@ -721,6 +362,8 @@ var _ = Describe("makeOcpbuildSignTemplate", func() {
 
 	DescribeTable("should set fields correctly", func(imagePullSecret *v1.LocalObjectReference) {
 
+		GinkgoT().Setenv("RELATED_IMAGE_SIGN", "some-signer-image:some-tag")
+
 		ctx := context.Background()
 		nodeSelector := map[string]string{"arch": "x64"}
 
@@ -743,7 +386,7 @@ COPY --from=signimage /signroot/modules/simple-kmod.ko:/modules/simple-procfs-km
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace:    namespace,
 				GenerateName: moduleName + "-sign-",
-				Labels:       omi.ocpbuildLabels(moduleName, kernelVersion, string(kmmv1beta1.SignImage)),
+				Labels:       resourceLabels(moduleName, kernelVersion, kmmv1beta1.SignImage),
 				OwnerReferences: []metav1.OwnerReference{
 					{
 						APIVersion:         "kmm.sigs.x-k8s.io/v1beta1",
@@ -809,13 +452,6 @@ COPY --from=signimage /signroot/modules/simple-kmod.ko:/modules/simple-procfs-km
 		}
 
 		gomock.InOrder(
-			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.CertSecret.Name, Namespace: mld.Namespace}, gomock.Any()).
-				DoAndReturn(
-					func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
-						secret.Data = publicSignData
-						return nil
-					},
-				),
 			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.KeySecret.Name, Namespace: mld.Namespace}, gomock.Any()).
 				DoAndReturn(
 					func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
@@ -823,23 +459,25 @@ COPY --from=signimage /signroot/modules/simple-kmod.ko:/modules/simple-procfs-km
 						return nil
 					},
 				),
+			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.CertSecret.Name, Namespace: mld.Namespace}, gomock.Any()).
+				DoAndReturn(
+					func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
+						secret.Data = publicSignData
+						return nil
+					},
+				),
 		)
 
-		hash, err := omi.getSignHashAnnotationValue(ctx, mld.Sign.KeySecret.Name, mld.Sign.CertSecret.Name, mld.Namespace, &expected.Spec)
+		hash, err := rm.getSignHashAnnotationValue(ctx, mld.Sign.KeySecret.Name, mld.Sign.CertSecret.Name, mld.Namespace, &expected.Spec)
 		Expect(err).NotTo(HaveOccurred())
-		annotations := omi.ocpbuildAnnotations(hash)
+		annotations := map[string]string{
+			constants.ResourceHashAnnotation: fmt.Sprintf("%d", hash),
+		}
 		expected.SetAnnotations(annotations)
 
 		mld.Selector = nodeSelector
 
 		gomock.InOrder(
-			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.CertSecret.Name, Namespace: mld.Namespace}, gomock.Any()).
-				DoAndReturn(
-					func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
-						secret.Data = publicSignData
-						return nil
-					},
-				),
 			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.KeySecret.Name, Namespace: mld.Namespace}, gomock.Any()).
 				DoAndReturn(
 					func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
@@ -847,9 +485,16 @@ COPY --from=signimage /signroot/modules/simple-kmod.ko:/modules/simple-procfs-km
 						return nil
 					},
 				),
+			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.CertSecret.Name, Namespace: mld.Namespace}, gomock.Any()).
+				DoAndReturn(
+					func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
+						secret.Data = publicSignData
+						return nil
+					},
+				),
 		)
 
-		actual, err := omi.makeOcpbuildSignTemplate(ctx, &mld, true, mld.Owner)
+		actual, err := rm.makeSignTemplate(ctx, &mld, mld.Owner, true)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(
@@ -879,13 +524,6 @@ COPY --from=signimage /signroot/modules/simple-kmod.ko:/modules/simple-procfs-km
 		mld.RegistryTLS = &kmmv1beta1.TLSOptions{}
 
 		gomock.InOrder(
-			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.CertSecret.Name, Namespace: mld.Namespace}, gomock.Any()).
-				DoAndReturn(
-					func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
-						secret.Data = publicSignData
-						return nil
-					},
-				),
 			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.KeySecret.Name, Namespace: mld.Namespace}, gomock.Any()).
 				DoAndReturn(
 					func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
@@ -893,10 +531,38 @@ COPY --from=signimage /signroot/modules/simple-kmod.ko:/modules/simple-procfs-km
 						return nil
 					},
 				),
+			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.CertSecret.Name, Namespace: mld.Namespace}, gomock.Any()).
+				DoAndReturn(
+					func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
+						secret.Data = publicSignData
+						return nil
+					},
+				),
 		)
 
-		actual, err := omi.makeOcpbuildSignTemplate(ctx, &mld, false, mld.Owner)
+		signObj, err := rm.makeSignTemplate(ctx, &mld, mld.Owner, false)
 		Expect(err).NotTo(HaveOccurred())
+		actual, ok := signObj.(*buildv1.Build)
+		Expect(ok).To(BeTrue())
 		Expect(actual.Spec.Output).To(BeZero())
+	})
+})
+var _ = Describe("resourceLabels", func() {
+
+	It("get build labels", func() {
+		mod := kmmv1beta1.Module{
+			ObjectMeta: metav1.ObjectMeta{Name: "moduleName"},
+		}
+		expected := map[string]string{
+			"app.kubernetes.io/name":      "kmm",
+			"app.kubernetes.io/component": string(kmmv1beta1.BuildImage),
+			"app.kubernetes.io/part-of":   "kmm",
+			constants.ModuleNameLabel:     "moduleName",
+			constants.TargetKernelTarget:  "targetKernel",
+			constants.ResourceType:        string(kmmv1beta1.BuildImage),
+		}
+
+		labels := resourceLabels(mod.Name, "targetKernel", kmmv1beta1.BuildImage)
+		Expect(labels).To(Equal(expected))
 	})
 })

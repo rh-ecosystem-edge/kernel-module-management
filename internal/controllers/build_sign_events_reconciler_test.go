@@ -160,7 +160,7 @@ var _ = Describe("JobEventReconciler_Reconcile", func() {
 		build := &buildv1.Build{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: map[string]string{
-					constants.BuildTypeLabel:     string(kmmv1beta1.BuildImage),
+					constants.ResourceType:       string(kmmv1beta1.BuildImage),
 					constants.TargetKernelTarget: kernelVersion,
 				},
 				OwnerReferences: []metav1.OwnerReference{or},
@@ -193,7 +193,7 @@ var _ = Describe("JobEventReconciler_Reconcile", func() {
 		pod := &buildv1.Build{
 			ObjectMeta: metav1.ObjectMeta{
 				Annotations:     map[string]string{createdAnnotationKey: ""},
-				Labels:          map[string]string{constants.BuildTypeLabel: string(kmmv1beta1.SignImage)},
+				Labels:          map[string]string{constants.ResourceType: string(kmmv1beta1.SignImage)},
 				Namespace:       namespace,
 				OwnerReferences: []metav1.OwnerReference{or},
 			},
@@ -216,7 +216,7 @@ var _ = Describe("JobEventReconciler_Reconcile", func() {
 
 		build := &buildv1.Build{
 			ObjectMeta: metav1.ObjectMeta{
-				Labels:          map[string]string{constants.BuildTypeLabel: string(kmmv1beta1.BuildImage)},
+				Labels:          map[string]string{constants.ResourceType: string(kmmv1beta1.BuildImage)},
 				Finalizers:      []string{constants.JobEventFinalizer},
 				Namespace:       namespace,
 				OwnerReferences: []metav1.OwnerReference{or},
@@ -256,7 +256,7 @@ var _ = Describe("JobEventReconciler_Reconcile", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{createdAnnotationKey: ""},
 					Labels: map[string]string{
-						constants.BuildTypeLabel:     jobType,
+						constants.ResourceType:       jobType,
 						constants.TargetKernelTarget: kernelVersion,
 					},
 					Finalizers:      []string{constants.JobEventFinalizer},
@@ -391,7 +391,7 @@ var _ = Describe("jobEventPredicate", func() {
 		func(buildType string, hasFinalizer, expectedResult bool) {
 			build := &buildv1.Build{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{constants.BuildTypeLabel: buildType},
+					Labels: map[string]string{constants.ResourceType: buildType},
 				},
 			}
 

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package ocpbuild
+package resource
 
 import (
 	"testing"
@@ -36,5 +36,5 @@ func TestAPIs(t *testing.T) {
 	scheme, err = test.TestScheme()
 	Expect(err).NotTo(HaveOccurred())
 
-	RunSpecs(t, "buildsign ocpbuild Suite")
+	RunSpecs(t, "buildsign resource Suite")
 }

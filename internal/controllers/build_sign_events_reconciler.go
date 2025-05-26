@@ -88,7 +88,7 @@ func NewBuildSignEventsReconciler(client client.Client, helper JobEventReconcile
 func (r *JobEventReconciler) Reconcile(ctx context.Context, build *buildv1.Build) (reconcile.Result, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
-	je, err := newJobEvent(build.Labels[constants.BuildTypeLabel])
+	je, err := newJobEvent(build.Labels[constants.ResourceType])
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("could not parse job type: %v", err)
 	}
@@ -175,7 +175,7 @@ func (r *JobEventReconciler) Reconcile(ctx context.Context, build *buildv1.Build
 }
 
 var jobEventPredicate = predicate.NewPredicateFuncs(func(obj client.Object) bool {
-	label := obj.GetLabels()[constants.BuildTypeLabel]
+	label := obj.GetLabels()[constants.ResourceType]
 
 	return (label == string(kmmv1beta1.BuildImage) || label == string(kmmv1beta1.SignImage)) &&
 		controllerutil.ContainsFinalizer(obj, constants.JobEventFinalizer)
