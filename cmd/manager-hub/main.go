@@ -45,7 +45,7 @@ import (
 	hubv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api-hub/v1beta1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
-	buildsignocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign/ocpbuild"
+	buildsignresource "github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign/resource"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cluster"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cmd"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
@@ -59,7 +59,9 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/registry"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
+
 	//+kubebuilder:scaffold:imports
+	buildsign "github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign"
 )
 
 var (
@@ -125,6 +127,7 @@ func main() {
 
 	buildSignCombiner := module.NewCombiner()
 	registryAPI := registry.NewRegistry()
+	resourceManager := buildsignresource.NewResourceManager(client, buildSignCombiner, kernelOsDtkMapping, scheme)
 
 	authFactory := auth.NewRegistryAuthGetterFactory(
 		client,
@@ -136,8 +139,7 @@ func main() {
 	micAPI := mic.New(client, scheme)
 	mbscAPI := mbsc.New(client, scheme)
 	imagePullerAPI := pod.NewImagePuller(client, scheme)
-	signImage := cmd.GetEnvOrFatalError("RELATED_IMAGE_SIGN", setupLogger)
-	buildSignAPI := buildsignocpbuild.NewManager(client, buildSignCombiner, kernelOsDtkMapping, signImage, scheme)
+	builSignAPI := buildsign.NewManager(client, resourceManager, scheme)
 
 	kernelAPI := module.NewKernelMapper(buildSignCombiner)
 
@@ -158,7 +160,7 @@ func main() {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.MICReconcilerName)
 	}
 
-	if err = controllers.NewMBSCReconciler(client, buildSignAPI, mbscAPI).SetupWithManager(mgr); err != nil {
+	if err = controllers.NewMBSCReconciler(client, builSignAPI, mbscAPI).SetupWithManager(mgr); err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.MBSCReconcilerName)
 	}
 

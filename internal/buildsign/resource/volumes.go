@@ -1,4 +1,4 @@
-package ocpbuild
+package resource
 
 import (
 	buildv1 "github.com/openshift/api/build/v1"

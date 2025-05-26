@@ -22,6 +22,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mbsc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mic"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
@@ -32,7 +33,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta2"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/auth"
-	buildsignocpbuild "github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign/ocpbuild"
+	buildsignresource "github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign/resource"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cmd"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/config"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
@@ -129,6 +130,7 @@ func main() {
 	metricsAPI := metrics.New()
 	metricsAPI.Register()
 	buildSignCombinerAPI := module.NewCombiner()
+	resourceManager := buildsignresource.NewResourceManager(client, buildSignCombinerAPI, kernelOsDtkMapping, scheme)
 	nodeAPI := node.NewNode(client)
 	registryAPI := registry.NewRegistry()
 	authFactory := auth.NewRegistryAuthGetterFactory(
@@ -215,10 +217,9 @@ func main() {
 			cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.NodeKernelClusterClaimReconcilerName)
 		}
 	} else {
-		signImage := cmd.GetEnvOrFatalError("RELATED_IMAGE_SIGN", setupLogger)
-		buildSignAPI := buildsignocpbuild.NewManager(client, buildSignCombinerAPI, kernelOsDtkMapping, signImage, scheme)
+		builSignAPI := buildsign.NewManager(client, resourceManager, scheme)
 
-		mbscr := controllers.NewMBSCReconciler(client, buildSignAPI, mbscAPI)
+		mbscr := controllers.NewMBSCReconciler(client, builSignAPI, mbscAPI)
 		if err = mbscr.SetupWithManager(mgr); err != nil {
 			cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.MBSCReconcilerName)
 		}

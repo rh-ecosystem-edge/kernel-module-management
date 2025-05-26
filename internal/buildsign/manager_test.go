@@ -1,4 +1,4 @@
-package ocpbuild
+package buildsign
 
 import (
 	"context"
@@ -20,11 +20,12 @@ var _ = Describe("GetStatus", func() {
 	var (
 		ctrl                *gomock.Controller
 		clnt                *client.MockClient
-		mockOCPBuildManager *MockocpbuildManager
-		mgr                 *manager
+		mockResourceManager *MockResourceManager
+		mgr                 Manager
 	)
 	const (
 		mbscName      = "some-name"
+		imageName     = "image-name"
 		mbscNamespace = "some-namespace"
 		kernelVersion = "some version"
 	)
@@ -32,20 +33,17 @@ var _ = Describe("GetStatus", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mockOCPBuildManager = NewMockocpbuildManager(ctrl)
-		mgr = &manager{
-			client:          clnt,
-			ocpbuildManager: mockOCPBuildManager,
-		}
+		mockResourceManager = NewMockResourceManager(ctrl)
+		mgr = NewManager(clnt, mockResourceManager, scheme)
 	})
 
 	ctx := context.Background()
 	testMBSC := kmmv1beta1.ModuleBuildSignConfig{}
 
-	It("failed flow, getModuleOCPBuildByKernel fails", func() {
+	It("failed flow, GetResourceByKernel fails", func() {
 		normalizedKernel := kernel.NormalizeVersion(kernelVersion)
-		mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, normalizedKernel,
-			string(kmmv1beta1.BuildImage), &testMBSC).
+		mockResourceManager.EXPECT().GetResourceByKernel(ctx, mbscName, mbscNamespace, normalizedKernel,
+			kmmv1beta1.BuildImage, &testMBSC).
 			Return(nil, fmt.Errorf("some error"))
 
 		status, err := mgr.GetStatus(ctx, mbscName, mbscNamespace, kernelVersion, kmmv1beta1.BuildImage, &testMBSC)
@@ -53,25 +51,25 @@ var _ = Describe("GetStatus", func() {
 		Expect(status).To(Equal(kmmv1beta1.BuildOrSignStatus("")))
 	})
 
-	It("getModuleOCPBuildByKernel returns pod does not exists", func() {
+	It("GetResourceByKernel returns pod does not exists", func() {
 		normalizedKernel := kernel.NormalizeVersion(kernelVersion)
-		mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, normalizedKernel,
-			string(kmmv1beta1.BuildImage), &testMBSC).
-			Return(nil, ErrNoMatchingBuild)
+		mockResourceManager.EXPECT().GetResourceByKernel(ctx, mbscName, mbscNamespace, normalizedKernel,
+			kmmv1beta1.BuildImage, &testMBSC).
+			Return(nil, ErrNoMatchingBuildSignResource)
 
 		status, err := mgr.GetStatus(ctx, mbscName, mbscNamespace, kernelVersion, kmmv1beta1.BuildImage, &testMBSC)
 		Expect(err).To(BeNil())
 		Expect(status).To(Equal(kmmv1beta1.BuildOrSignStatus("")))
 	})
 
-	It("failed flow, getOCPBuildStatus fails", func() {
+	It("failed flow, GetResourceStatus fails", func() {
 		foundBuild := buildv1.Build{}
 		normalizedKernel := kernel.NormalizeVersion(kernelVersion)
 		gomock.InOrder(
-			mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, normalizedKernel,
-				string(kmmv1beta1.BuildImage), &testMBSC).
+			mockResourceManager.EXPECT().GetResourceByKernel(ctx, mbscName, mbscNamespace, normalizedKernel,
+				kmmv1beta1.BuildImage, &testMBSC).
 				Return(&foundBuild, nil),
-			mockOCPBuildManager.EXPECT().getOCPBuildStatus(&foundBuild).Return(Status(""), fmt.Errorf("some error")),
+			mockResourceManager.EXPECT().GetResourceStatus(&foundBuild).Return(Status(""), fmt.Errorf("some error")),
 		)
 
 		status, err := mgr.GetStatus(ctx, mbscName, mbscNamespace, kernelVersion, kmmv1beta1.BuildImage, &testMBSC)
@@ -83,10 +81,10 @@ var _ = Describe("GetStatus", func() {
 		foundBuild := buildv1.Build{}
 		normalizedKernel := kernel.NormalizeVersion(kernelVersion)
 		gomock.InOrder(
-			mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, normalizedKernel,
-				string(kmmv1beta1.BuildImage), &testMBSC).
+			mockResourceManager.EXPECT().GetResourceByKernel(ctx, mbscName, mbscNamespace, normalizedKernel,
+				kmmv1beta1.BuildImage, &testMBSC).
 				Return(&foundBuild, nil),
-			mockOCPBuildManager.EXPECT().getOCPBuildStatus(&foundBuild).Return(buildStatus, nil),
+			mockResourceManager.EXPECT().GetResourceStatus(&foundBuild).Return(buildStatus, nil),
 		)
 		status, err := mgr.GetStatus(ctx, mbscName, mbscNamespace, kernelVersion, kmmv1beta1.BuildImage, &testMBSC)
 		Expect(err).To(BeNil())
@@ -103,11 +101,12 @@ var _ = Describe("Sync", func() {
 	var (
 		ctrl                *gomock.Controller
 		clnt                *client.MockClient
-		mockOCPBuildManager *MockocpbuildManager
-		mgr                 *manager
+		mockResourceManager *MockResourceManager
+		mgr                 Manager
 	)
 	const (
 		mbscName      = "some-name"
+		imageName     = "image-name"
 		mbscNamespace = "some-namespace"
 		kernelVersion = "some version"
 	)
@@ -115,11 +114,8 @@ var _ = Describe("Sync", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mockOCPBuildManager = NewMockocpbuildManager(ctrl)
-		mgr = &manager{
-			client:          clnt,
-			ocpbuildManager: mockOCPBuildManager,
-		}
+		mockResourceManager = NewMockResourceManager(ctrl)
+		mgr = NewManager(clnt, mockResourceManager, scheme)
 	})
 
 	ctx := context.Background()
@@ -130,66 +126,72 @@ var _ = Describe("Sync", func() {
 		KernelNormalizedVersion: kernelVersion,
 	}
 
-	It("makeOcpbuildSignTemplate failed", func() {
+	It("makeSignTemplate failed", func() {
 		By("test build action")
-		mockOCPBuildManager.EXPECT().makeOcpbuildBuildTemplate(ctx, testMLD, true, &testMBSC).Return(nil, fmt.Errorf("some error"))
+		mockResourceManager.EXPECT().MakeResourceTemplate(ctx, testMLD, &testMBSC, true, kmmv1beta1.BuildImage).
+			Return(nil, fmt.Errorf("some error"))
 		err := mgr.Sync(ctx, testMLD, true, kmmv1beta1.BuildImage, &testMBSC)
 		Expect(err).To(HaveOccurred())
 
 		By("test sign action")
-		mockOCPBuildManager.EXPECT().makeOcpbuildSignTemplate(ctx, testMLD, true, &testMBSC).Return(nil, fmt.Errorf("some error"))
+		mockResourceManager.EXPECT().MakeResourceTemplate(ctx, testMLD, &testMBSC, true, kmmv1beta1.SignImage).
+			Return(nil, fmt.Errorf("some error"))
 		err = mgr.Sync(ctx, testMLD, true, kmmv1beta1.SignImage, &testMBSC)
 		Expect(err).To(HaveOccurred())
 	})
 
-	It("GetModulePodByKernel failed", func() {
+	It("GetResourceByKernel failed", func() {
 		gomock.InOrder(
-			mockOCPBuildManager.EXPECT().makeOcpbuildBuildTemplate(ctx, testMLD, true, &testMBSC).Return(nil, nil),
-			mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, kernelVersion,
-				string(kmmv1beta1.BuildImage), &testMBSC).
+			mockResourceManager.EXPECT().MakeResourceTemplate(ctx, testMLD, &testMBSC, true, kmmv1beta1.BuildImage).
+				Return(nil, nil),
+			mockResourceManager.EXPECT().GetResourceByKernel(ctx, mbscName, mbscNamespace, kernelVersion,
+				kmmv1beta1.BuildImage, &testMBSC).
 				Return(nil, fmt.Errorf("some error")),
 		)
 		err := mgr.Sync(ctx, testMLD, true, kmmv1beta1.BuildImage, &testMBSC)
 		Expect(err).To(HaveOccurred())
 	})
 
-	It("CreateOCPBuild failed", func() {
+	It("CreateResource failed", func() {
 		testTemplate := buildv1.Build{}
 		gomock.InOrder(
-			mockOCPBuildManager.EXPECT().makeOcpbuildBuildTemplate(ctx, testMLD, true, &testMBSC).Return(&testTemplate, nil),
-			mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, kernelVersion,
-				string(kmmv1beta1.BuildImage), &testMBSC).
-				Return(nil, ErrNoMatchingBuild),
-			mockOCPBuildManager.EXPECT().createOCPBuild(ctx, &testTemplate).Return(fmt.Errorf("some error")),
+			mockResourceManager.EXPECT().MakeResourceTemplate(ctx, testMLD, &testMBSC, true, kmmv1beta1.BuildImage).
+				Return(&testTemplate, nil),
+			mockResourceManager.EXPECT().GetResourceByKernel(ctx, mbscName, mbscNamespace, kernelVersion,
+				kmmv1beta1.BuildImage, &testMBSC).
+				Return(nil, ErrNoMatchingBuildSignResource),
+			mockResourceManager.EXPECT().CreateResource(ctx, &testTemplate).Return(fmt.Errorf("some error")),
 		)
 		err := mgr.Sync(ctx, testMLD, true, kmmv1beta1.BuildImage, &testMBSC)
 		Expect(err).To(HaveOccurred())
 	})
 
-	It("isOCPBuildChanged failed", func() {
+	It("IsResourceChanged failed", func() {
 		testTemplate := buildv1.Build{}
 		testBuild := buildv1.Build{}
 		gomock.InOrder(
-			mockOCPBuildManager.EXPECT().makeOcpbuildBuildTemplate(ctx, testMLD, true, &testMBSC).Return(&testTemplate, nil),
-			mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, kernelVersion,
-				string(kmmv1beta1.BuildImage), &testMBSC).
+			mockResourceManager.EXPECT().MakeResourceTemplate(ctx, testMLD, &testMBSC, true, kmmv1beta1.BuildImage).
+				Return(&testTemplate, nil),
+			mockResourceManager.EXPECT().GetResourceByKernel(ctx, mbscName, mbscNamespace, kernelVersion,
+				kmmv1beta1.BuildImage, &testMBSC).
 				Return(&testBuild, nil),
-			mockOCPBuildManager.EXPECT().isOCPBuildChanged(&testBuild, &testTemplate).Return(false, fmt.Errorf("some error")),
+			mockResourceManager.EXPECT().IsResourceChanged(&testBuild, &testTemplate).Return(false, fmt.Errorf("some error")),
 		)
 		err := mgr.Sync(ctx, testMLD, true, kmmv1beta1.BuildImage, &testMBSC)
 		Expect(err).To(HaveOccurred())
 	})
 
-	It("deleteOCPBuild failed should not cause failure", func() {
+	It("DeleteResource failed should not cause failure", func() {
 		testTemplate := buildv1.Build{}
 		testBuild := buildv1.Build{}
 		gomock.InOrder(
-			mockOCPBuildManager.EXPECT().makeOcpbuildBuildTemplate(ctx, testMLD, true, &testMBSC).Return(&testTemplate, nil),
-			mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, kernelVersion,
-				string(kmmv1beta1.BuildImage), &testMBSC).
+			mockResourceManager.EXPECT().MakeResourceTemplate(ctx, testMLD, &testMBSC, true, kmmv1beta1.BuildImage).
+				Return(&testTemplate, nil),
+			mockResourceManager.EXPECT().GetResourceByKernel(ctx, mbscName, mbscNamespace, kernelVersion,
+				kmmv1beta1.BuildImage, &testMBSC).
 				Return(&testBuild, nil),
-			mockOCPBuildManager.EXPECT().isOCPBuildChanged(&testBuild, &testTemplate).Return(true, nil),
-			mockOCPBuildManager.EXPECT().deleteOCPBuild(ctx, &testBuild).Return(fmt.Errorf("some error")),
+			mockResourceManager.EXPECT().IsResourceChanged(&testBuild, &testTemplate).Return(true, nil),
+			mockResourceManager.EXPECT().DeleteResource(ctx, &testBuild).Return(fmt.Errorf("some error")),
 		)
 		err := mgr.Sync(ctx, testMLD, true, kmmv1beta1.BuildImage, &testMBSC)
 		Expect(err).To(BeNil())
@@ -204,23 +206,25 @@ var _ = Describe("Sync", func() {
 		}
 
 		if buildAction {
-			mockOCPBuildManager.EXPECT().makeOcpbuildBuildTemplate(ctx, testMLD, pushImage, &testMBSC).Return(&testBuildTemplate, nil)
+			mockResourceManager.EXPECT().MakeResourceTemplate(ctx, testMLD, &testMBSC, pushImage, kmmv1beta1.BuildImage).
+				Return(&testBuildTemplate, nil)
 		} else {
-			mockOCPBuildManager.EXPECT().makeOcpbuildSignTemplate(ctx, testMLD, pushImage, &testMBSC).Return(&testBuildTemplate, nil)
+			mockResourceManager.EXPECT().MakeResourceTemplate(ctx, testMLD, &testMBSC, pushImage, kmmv1beta1.SignImage).
+				Return(&testBuildTemplate, nil)
 		}
 		var getBuildError error
 		if !buildExists {
-			getBuildError = ErrNoMatchingBuild
+			getBuildError = ErrNoMatchingBuildSignResource
 		}
-		mockOCPBuildManager.EXPECT().getModuleOCPBuildByKernel(ctx, mbscName, mbscNamespace, kernelVersion, string(testAction),
-			&testMBSC).Return(&existingTestBuild, getBuildError)
+		mockResourceManager.EXPECT().GetResourceByKernel(ctx, mbscName, mbscNamespace, kernelVersion,
+			testAction, &testMBSC).Return(&existingTestBuild, getBuildError)
 		if !buildExists {
-			mockOCPBuildManager.EXPECT().createOCPBuild(ctx, &testBuildTemplate).Return(nil)
+			mockResourceManager.EXPECT().CreateResource(ctx, &testBuildTemplate).Return(nil)
 			goto executeTestFunction
 		}
-		mockOCPBuildManager.EXPECT().isOCPBuildChanged(&existingTestBuild, &testBuildTemplate).Return(buildChanged, nil)
+		mockResourceManager.EXPECT().IsResourceChanged(&existingTestBuild, &testBuildTemplate).Return(buildChanged, nil)
 		if buildChanged {
-			mockOCPBuildManager.EXPECT().deleteOCPBuild(ctx, &existingTestBuild).Return(nil)
+			mockResourceManager.EXPECT().DeleteResource(ctx, &existingTestBuild).Return(nil)
 		}
 
 	executeTestFunction:
@@ -240,11 +244,12 @@ var _ = Describe("GarbageCollect", func() {
 	var (
 		ctrl                *gomock.Controller
 		clnt                *client.MockClient
-		mockOCPBuildManager *MockocpbuildManager
-		mgr                 *manager
+		mockResourceManager *MockResourceManager
+		mgr                 Manager
 	)
 	const (
 		mbscName      = "some-name"
+		imageName     = "image-name"
 		mbscNamespace = "some-namespace"
 		kernelVersion = "some version"
 	)
@@ -252,19 +257,16 @@ var _ = Describe("GarbageCollect", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mockOCPBuildManager = NewMockocpbuildManager(ctrl)
-		mgr = &manager{
-			client:          clnt,
-			ocpbuildManager: mockOCPBuildManager,
-		}
+		mockResourceManager = NewMockResourceManager(ctrl)
+		mgr = NewManager(clnt, mockResourceManager, scheme)
 	})
 
 	ctx := context.Background()
 	testMBSC := kmmv1beta1.ModuleBuildSignConfig{}
 
 	It("failed to get module buildss", func() {
-		mockOCPBuildManager.EXPECT().getModuleOCPBuilds(ctx, mbscName, mbscNamespace, string(kmmv1beta1.BuildImage),
-			&testMBSC).Return(nil, fmt.Errorf("some error"))
+		mockResourceManager.EXPECT().GetModuleResources(ctx, mbscName, mbscNamespace,
+			kmmv1beta1.BuildImage, &testMBSC).Return(nil, fmt.Errorf("some error"))
 
 		_, err := mgr.GarbageCollect(ctx, mbscName, mbscNamespace, kmmv1beta1.BuildImage, &testMBSC)
 		Expect(err).To(HaveOccurred())
@@ -277,9 +279,10 @@ var _ = Describe("GarbageCollect", func() {
 			},
 		}
 		gomock.InOrder(
-			mockOCPBuildManager.EXPECT().getModuleOCPBuilds(ctx, mbscName, mbscNamespace, string(kmmv1beta1.BuildImage), &testMBSC).
-				Return([]buildv1.Build{testBuild}, nil),
-			mockOCPBuildManager.EXPECT().deleteOCPBuild(ctx, &testBuild).Return(fmt.Errorf("some error")),
+			mockResourceManager.EXPECT().GetModuleResources(ctx, mbscName, mbscNamespace, kmmv1beta1.BuildImage, &testMBSC).
+				Return([]metav1.Object{&testBuild}, nil),
+			mockResourceManager.EXPECT().HasResourcesCompletedSuccessfully(ctx, &testBuild).Return(true, nil),
+			mockResourceManager.EXPECT().DeleteResource(ctx, &testBuild).Return(fmt.Errorf("some error")),
 		)
 
 		_, err := mgr.GarbageCollect(ctx, mbscName, mbscNamespace, kmmv1beta1.BuildImage, &testMBSC)
@@ -287,31 +290,36 @@ var _ = Describe("GarbageCollect", func() {
 	})
 
 	It("good flow", func() {
-		testBuildSuccess := buildv1.Build{
+		testBuildSuccess := &buildv1.Build{
 			ObjectMeta: metav1.ObjectMeta{Name: "buildSuccess"},
 			Status:     buildv1.BuildStatus{Phase: buildv1.BuildPhaseComplete},
 		}
-		testBuildFailure := buildv1.Build{
+		testBuildFailure := &buildv1.Build{
 			ObjectMeta: metav1.ObjectMeta{Name: "buildFailure"},
 			Status:     buildv1.BuildStatus{Phase: buildv1.BuildPhaseFailed},
 		}
-		testBuildRunning := buildv1.Build{
+		testBuildRunning := &buildv1.Build{
 			ObjectMeta: metav1.ObjectMeta{Name: "buildRunning"},
 			Status:     buildv1.BuildStatus{Phase: buildv1.BuildPhaseRunning},
 		}
-		testBuildError := buildv1.Build{
+		testBuildError := &buildv1.Build{
 			ObjectMeta: metav1.ObjectMeta{Name: "buildError"},
 			Status:     buildv1.BuildStatus{Phase: buildv1.BuildPhaseError},
 		}
-		testBuildPending := buildv1.Build{
+		testBuildPending := &buildv1.Build{
 			ObjectMeta: metav1.ObjectMeta{Name: "buildPending"},
 			Status:     buildv1.BuildStatus{Phase: buildv1.BuildPhasePending},
 		}
-		returnedBuilds := []buildv1.Build{testBuildSuccess, testBuildFailure, testBuildRunning, testBuildError, testBuildPending}
+		returnedBuilds := []metav1.Object{testBuildSuccess, testBuildFailure, testBuildRunning, testBuildError, testBuildPending}
 		gomock.InOrder(
-			mockOCPBuildManager.EXPECT().getModuleOCPBuilds(ctx, mbscName, mbscNamespace, string(kmmv1beta1.BuildImage), &testMBSC).
+			mockResourceManager.EXPECT().GetModuleResources(ctx, mbscName, mbscNamespace, kmmv1beta1.BuildImage, &testMBSC).
 				Return(returnedBuilds, nil),
-			mockOCPBuildManager.EXPECT().deleteOCPBuild(ctx, &testBuildSuccess).Return(nil),
+			mockResourceManager.EXPECT().HasResourcesCompletedSuccessfully(ctx, testBuildSuccess).Return(true, nil),
+			mockResourceManager.EXPECT().DeleteResource(ctx, testBuildSuccess).Return(nil),
+			mockResourceManager.EXPECT().HasResourcesCompletedSuccessfully(ctx, testBuildFailure).Return(false, nil),
+			mockResourceManager.EXPECT().HasResourcesCompletedSuccessfully(ctx, testBuildRunning).Return(false, nil),
+			mockResourceManager.EXPECT().HasResourcesCompletedSuccessfully(ctx, testBuildError).Return(false, nil),
+			mockResourceManager.EXPECT().HasResourcesCompletedSuccessfully(ctx, testBuildPending).Return(false, nil),
 		)
 
 		res, err := mgr.GarbageCollect(ctx, mbscName, mbscNamespace, kmmv1beta1.BuildImage, &testMBSC)
