@@ -8,6 +8,7 @@ import (
 	kmmv1beta2 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta2"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cmd"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/config"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/webhook"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/webhook/hub"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -38,14 +39,14 @@ func main() {
 	logConfig.AddFlags(flag.CommandLine)
 
 	var (
-		configFile                 string
 		enableModule               bool
 		enableManagedClusterModule bool
 		enableNamespaceDeletion    bool
 		enablePreflightValidation  bool
+		userConfigMapName          string
 	)
 
-	flag.StringVar(&configFile, "config", "", "The path to the configuration file.")
+	flag.StringVar(&userConfigMapName, "config", "", "Name of the ConfigMap containing user config.")
 	flag.BoolVar(&enableModule, "enable-module", false, "Enable the webhook for Module resources")
 	flag.BoolVar(&enableManagedClusterModule, "enable-managedclustermodule", false, "Enable the webhook for ManagedClusterModule resources")
 	flag.BoolVar(&enableNamespaceDeletion, "enable-namespace", false, "Enable the webhook for Namespace deletion")
@@ -60,17 +61,20 @@ func main() {
 	setupLogger := logger.WithName("setup")
 
 	setupLogger.Info("Creating manager", "git commit", GitCommit)
+	operatorNamespace := cmd.GetEnvOrFatalError(constants.OperatorNamespaceEnvVar, setupLogger)
 
-	cfg, err := config.ParseFile(configFile)
+	ctx := ctrl.SetupSignalHandler()
+	cg := config.NewConfigGetter(setupLogger)
+
+	cfg, err := cg.GetConfig(ctx, userConfigMapName, operatorNamespace, false)
 	if err != nil {
-		cmd.FatalError(setupLogger, err, "could not parse the configuration file", "path", configFile)
+		cmd.FatalError(setupLogger, err, "failed to get kmm config")
 	}
 
-	options := cfg.ManagerOptions(setupLogger)
+	options := cg.GetManagerOptionsFromConfig(cfg, scheme)
 	options.LeaderElection = false
-	options.Scheme = scheme
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), *options)
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), options)
 	if err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create manager")
 	}
@@ -127,7 +131,7 @@ func main() {
 	}
 
 	setupLogger.Info("starting manager")
-	if err = mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err = mgr.Start(ctx); err != nil {
 		cmd.FatalError(setupLogger, err, "problem running manager")
 	}
 }

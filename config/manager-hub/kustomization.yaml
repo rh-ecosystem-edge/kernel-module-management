@@ -9,10 +9,5 @@ images:
   newName: quay.io/edge-infrastructure/kernel-module-management-operator-hub
   newTag: latest
 
-configMapGenerator:
-- files:
-  - controller_config.yaml
-  name: manager-config
-
-generatorOptions:
-  disableNameSuffixHash: true
+patches:
+- path: manager_hub_config_patch.yaml

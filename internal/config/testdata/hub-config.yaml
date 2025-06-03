@@ -1,7 +1,9 @@
 healthProbeBindAddress: :8081
 leaderElection:
   enabled: true
-  resourceID: kmm.sigs.x-k8s.io
+  resourceID: kmm-hub.sigs.x-k8s.io
+job:
+  gcDelay: "0s"
 webhook:
   disableHTTP2: true  # CVE-2023-44487
   port: 9443
