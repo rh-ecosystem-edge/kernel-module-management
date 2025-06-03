@@ -1,18 +1,25 @@
 package config
 
 import (
+	"bytes"
+	"context"
 	"crypto/tls"
 	"fmt"
-	"os"
-	"time"
-
 	"github.com/go-logr/logr"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/http"
 	"gopkg.in/yaml.v3"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"time"
 )
 
 type Job struct {
@@ -51,50 +58,157 @@ type Config struct {
 	Worker                 Worker         `yaml:"worker"`
 }
 
-func ParseFile(path string) (*Config, error) {
-	fd, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("could not open the configuration file: %v", err)
-	}
-	defer fd.Close()
-
-	cfg := Config{}
-
-	if err = yaml.NewDecoder(fd).Decode(&cfg); err != nil {
-		return nil, fmt.Errorf("could not decode configuration file: %v", err)
-	}
-
-	return &cfg, nil
+//go:generate mockgen -source=config.go -package=config -destination=mock_config.go ConfigGetter,configHelperAPI
+type ConfigGetter interface {
+	GetConfig(ctx context.Context, userConfigMapName, userConfigMapNamespace string, isHubConfig bool) (*Config, error)
+	GetManagerOptionsFromConfig(conf *Config, scheme *runtime.Scheme) manager.Options
 }
 
-func (c *Config) ManagerOptions(logger logr.Logger) *manager.Options {
-	webhookOpts := webhook.Options{Port: c.Webhook.Port}
+func NewConfigGetter(logger logr.Logger) ConfigGetter {
+	return &configGetter{
+		configHelper: newConfigHelper(),
+		logger:       logger,
+	}
+}
 
-	if c.Webhook.DisableHTTP2 {
-		logger.Info("Disabling HTTP/2 in the webhook server")
+func (cg *configGetter) GetConfig(ctx context.Context,
+	userConfigMapName, userConfigMapNamespace string,
+	isHubConfig bool) (*Config, error) {
+
+	cfg := cg.configHelper.newDefaultConfig(isHubConfig)
+	clnt, err := cg.configHelper.getClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get client %v", err)
+	}
+
+	managerConfig := &corev1.ConfigMap{}
+	namespacedName := types.NamespacedName{
+		Namespace: userConfigMapNamespace,
+		Name:      userConfigMapName,
+	}
+	if err := clnt.Get(ctx, namespacedName, managerConfig); err != nil {
+		if errors.IsNotFound(err) {
+			cg.logger.Info("No ConfigMap configuring the manager was found in namespace, using default configuration",
+				"namespace", userConfigMapNamespace, "name", userConfigMapName)
+			return cfg, nil
+		}
+		return nil, fmt.Errorf("failed to get ConfigMap %s/%s: %v", userConfigMapName, userConfigMapNamespace, err)
+	}
+
+	err = cg.configHelper.overrideConfigFromCM(managerConfig, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("unable to load KMM config from ConfigMap %v", err)
+	}
+	return cfg, nil
+}
+
+func (cg *configGetter) GetManagerOptionsFromConfig(conf *Config, scheme *runtime.Scheme) manager.Options {
+
+	webhookOpts := webhook.Options{Port: conf.Webhook.Port}
+
+	if conf.Webhook.DisableHTTP2 {
+		cg.logger.Info("Disabling HTTP/2 in the webhook server")
 		webhookOpts.TLSOpts = []func(*tls.Config){http.DisableHTTP2}
 	}
 
 	metrics := server.Options{
-		BindAddress:   c.Metrics.BindAddress,
-		SecureServing: c.Metrics.SecureServing,
+		BindAddress:   conf.Metrics.BindAddress,
+		SecureServing: conf.Metrics.SecureServing,
 		CertDir:       "/certs",
 	}
 
-	if c.Metrics.EnableAuthnAuthz {
+	if conf.Metrics.EnableAuthnAuthz {
 		metrics.FilterProvider = filters.WithAuthenticationAndAuthorization
 	}
 
-	if c.Metrics.SecureServing && c.Metrics.DisableHTTP2 {
-		logger.Info("Disabling HTTP/2 in the metrics server")
+	if conf.Metrics.SecureServing && conf.Metrics.DisableHTTP2 {
+		cg.logger.Info("Disabling HTTP/2 in the metrics server")
 		metrics.TLSOpts = []func(*tls.Config){http.DisableHTTP2}
 	}
 
-	return &manager.Options{
-		HealthProbeBindAddress: c.HealthProbeBindAddress,
-		LeaderElection:         c.LeaderElection.Enabled,
-		LeaderElectionID:       c.LeaderElection.ResourceID,
+	return manager.Options{
+		HealthProbeBindAddress: conf.HealthProbeBindAddress,
+		LeaderElection:         conf.LeaderElection.Enabled,
+		LeaderElectionID:       conf.LeaderElection.ResourceID,
 		Metrics:                metrics,
 		WebhookServer:          webhook.NewServer(webhookOpts),
+		Scheme:                 scheme,
+	}
+}
+
+type configHelperAPI interface {
+	getClient() (client.Client, error)
+	overrideConfigFromCM(cm *corev1.ConfigMap, cfg *Config) error
+	decodeStrictYAMLIntoConfig(yamlData []byte, config *Config) error
+	newDefaultConfig(isHubConfig bool) *Config
+}
+type configGetter struct {
+	configHelper configHelperAPI
+	logger       logr.Logger
+}
+
+type configHelper struct{}
+
+func newConfigHelper() configHelperAPI {
+	return &configHelper{}
+}
+
+func (ch *configHelper) getClient() (client.Client, error) {
+	clnt, err := client.New(ctrl.GetConfigOrDie(), client.Options{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new client %v", err)
+	}
+	return clnt, nil
+}
+
+func (ch *configHelper) overrideConfigFromCM(cm *corev1.ConfigMap, cfg *Config) error {
+	const configKey = "controller_config.yaml"
+	if cm == nil {
+		return fmt.Errorf("cm can not be nil")
+	}
+	rawConfig, ok := cm.Data[configKey]
+	if !ok {
+		return fmt.Errorf("key %q not found in ConfigMap %s/%s", configKey, cm.Namespace, cm.Name)
+	}
+	return ch.decodeStrictYAMLIntoConfig([]byte(rawConfig), cfg)
+}
+
+func (ch *configHelper) decodeStrictYAMLIntoConfig(yamlData []byte, config *Config) error {
+	decoder := yaml.NewDecoder(bytes.NewReader(yamlData))
+	decoder.KnownFields(true)
+
+	if err := decoder.Decode(config); err != nil {
+		return fmt.Errorf("error unmarshaling YAML: %v", err)
+	}
+
+	return nil
+}
+
+func (ch *configHelper) newDefaultConfig(isHubConfig bool) *Config {
+	leaderElectionResourceID := "kmm.sigs.x-k8s.io"
+	if isHubConfig {
+		leaderElectionResourceID = "kmm-hub.sigs.x-k8s.io"
+	}
+	return &Config{
+		HealthProbeBindAddress: ":8081",
+		LeaderElection: LeaderElection{
+			Enabled:    true,
+			ResourceID: leaderElectionResourceID,
+		},
+		Metrics: Metrics{
+			EnableAuthnAuthz: true,
+			BindAddress:      "0.0.0.0:8443",
+			SecureServing:    true,
+			DisableHTTP2:     true,
+		},
+		Worker: Worker{
+			RunAsUser:        ptr.To[int64](0),
+			SELinuxType:      "spc_t",
+			FirmwareHostPath: ptr.To("/var/lib/firmware"),
+		},
+		Webhook: Webhook{
+			DisableHTTP2: true,
+			Port:         9443,
+		},
 	}
 }

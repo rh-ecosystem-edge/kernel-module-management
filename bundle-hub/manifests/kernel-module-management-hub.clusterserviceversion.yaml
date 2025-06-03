@@ -37,7 +37,7 @@ metadata:
         }
       ]
     capabilities: Seamless Upgrades
-    createdAt: "2025-05-29T12:32:17Z"
+    createdAt: "2025-06-03T12:30:04Z"
     operatorframework.io/suggested-namespace: openshift-kmm-hub
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -237,7 +237,7 @@ spec:
             spec:
               containers:
               - args:
-                - --config=controller_config.yaml
+                - --config=kmm-operator-hub-manager-config
                 command:
                 - /usr/local/bin/manager
                 env:
@@ -288,9 +288,6 @@ spec:
                 - mountPath: /certs
                   name: metrics-tls
                   readOnly: true
-                - mountPath: /controller_config.yaml
-                  name: manager-config
-                  subPath: controller_config.yaml
               nodeSelector:
                 node-role.kubernetes.io/master: ""
               securityContext:
@@ -321,9 +318,6 @@ spec:
                 secret:
                   defaultMode: 420
                   secretName: metrics-service-cert
-              - configMap:
-                  name: kmm-operator-hub-manager-config
-                name: manager-config
       - label:
           app.kubernetes.io/component: kmm-hub
           app.kubernetes.io/name: kmm-hub
@@ -364,8 +358,13 @@ spec:
                     weight: 1
               containers:
               - args:
-                - --config=controller_config.yaml
+                - --config=kmm-operator-manager-config
                 - --enable-managedclustermodule
+                env:
+                - name: OPERATOR_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
                 image: quay.io/edge-infrastructure/kernel-module-management-webhook-server:latest
                 livenessProbe:
                   httpGet:
@@ -396,10 +395,6 @@ spec:
                   capabilities:
                     drop:
                     - ALL
-                volumeMounts:
-                - mountPath: /controller_config.yaml
-                  name: manager-config
-                  subPath: controller_config.yaml
               securityContext:
                 runAsNonRoot: true
               serviceAccountName: kmm-operator-hub-controller
@@ -411,10 +406,6 @@ spec:
               - effect: NoSchedule
                 key: node-role.kubernetes.io/control-plane
                 operator: Equal
-              volumes:
-              - configMap:
-                  name: kmm-operator-hub-manager-config
-                name: manager-config
       permissions:
       - rules:
         - apiGroups:
