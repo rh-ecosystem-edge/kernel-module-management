@@ -44,26 +44,10 @@ metadata:
             "kernelVersion": "4.18.0-372.32.1.el8_6.x86_64",
             "pushBuiltImage": true
           }
-        },
-        {
-          "apiVersion": "kmm.sigs.x-k8s.io/v1beta1",
-          "kind": "PreflightValidationOCP",
-          "metadata": {
-            "labels": {
-              "app.kubernetes.io/component": "kmm",
-              "app.kubernetes.io/name": "kmm",
-              "app.kubernetes.io/part-of": "kmm"
-            },
-            "name": "preflightvalidationocp-sample"
-          },
-          "spec": {
-            "pushBuiltImage": true,
-            "releaseImage": "quay.io/openshift-release-dev/ocp-release@sha256:22e149142517dfccb47be828f012659b1ccf71d26620e6f62468c264a7ce7863"
-          }
         }
       ]
     capabilities: Seamless Upgrades
-    createdAt: "2025-06-03T12:30:04Z"
+    createdAt: "2025-06-04T09:48:09Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -100,15 +84,6 @@ spec:
       version: v1beta1
     - kind: PreflightValidation
       name: preflightvalidations.kmm.sigs.x-k8s.io
-      version: v1beta2
-    - description: PreflightValidationOCP initiates a preflight validations for all
-        Modules on the current OCP cluster.
-      displayName: Preflight Validation OCP
-      kind: PreflightValidationOCP
-      name: preflightvalidationsocp.kmm.sigs.x-k8s.io
-      version: v1beta1
-    - kind: PreflightValidationOCP
-      name: preflightvalidationsocp.kmm.sigs.x-k8s.io
       version: v1beta2
   description: Kubernetes operator managing out of tree kernel modules
   displayName: Kernel Module Management
@@ -584,9 +559,8 @@ spec:
     containerPort: 443
     conversionCRDs:
     - preflightvalidations.kmm.sigs.x-k8s.io
-    - preflightvalidationsocp.kmm.sigs.x-k8s.io
     deploymentName: kmm-operator-webhook
-    generateName: cpreflightvalidationspreflightvalidationsocp.kb.io
+    generateName: cpreflightvalidations.kb.io
     sideEffects: None
     targetPort: 9443
     type: ConversionWebhook
