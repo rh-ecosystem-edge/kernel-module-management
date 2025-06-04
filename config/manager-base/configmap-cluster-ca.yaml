@@ -1,9 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  labels:
-    kmm.openshift.io/ca.type: cluster
-    config.openshift.io/inject-trusted-cabundle: "true"
-  name: cluster-ca
-  namespace: system
-data: {}

@@ -1,7 +1,3 @@
 images:
 - path: spec/template/spec/containers/env/value
   kind: Deployment
-
-namePrefix:
-- kind: Deployment
-  path: spec/template/spec/volumes/configMap/name

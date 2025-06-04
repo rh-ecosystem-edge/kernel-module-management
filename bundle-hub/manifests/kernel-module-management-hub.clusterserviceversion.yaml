@@ -37,7 +37,7 @@ metadata:
         }
       ]
     capabilities: Seamless Upgrades
-    createdAt: "2025-06-04T09:03:23Z"
+    createdAt: "2025-06-04T19:43:18Z"
     operatorframework.io/suggested-namespace: openshift-kmm-hub
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -235,14 +235,23 @@ spec:
                 app.kubernetes.io/part-of: kmm
                 control-plane: controller
             spec:
+              affinity:
+                nodeAffinity:
+                  preferredDuringSchedulingIgnoredDuringExecution:
+                  - preference:
+                      matchExpressions:
+                      - key: node-role.kubernetes.io/control-plane
+                        operator: Exists
+                    weight: 1
+                  - preference:
+                      matchExpressions:
+                      - key: node-role.kubernetes.io/master
+                        operator: Exists
+                    weight: 1
               containers:
               - args:
                 - --config=kmm-operator-hub-manager-config
-                command:
-                - /usr/local/bin/manager
                 env:
-                - name: SSL_CERT_DIR
-                  value: /etc/pki/ca-trust/extracted/pem
                 - name: OPERATOR_NAMESPACE
                   valueFrom:
                     fieldRef:
@@ -278,46 +287,17 @@ spec:
                     memory: 64Mi
                 securityContext:
                   allowPrivilegeEscalation: false
-                  capabilities:
-                    drop:
-                    - ALL
-                volumeMounts:
-                - mountPath: /etc/pki/ca-trust/extracted/pem
-                  name: trusted-ca
-                  readOnly: true
-                - mountPath: /certs
-                  name: metrics-tls
-                  readOnly: true
-              nodeSelector:
-                node-role.kubernetes.io/master: ""
               securityContext:
                 runAsNonRoot: true
-                seccompProfile:
-                  type: RuntimeDefault
               serviceAccountName: kmm-operator-hub-controller
               terminationGracePeriodSeconds: 10
               tolerations:
               - effect: NoSchedule
                 key: node-role.kubernetes.io/master
                 operator: Equal
-              volumes:
-              - name: trusted-ca
-                projected:
-                  sources:
-                  - configMap:
-                      items:
-                      - key: ca-bundle.crt
-                        path: tls-ca-bundle.pem
-                      name: kmm-operator-hub-cluster-ca
-                  - configMap:
-                      items:
-                      - key: service-ca.crt
-                        path: ocp-service-ca-bundle.pem
-                      name: kmm-operator-hub-service-ca
-              - name: metrics-tls
-                secret:
-                  defaultMode: 420
-                  secretName: metrics-service-cert
+              - effect: NoSchedule
+                key: node-role.kubernetes.io/control-plane
+                operator: Equal
       - label:
           app.kubernetes.io/component: kmm-hub
           app.kubernetes.io/name: kmm-hub

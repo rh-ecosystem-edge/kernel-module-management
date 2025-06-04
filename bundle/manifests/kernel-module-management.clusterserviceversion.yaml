@@ -47,7 +47,7 @@ metadata:
         }
       ]
     capabilities: Seamless Upgrades
-    createdAt: "2025-06-04T09:48:09Z"
+    createdAt: "2025-06-04T19:43:16Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -146,13 +146,10 @@ spec:
           - ""
           resources:
           - configmaps
-          - pods
           verbs:
-          - create
           - delete
           - get
           - list
-          - patch
           - watch
         - apiGroups:
           - ""
@@ -160,6 +157,17 @@ spec:
           - namespaces
           - nodes
           verbs:
+          - get
+          - list
+          - patch
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - pods
+          verbs:
+          - create
+          - delete
           - get
           - list
           - patch
@@ -298,16 +306,25 @@ spec:
                 app.kubernetes.io/part-of: kmm
                 control-plane: controller
             spec:
+              affinity:
+                nodeAffinity:
+                  preferredDuringSchedulingIgnoredDuringExecution:
+                  - preference:
+                      matchExpressions:
+                      - key: node-role.kubernetes.io/control-plane
+                        operator: Exists
+                    weight: 1
+                  - preference:
+                      matchExpressions:
+                      - key: node-role.kubernetes.io/master
+                        operator: Exists
+                    weight: 1
               containers:
               - args:
                 - --config=kmm-operator-manager-config
-                command:
-                - /usr/local/bin/manager
                 env:
                 - name: RELATED_IMAGE_WORKER
                   value: quay.io/edge-infrastructure/kernel-module-management-worker:latest
-                - name: SSL_CERT_DIR
-                  value: /etc/pki/ca-trust/extracted/pem
                 - name: OPERATOR_NAMESPACE
                   valueFrom:
                     fieldRef:
@@ -343,46 +360,17 @@ spec:
                     memory: 64Mi
                 securityContext:
                   allowPrivilegeEscalation: false
-                  capabilities:
-                    drop:
-                    - ALL
-                volumeMounts:
-                - mountPath: /etc/pki/ca-trust/extracted/pem
-                  name: trusted-ca
-                  readOnly: true
-                - mountPath: /certs
-                  name: metrics-tls
-                  readOnly: true
-              nodeSelector:
-                node-role.kubernetes.io/master: ""
               securityContext:
                 runAsNonRoot: true
-                seccompProfile:
-                  type: RuntimeDefault
               serviceAccountName: kmm-operator-controller
               terminationGracePeriodSeconds: 10
               tolerations:
               - effect: NoSchedule
                 key: node-role.kubernetes.io/master
                 operator: Equal
-              volumes:
-              - name: trusted-ca
-                projected:
-                  sources:
-                  - configMap:
-                      items:
-                      - key: ca-bundle.crt
-                        path: tls-ca-bundle.pem
-                      name: kmm-operator-cluster-ca
-                  - configMap:
-                      items:
-                      - key: service-ca.crt
-                        path: ocp-service-ca-bundle.pem
-                      name: kmm-operator-service-ca
-              - name: metrics-tls
-                secret:
-                  defaultMode: 420
-                  secretName: metrics-service-cert
+              - effect: NoSchedule
+                key: node-role.kubernetes.io/control-plane
+                operator: Equal
       - label:
           app.kubernetes.io/component: kmm
           app.kubernetes.io/name: kmm

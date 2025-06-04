@@ -49,13 +49,10 @@ rules:
   - ""
   resources:
   - configmaps
-  - pods
   verbs:
-  - create
   - delete
   - get
   - list
-  - patch
   - watch
 - apiGroups:
   - ""
@@ -63,6 +60,17 @@ rules:
   - namespaces
   - nodes
   verbs:
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - create
+  - delete
   - get
   - list
   - patch
