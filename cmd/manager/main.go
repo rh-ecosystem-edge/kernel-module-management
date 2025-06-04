@@ -42,7 +42,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ocp/ca"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -147,12 +146,6 @@ func main() {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.DevicePluginReconcilerName)
 	}
 
-	caHelper := ca.NewHelper(client, scheme)
-
-	if err = controllers.NewModuleCAReconciler(client, caHelper, operatorNamespace).SetupWithManager(mgr); err != nil {
-		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.ModuleCAReconcilerName)
-	}
-
 	mnc := controllers.NewModuleReconciler(
 		client,
 		kernelAPI,
@@ -170,7 +163,7 @@ func main() {
 	eventRecorder := mgr.GetEventRecorderFor("kmm")
 
 	workerPodManagerAPI := pod.NewWorkerPodManager(client, workerImage, scheme, &cfg.Worker)
-	if err = controllers.NewNMCReconciler(client, scheme, workerImage, caHelper, &cfg.Worker, eventRecorder, nodeAPI,
+	if err = controllers.NewNMCReconciler(client, scheme, workerImage, &cfg.Worker, eventRecorder, nodeAPI,
 		workerPodManagerAPI).SetupWithManager(ctx, mgr); err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.NodeModulesConfigReconcilerName)
 	}

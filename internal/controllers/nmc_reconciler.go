@@ -12,7 +12,6 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ocp/ca"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/pod"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	v1 "k8s.io/api/core/v1"
@@ -48,7 +47,6 @@ func NewNMCReconciler(
 	client client.Client,
 	scheme *runtime.Scheme,
 	workerImage string,
-	caHelper ca.Helper,
 	workerCfg *config.Worker,
 	recorder record.EventRecorder,
 	nodeAPI node.Node,

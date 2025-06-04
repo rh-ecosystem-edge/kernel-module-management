@@ -3,11 +3,6 @@ kind: Kustomization
 
 resources:
 - manager.yaml
-- configmap-cluster-ca.yaml
-- configmap-service-ca.yaml
-
-patches:
-- path: ocp.patch.yaml
 
 images:
 - name: must-gather
