@@ -112,15 +112,6 @@ func main() {
 		if err = ctrl.NewWebhookManagedBy(mgr).For(&kmmv1beta2.PreflightValidation{}).Complete(); err != nil {
 			cmd.FatalError(setupLogger, err, "unable to create conversion webhook", "name", "PreflightValidation/v1beta2")
 		}
-
-		// PreflightValidationOCP
-		if err = ctrl.NewWebhookManagedBy(mgr).For(&kmmv1beta1.PreflightValidationOCP{}).Complete(); err != nil {
-			cmd.FatalError(setupLogger, err, "unable to create conversion webhook", "name", "PreflightValidationOCP/v1beta1")
-		}
-
-		if err = ctrl.NewWebhookManagedBy(mgr).For(&kmmv1beta2.PreflightValidationOCP{}).Complete(); err != nil {
-			cmd.FatalError(setupLogger, err, "unable to create conversion webhook", "name", "PreflightValidationOCP/v1beta2")
-		}
 	}
 
 	if err = mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
