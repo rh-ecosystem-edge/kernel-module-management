@@ -5,7 +5,6 @@ import (
 	"github.com/go-logr/logr"
 	buildv1 "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -39,7 +38,7 @@ var skipCreations predicate.Predicate = predicate.Funcs{
 	CreateFunc: func(_ event.CreateEvent) bool { return false },
 }
 
-var nodeBecomesSchedulable predicate.Predicate = predicate.Funcs{
+var nodeTaintsChanged predicate.Predicate = predicate.Funcs{
 	UpdateFunc: func(e event.UpdateEvent) bool {
 		oldNode, ok := e.ObjectOld.(*v1.Node)
 		if !ok {
@@ -51,10 +50,7 @@ var nodeBecomesSchedulable predicate.Predicate = predicate.Funcs{
 			return false
 		}
 
-		n := node.NewNode(nil)
-		isOldSchedulable := n.IsNodeSchedulable(oldNode, nil)
-		isNewSchedulable := n.IsNodeSchedulable(newNode, nil)
-		if isOldSchedulable != isNewSchedulable && isNewSchedulable {
+		if !reflect.DeepEqual(newNode.Spec.Taints, oldNode.Spec.Taints) {
 			return true
 		}
 
@@ -117,14 +113,6 @@ func New(client client.Client, nmcHelper nmc.Helper) *Filter {
 		client:    client,
 		nmcHelper: nmcHelper,
 	}
-}
-
-func (f *Filter) ModuleReconcilerNodePredicate(kernelLabel string) predicate.Predicate {
-	return predicate.And(
-		skipDeletions,
-		HasLabel(kernelLabel),
-		predicate.Or(nodeBecomesSchedulable, predicate.LabelChangedPredicate{}),
-	)
 }
 
 func ListModulesForNMC(_ context.Context, obj client.Object) []reconcile.Request {
@@ -197,7 +185,7 @@ func NMCReconcilerNodePredicate() predicate.Predicate {
 func ModuleReconcilerNodePredicate() predicate.Predicate {
 	return predicate.And(
 		skipDeletions,
-		predicate.Or(nodeBecomesSchedulable, predicate.LabelChangedPredicate{}),
+		predicate.Or(nodeTaintsChanged, predicate.LabelChangedPredicate{}),
 	)
 }
 
