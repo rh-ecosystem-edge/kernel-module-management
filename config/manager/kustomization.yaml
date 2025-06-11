@@ -9,8 +9,8 @@ patches:
 
 images:
 - name: controller
-  newName: quay.io/edge-infrastructure/kernel-module-management-operator
-  newTag: latest
+  newName: quay.io/yshnaidm/kmmo
+  newTag: simulate-metrics
 - name: worker
   newName: quay.io/edge-infrastructure/kernel-module-management-worker
   newTag: latest

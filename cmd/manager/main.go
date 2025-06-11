@@ -184,7 +184,7 @@ func main() {
 
 	workerPodManagerAPI := pod.NewWorkerPodManager(client, workerImage, scheme, &cfg.Worker)
 	if err = controllers.NewNMCReconciler(client, scheme, workerImage, caHelper, &cfg.Worker, eventRecorder, nodeAPI,
-		workerPodManagerAPI).SetupWithManager(ctx, mgr); err != nil {
+		workerPodManagerAPI, metricsAPI).SetupWithManager(ctx, mgr); err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.NodeModulesConfigReconcilerName)
 	}
 

@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"reflect"
+	"time"
 
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/config"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/ocp/ca"
@@ -51,6 +54,7 @@ type NMCReconciler struct {
 	helper     nmcReconcilerHelper
 	nodeAPI    node.Node
 	podManager pod.WorkerPodManager
+	metricsAPI metrics.Metrics
 }
 
 func NewNMCReconciler(
@@ -62,13 +66,16 @@ func NewNMCReconciler(
 	recorder record.EventRecorder,
 	nodeAPI node.Node,
 	podManager pod.WorkerPodManager,
+	metricsAPI metrics.Metrics,
 ) *NMCReconciler {
+	rand.Seed(time.Now().UnixNano())
 	helper := newNMCReconcilerHelper(client, podManager, recorder, nodeAPI)
 	return &NMCReconciler{
 		client:     client,
 		helper:     helper,
 		nodeAPI:    nodeAPI,
 		podManager: podManager,
+		metricsAPI: metricsAPI,
 	}
 }
 
@@ -82,6 +89,21 @@ func (r *NMCReconciler) Reconcile(ctx context.Context, req reconcile.Request) (r
 			// Pods are owned by the NMC, so the GC will have deleted them already.
 			// Remove the finalizer if we did not have a chance to do it before NMC deletion.
 			logger.Info("Clearing worker Pod finalizers")
+
+			r.metricsAPI.SetAcceleratorGpuUtilization(rand.Intn(20)+1, "amd")
+			r.metricsAPI.SetAcceleratorGpuUtilization(rand.Intn(20)+1, "nvidia")
+			r.metricsAPI.SetAcceleratorMemoryUsedBytes(rand.Intn(20)+1, "amd")
+			r.metricsAPI.SetAcceleratorMemoryUsedBytes(rand.Intn(20)+1, "nvidia")
+			r.metricsAPI.SetAcceleratorMemoryTotalBytes(rand.Intn(20)+1, "amd")
+			r.metricsAPI.SetAcceleratorMemoryTotalBytes(rand.Intn(20)+1, "nvidia")
+			r.metricsAPI.SetAcceleratorPowerUsageWatts(rand.Intn(20)+1, "amd")
+			r.metricsAPI.SetAcceleratorPowerUsageWatts(rand.Intn(20)+1, "nvidia")
+			r.metricsAPI.SetAcceleratorTemperatureCelcius(rand.Intn(20)+1, "amd")
+			r.metricsAPI.SetAcceleratorTemperatureCelcius(rand.Intn(20)+1, "nvidia")
+			r.metricsAPI.SetAcceleratorSMClockHertz(rand.Intn(20)+1, "amd")
+			r.metricsAPI.SetAcceleratorSMClockHertz(rand.Intn(20)+1, "nvidia")
+			r.metricsAPI.SetAcceleratorMemoryClockHertz(rand.Intn(20)+1, "amd")
+			r.metricsAPI.SetAcceleratorMemoryClockHertz(rand.Intn(20)+1, "nvidia")
 
 			if err = r.helper.RemovePodFinalizers(ctx, req.Name); err != nil {
 				return reconcile.Result{}, fmt.Errorf("could not clear all Pod finalizers for NMC %s: %v", req.Name, err)
