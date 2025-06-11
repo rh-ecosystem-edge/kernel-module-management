@@ -186,6 +186,7 @@ func (ch *configHelper) decodeStrictYAMLIntoConfig(yamlData []byte, config *Conf
 
 func (ch *configHelper) newDefaultConfig(isHubConfig bool) *Config {
 	leaderElectionResourceID := "kmm.sigs.x-k8s.io"
+	gcDelay, _ := time.ParseDuration("0s")
 	if isHubConfig {
 		leaderElectionResourceID = "kmm-hub.sigs.x-k8s.io"
 	}
@@ -209,6 +210,9 @@ func (ch *configHelper) newDefaultConfig(isHubConfig bool) *Config {
 		Webhook: Webhook{
 			DisableHTTP2: true,
 			Port:         9443,
+		},
+		Job: Job{
+			GCDelay: gcDelay,
 		},
 	}
 }
