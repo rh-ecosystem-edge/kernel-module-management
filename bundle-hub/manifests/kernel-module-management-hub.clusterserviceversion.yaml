@@ -37,7 +37,7 @@ metadata:
         }
       ]
     capabilities: Seamless Upgrades
-    createdAt: "2025-06-05T10:08:33Z"
+    createdAt: "2025-06-12T13:41:07Z"
     operatorframework.io/suggested-namespace: openshift-kmm-hub
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -57,6 +57,12 @@ spec:
       displayName: Managed Cluster Module
       kind: ManagedClusterModule
       name: managedclustermodules.hub.kmm.sigs.x-k8s.io
+      version: v1beta1
+    - kind: ModuleBuildSignConfig
+      name: modulebuildsignconfigs.kmm.sigs.x-k8s.io
+      version: v1beta1
+    - kind: ModuleImagesConfig
+      name: moduleimagesconfigs.kmm.sigs.x-k8s.io
       version: v1beta1
   description: Hub component for Kernel Module Management
   displayName: Kernel Module Management (Hub)
