@@ -168,6 +168,7 @@ spec:
           - kmm.sigs.x-k8s.io
           resources:
           - modulebuildsignconfigs/finalizers
+          - moduleimagesconfigs/finalizers
           verbs:
           - update
         - apiGroups:
