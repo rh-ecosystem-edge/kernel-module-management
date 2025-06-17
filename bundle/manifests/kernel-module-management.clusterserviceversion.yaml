@@ -47,7 +47,7 @@ metadata:
         }
       ]
     capabilities: Seamless Upgrades
-    createdAt: "2025-06-19T07:54:06Z"
+    createdAt: "2025-06-19T20:27:41Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -604,3 +604,23 @@ spec:
     targetPort: 9443
     type: ValidatingAdmissionWebhook
     webhookPath: /validate-kmm-sigs-x-k8s-io-v1beta1-module
+  - admissionReviewVersions:
+    - v1
+    containerPort: 443
+    deploymentName: kmm-operator-webhook
+    failurePolicy: Fail
+    generateName: vpreflightvalidationocp.kb.io
+    rules:
+    - apiGroups:
+      - kmm.sigs.x-k8s.io
+      apiVersions:
+      - v1beta2
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - preflightvalidationsocp
+    sideEffects: None
+    targetPort: 9443
+    type: ValidatingAdmissionWebhook
+    webhookPath: /validate-kmm-sigs-x-k8s-io-v1beta2-preflightvalidationocp
