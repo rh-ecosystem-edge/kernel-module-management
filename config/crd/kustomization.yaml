@@ -10,6 +10,7 @@ resources:
 - bases/kmm.sigs.x-k8s.io_moduleimagesconfigs.yaml
 - bases/kmm.sigs.x-k8s.io_modulebuildsignconfigs.yaml
 - bases/kmm.sigs.x-k8s.io_preflightvalidations.yaml
+- bases/kmm.sigs.x-k8s.io_preflightvalidationsocp.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
 patches:
