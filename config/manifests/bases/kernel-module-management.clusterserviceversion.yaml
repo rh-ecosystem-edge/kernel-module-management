@@ -12,12 +12,6 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-    - description: PreflightValidationOCP initiates a preflight validations for all
-        Modules on the current OCP cluster.
-      displayName: Preflight Validation OCP
-      kind: PreflightValidationOCP
-      name: preflightvalidationsocp.kmm.sigs.x-k8s.io
-      version: v1beta1
     - description: Module describes how to load a module on different kernel versions
       displayName: Module
       kind: Module
@@ -28,6 +22,12 @@ spec:
       displayName: Preflight Validation
       kind: PreflightValidation
       name: preflightvalidations.kmm.sigs.x-k8s.io
+      version: v1beta1
+    - description: PreflightValidationOCP initiates a preflight validations for all
+        Modules on the current OCP cluster.
+      displayName: Preflight Validation OCP
+      kind: PreflightValidationOCP
+      name: preflightvalidationsocp.kmm.sigs.x-k8s.io
       version: v1beta1
   description: Kubernetes operator managing out of tree kernel modules
   displayName: Kernel Module Management
