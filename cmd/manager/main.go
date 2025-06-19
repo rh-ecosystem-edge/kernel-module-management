@@ -219,6 +219,10 @@ func main() {
 		if err = controllers.NewPreflightValidationReconciler(client, filterAPI, metricsAPI, micAPI, kernelAPI, preflightAPI).SetupWithManager(mgr); err != nil {
 			cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.PreflightValidationReconcilerName)
 		}
+
+		if err = controllers.NewPreflightValidationOCPReconciler(client, filterAPI, kernelOsDtkMapping, scheme).SetupWithManager(mgr); err != nil {
+			cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.PreflightValidationOCPReconcilerName)
+		}
 	}
 
 	dtkNSN := types.NamespacedName{
