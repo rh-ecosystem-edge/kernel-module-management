@@ -118,6 +118,7 @@ rules:
   - moduleimagesconfigs/status
   - modules/status
   - preflightvalidations/status
+  - preflightvalidationsocp/status
   verbs:
   - get
   - patch
@@ -149,6 +150,7 @@ rules:
   resources:
   - nodemodulesconfigs/finalizers
   - preflightvalidations/finalizers
+  - preflightvalidationsocp/finalizers
   verbs:
   - patch
   - update
@@ -162,6 +164,7 @@ rules:
   - kmm.sigs.x-k8s.io
   resources:
   - preflightvalidations
+  - preflightvalidationsocp
   verbs:
   - create
   - delete
