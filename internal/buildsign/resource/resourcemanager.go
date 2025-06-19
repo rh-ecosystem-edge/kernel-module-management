@@ -102,7 +102,7 @@ func (rm *resourceManager) GetResourceStatus(obj metav1.Object) (buildsign.Statu
 	switch resource.Status.Phase {
 	case buildv1.BuildPhaseComplete:
 		return buildsign.StatusCompleted, nil
-	case buildv1.BuildPhaseRunning, buildv1.BuildPhasePending:
+	case buildv1.BuildPhaseRunning, buildv1.BuildPhasePending, buildv1.BuildPhaseNew:
 		return buildsign.StatusInProgress, nil
 	case buildv1.BuildPhaseFailed, buildv1.BuildPhaseCancelled, buildv1.BuildPhaseError:
 		return buildsign.StatusFailed, nil
