@@ -3,6 +3,9 @@ package config
 import (
 	"context"
 	"fmt"
+	"os"
+	"time"
+
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -12,10 +15,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"os"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"time"
 )
 
 var _ = Describe("overrideConfigFromCM", func() {
@@ -167,6 +168,7 @@ var _ = Describe("GetConfig", func() {
 			mch.EXPECT().newDefaultConfig(false).Return(&Config{}),
 			mch.EXPECT().getClient().Return(clnt, nil),
 			clnt.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).Return(nil),
+			mch.EXPECT().newDefaultConfig(false).Return(&Config{}),
 			mch.EXPECT().overrideConfigFromCM(gomock.Any(), gomock.Any()).Return(fmt.Errorf("some error")),
 		)
 		_, err := cg.GetConfig(ctx, "test-cm", "test-ns", false)
@@ -179,6 +181,7 @@ var _ = Describe("GetConfig", func() {
 			mch.EXPECT().newDefaultConfig(false).Return(&Config{}),
 			mch.EXPECT().getClient().Return(clnt, nil),
 			clnt.EXPECT().Get(ctx, gomock.Any(), cm).Return(nil),
+			mch.EXPECT().newDefaultConfig(false).Return(&Config{}),
 			mch.EXPECT().overrideConfigFromCM(gomock.Any(), gomock.Any()).Return(nil),
 		)
 		_, err := cg.GetConfig(ctx, "test-cm", "test-ns", false)
