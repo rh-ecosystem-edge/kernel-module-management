@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+
+set -euxo pipefail
+
+make operator-sdk
+
+# Set the pull secret in Docker's auth file so operator-sdk can pull the current bundle image
+mkdir -p ~/.docker
+oc get secret/pull-secret -n openshift-config -o json | jq -r '.data[".dockerconfigjson"]' | base64 --decode | jq > ~/.docker/config.json
+
+export ACM_NAMESPACE=advanced-cluster-management
+echo "Install ACM..."
+oc create namespace ${ACM_NAMESPACE}
+oc apply -f ci/acm_subscription.yaml
+timeout 1m bash -c '
+  until oc get crds -o json | jq -er ".items[].metadata.name | select(.? | match(\"multiclusterhubs\"))"; do
+    sleep 1;
+  done
+'
+oc apply -f ci/acm_multiclusterhub.yaml
+timeout 15m bash -c '
+  acm_phase="oc -n ${ACM_NAMESPACE} get multiclusterhub/multiclusterhub -o json | jq -r \".status.phase\""
+  until [[ $(eval ${acm_phase}) == "Running" ]]; do
+    sleep 1;
+  done
+'
+
+# Get the latest bundle image published
+latest_published_bundle=$(grpcurl -d '{"pkgName": "kernel-module-management-hub", "channelName": "stable"}' -plaintext redhat-operators.openshift-marketplace.svc:50051 api.Registry/GetBundleForChannel | jq -r '.bundlePath')
+
+# Deploy the current bundle
+./bin/operator-sdk run bundle ${latest_published_bundle} \
+    --timeout 5m0s
+oc wait --for=condition=Available --timeout=1m deployment/kmm-operator-controller
+
+# Upgrade to the new bundle
+./bin/operator-sdk run bundle-upgrade "$OO_HUB_BUNDLE" \
+    --timeout 5m0s
+
+oc wait --for=condition=Available --timeout=1m \
+    deployment/kmm-operator-hub-controller \
+    deployment/kmm-operator-hub-webhook
