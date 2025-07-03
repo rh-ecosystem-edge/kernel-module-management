@@ -2,14 +2,17 @@ package config
 
 import (
 	"bytes"
-	"context"
+	context "context"
 	"crypto/tls"
+	"errors"
 	"fmt"
+	"time"
+
 	"github.com/go-logr/logr"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/http"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
@@ -19,7 +22,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"time"
 )
 
 type Job struct {
@@ -58,6 +60,8 @@ type Config struct {
 	Worker                 Worker         `yaml:"worker"`
 }
 
+var ErrCannotUseCustomConfig = errors.New("cannot use custom config on top of the default config; using default configs")
+
 //go:generate mockgen -source=config.go -package=config -destination=mock_config.go ConfigGetter,configHelperAPI
 type ConfigGetter interface {
 	GetConfig(ctx context.Context, userConfigMapName, userConfigMapNamespace string, isHubConfig bool) (*Config, error)
@@ -75,7 +79,7 @@ func (cg *configGetter) GetConfig(ctx context.Context,
 	userConfigMapName, userConfigMapNamespace string,
 	isHubConfig bool) (*Config, error) {
 
-	cfg := cg.configHelper.newDefaultConfig(isHubConfig)
+	defaultCfg := cg.configHelper.newDefaultConfig(isHubConfig)
 	clnt, err := cg.configHelper.getClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get client %v", err)
@@ -87,17 +91,18 @@ func (cg *configGetter) GetConfig(ctx context.Context,
 		Name:      userConfigMapName,
 	}
 	if err := clnt.Get(ctx, namespacedName, managerConfig); err != nil {
-		if errors.IsNotFound(err) {
+		if k8serrors.IsNotFound(err) {
 			cg.logger.Info("No ConfigMap configuring the manager was found in namespace, using default configuration",
 				"namespace", userConfigMapNamespace, "name", userConfigMapName)
-			return cfg, nil
+			return defaultCfg, nil
 		}
 		return nil, fmt.Errorf("failed to get ConfigMap %s/%s: %v", userConfigMapName, userConfigMapNamespace, err)
 	}
 
+	cfg := cg.configHelper.newDefaultConfig(isHubConfig)
 	err = cg.configHelper.overrideConfigFromCM(managerConfig, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("unable to load KMM config from ConfigMap %v", err)
+		return defaultCfg, fmt.Errorf("%w; unable to load KMM config from ConfigMap: %v", ErrCannotUseCustomConfig, err)
 	}
 	return cfg, nil
 }
