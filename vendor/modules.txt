@@ -5,8 +5,8 @@ cel.dev/expr
 ## explicit; go 1.18
 github.com/BurntSushi/toml
 github.com/BurntSushi/toml/internal
-# github.com/a8m/envsubst v1.4.2
-## explicit; go 1.17
+# github.com/a8m/envsubst v1.4.3
+## explicit; go 1.24
 github.com/a8m/envsubst/parse
 # github.com/antlr4-go/antlr/v4 v4.13.0
 ## explicit; go 1.20
