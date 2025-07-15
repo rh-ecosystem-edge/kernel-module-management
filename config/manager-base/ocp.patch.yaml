@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller
+  namespace: system
+spec:
+  template:
+    spec:
+      containers:
+        - name: manager
+          volumeMounts:
+            - name: metrics-tls
+              mountPath: /certs
+              readOnly: true
+      volumes:
+        - name: metrics-tls
+          secret:
+            defaultMode: 420
+            secretName: metrics-service-cert

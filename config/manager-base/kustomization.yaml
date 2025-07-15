@@ -4,6 +4,9 @@ kind: Kustomization
 resources:
 - manager.yaml
 
+patches:
+- path: ocp.patch.yaml
+
 images:
 - name: must-gather
   newName: quay.io/edge-infrastructure/kernel-module-management-must-gather
