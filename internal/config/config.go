@@ -68,9 +68,9 @@ type ConfigGetter interface {
 	GetManagerOptionsFromConfig(conf *Config, scheme *runtime.Scheme) manager.Options
 }
 
-func NewConfigGetter(logger logr.Logger) ConfigGetter {
+func NewConfigGetter(logger logr.Logger, client client.Client) ConfigGetter {
 	return &configGetter{
-		configHelper: newConfigHelper(),
+		configHelper: newConfigHelper(client),
 		logger:       logger,
 	}
 }
@@ -152,10 +152,12 @@ type configGetter struct {
 	logger       logr.Logger
 }
 
-type configHelper struct{}
+type configHelper struct {
+	client client.Client
+}
 
-func newConfigHelper() configHelperAPI {
-	return &configHelper{}
+func newConfigHelper(client client.Client) configHelperAPI {
+	return &configHelper{client: client}
 }
 
 func (ch *configHelper) getClient() (client.Client, error) {

@@ -5,6 +5,19 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - apps
+  resources:
+  - replicasets
+  verbs:
+  - get
+- apiGroups:
+  - apps
+  resources:
+  - replicasets/finalizers
+  verbs:
+  - patch
+  - update
+- apiGroups:
   - build.openshift.io
   resources:
   - builds
@@ -115,6 +128,16 @@ rules:
   - list
   - patch
   - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
 - apiGroups:
   - work.open-cluster-management.io
   resources:

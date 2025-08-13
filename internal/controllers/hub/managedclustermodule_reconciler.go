@@ -75,6 +75,9 @@ type ManagedClusterModuleReconciler struct {
 //+kubebuilder:rbac:groups="core",resources=serviceaccounts,verbs=get;list;watch
 //+kubebuilder:rbac:groups=build.openshift.io,resources=builds,verbs=get;list;create;delete;watch;patch
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=create;delete;get;list;patch;watch
+//+kubebuilder:rbac:groups=apps,resources=replicasets,verbs=get
+//+kubebuilder:rbac:groups=apps,resources=replicasets/finalizers,verbs=update;patch
+//+kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=create;get;list;patch;update
 
 func NewManagedClusterModuleReconciler(
 	client client.Client,

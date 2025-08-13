@@ -26,6 +26,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mbsc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mic"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/networkpolicy"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/pod"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/preflight"
@@ -44,6 +45,8 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
+
+	networkingv1 "k8s.io/api/networking/v1"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -74,6 +77,7 @@ func init() {
 	utilruntime.Must(v1beta2.AddToScheme(scheme))
 	utilruntime.Must(buildv1.Install(scheme))
 	utilruntime.Must(imagev1.Install(scheme))
+	utilruntime.Must(networkingv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -105,7 +109,13 @@ func main() {
 	}
 
 	ctx := ctrl.SetupSignalHandler()
-	cg := config.NewConfigGetter(setupLogger)
+
+	directClient, err := ctrlclient.New(ctrl.GetConfigOrDie(), ctrlclient.Options{Scheme: scheme})
+	if err != nil {
+		cmd.FatalError(setupLogger, err, "failed to create direct client")
+	}
+
+	cg := config.NewConfigGetter(setupLogger, directClient)
 
 	cfg, err := cg.GetConfig(ctx, userConfigMapName, operatorNamespace, false)
 	if err != nil {
@@ -114,6 +124,17 @@ func main() {
 		} else {
 			cmd.FatalError(setupLogger, err, "failed to get kmm config")
 		}
+	}
+
+	networkPolicyManager := networkpolicy.NewManager(directClient, scheme)
+
+	operatorReplicaSet, err := cmd.GetOperatorReplicaSet(ctx, directClient, operatorNamespace)
+	if err != nil {
+		cmd.FatalError(setupLogger, err, "failed to get operator replicaset for network policy owner reference")
+	}
+
+	if err := networkPolicyManager.DeployNetworkPolicies(ctx, operatorNamespace, operatorReplicaSet, "kmm-operator"); err != nil {
+		cmd.FatalError(setupLogger, err, "failed to deploy network policies")
 	}
 
 	options := cg.GetManagerOptionsFromConfig(cfg, scheme)

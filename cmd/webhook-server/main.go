@@ -64,7 +64,7 @@ func main() {
 	operatorNamespace := cmd.GetEnvOrFatalError(constants.OperatorNamespaceEnvVar, setupLogger)
 
 	ctx := ctrl.SetupSignalHandler()
-	cg := config.NewConfigGetter(setupLogger)
+	cg := config.NewConfigGetter(setupLogger, nil)
 
 	cfg, err := cg.GetConfig(ctx, userConfigMapName, operatorNamespace, false)
 	if err != nil {

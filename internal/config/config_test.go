@@ -25,7 +25,7 @@ var _ = Describe("overrideConfigFromCM", func() {
 		ch configHelperAPI
 	)
 	BeforeEach(func() {
-		ch = newConfigHelper()
+		ch = newConfigHelper(nil)
 	})
 
 	It("should return error if ConfigMap is nil", func() {
@@ -194,7 +194,7 @@ var _ = Describe("newDefaultConfig", func() {
 		ch configHelperAPI
 	)
 	BeforeEach(func() {
-		ch = newConfigHelper()
+		ch = newConfigHelper(nil)
 	})
 	It("should return kmm-hub config", func() {
 		data, err := os.ReadFile("testdata/hub-config.yaml")
@@ -235,7 +235,7 @@ var _ = Describe("decodeStrictYAMLIntoConfig", func() {
 		ch configHelperAPI
 	)
 	BeforeEach(func() {
-		ch = newConfigHelper()
+		ch = newConfigHelper(nil)
 	})
 	It("should decode valid YAML into config struct", func() {
 		yamlData := []byte(`
@@ -283,7 +283,7 @@ var _ = Describe("GetManagerOptionsFromConfig", func() {
 	BeforeEach(func() {
 		ctx = context.TODO()
 		logger = log.FromContext(ctx)
-		ch = NewConfigGetter(logger)
+		ch = NewConfigGetter(logger, nil)
 	})
 
 	It("should work as expected", func() {
