@@ -245,9 +245,6 @@ spec:
           replicas: 1
           selector:
             matchLabels:
-              app.kubernetes.io/component: kmm-hub
-              app.kubernetes.io/name: kmm-hub
-              app.kubernetes.io/part-of: kmm
               control-plane: controller
           strategy: {}
           template:
@@ -255,9 +252,6 @@ spec:
               annotations:
                 kubectl.kubernetes.io/default-container: manager
               labels:
-                app.kubernetes.io/component: kmm-hub
-                app.kubernetes.io/name: kmm-hub
-                app.kubernetes.io/part-of: kmm
                 control-plane: controller
             spec:
               affinity:
@@ -342,9 +336,6 @@ spec:
           replicas: 1
           selector:
             matchLabels:
-              app.kubernetes.io/component: kmm-hub
-              app.kubernetes.io/name: kmm-hub
-              app.kubernetes.io/part-of: kmm
               control-plane: webhook-server
           strategy: {}
           template:
@@ -352,9 +343,6 @@ spec:
               annotations:
                 kubectl.kubernetes.io/default-container: webhook-server
               labels:
-                app.kubernetes.io/component: kmm-hub
-                app.kubernetes.io/name: kmm-hub
-                app.kubernetes.io/part-of: kmm
                 control-plane: webhook-server
             spec:
               affinity:

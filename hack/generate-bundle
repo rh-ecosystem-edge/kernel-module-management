@@ -8,6 +8,7 @@ set -euxo pipefail
 : "$PKG"
 : "$SOURCE_DIR"
 : "${SUFFIX:=}"
+: "${INCLUDE_NETWORK_POLICIES:=false}"
 
 readonly BUNDLE_DIR="bundle${SUFFIX}"
 
@@ -22,6 +23,16 @@ oc kustomize "$MANIFESTS_DIR" | "$OPERATOR_SDK" generate bundle \
   --output-dir "$BUNDLE_DIR" \
   --package "$PKG" \
   $BUNDLE_GEN_FLAGS
+
+# add network policies
+if [ "$INCLUDE_NETWORK_POLICIES" = "true" ] && [ -d "$SOURCE_DIR/config/network-policy" ]; then
+  for np_file in "$SOURCE_DIR/config/network-policy"/*.yaml; do
+    if [ -f "$np_file" ] && [ "$(basename "$np_file")" != "kustomization.yaml" ]; then
+      filename=$(basename "$np_file" .yaml)
+      cp "$np_file" "$BUNDLE_DIR/manifests/kmm-operator${SUFFIX}-${filename}_networking.k8s.io_v1_networkpolicy.yaml"
+    fi
+  done
+fi
 
 mv "$BUNDLE_DIR" "$SOURCE_DIR/$BUNDLE_DIR"
 mv bundle.Dockerfile "$SOURCE_DIR/bundle${SUFFIX}.Dockerfile"

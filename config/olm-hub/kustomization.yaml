@@ -10,7 +10,7 @@ namePrefix: kmm-operator-hub-
 resources:
 - ../deploy-hub
 labels:
-- includeSelectors: true
+- includeSelectors: false
   pairs:
     app.kubernetes.io/component: kmm-hub
     app.kubernetes.io/name: kmm-hub
