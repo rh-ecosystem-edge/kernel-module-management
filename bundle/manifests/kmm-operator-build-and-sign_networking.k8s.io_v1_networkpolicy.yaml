@@ -1,0 +1,14 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: build-and-sign
+  namespace: system
+spec:
+  podSelector:
+    matchExpressions:
+    - key: openshift.io/build.name
+      operator: Exists
+  policyTypes:
+    - Egress
+  egress:
+  - {}
