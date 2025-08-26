@@ -47,10 +47,10 @@ metadata:
         }
       ]
     capabilities: Seamless Upgrades
-    createdAt: "2025-07-15T13:32:13Z"
+    createdAt: "2025-09-09T13:35:44Z"
     operatorframework.io/suggested-namespace: openshift-kmm
-    operators.operatorframework.io/builder: operator-sdk-v1.32.0
-    operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
+    operators.operatorframework.io/builder: operator-sdk-v1.41.1
+    operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     repository: https://github.com/rh-ecosystem-edge/kernel-module-management
   labels:
     app.kubernetes.io/component: kmm
