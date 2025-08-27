@@ -43,7 +43,6 @@ if [ -n "$(podman images -q "$full_kernel_module_image" 2> /dev/null)" ] && \
     podman create \
           --pod $worker_pod_name \
           --init-ctr=always \
-          --rm \
           -v $worker_volume_name:/tmp \
           $full_kernel_module_image \
           /bin/sh -c "${copycmd}"
@@ -53,7 +52,6 @@ if [ -n "$(podman images -q "$full_kernel_module_image" 2> /dev/null)" ] && \
       --pod $worker_pod_name\
       --user=root \
       --privileged \
-      --rm \
       -v $worker_volume_name:/tmp \
       -v /lib/modules:/lib/modules \
       -v $kmm_config_file_filepath:/etc/kmm-worker/config.yaml \
