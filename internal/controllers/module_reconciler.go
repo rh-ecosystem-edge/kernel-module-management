@@ -33,6 +33,8 @@ import (
 )
 
 // +kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=create;delete;get;list;patch;watch
+// +kubebuilder:rbac:groups=apps,resources=replicasets,verbs=get
+// +kubebuilder:rbac:groups=apps,resources=replicasets/finalizers,verbs=update;patch
 // +kubebuilder:rbac:groups=build.openshift.io,resources=builds,verbs=create;delete;get;list;patch;watch
 // +kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=clusterclaims,resourceNames=kernel-versions.kmm.node.kubernetes.io,verbs=delete;patch;update
 // +kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=clusterclaims,verbs=create;get;list;watch
@@ -62,6 +64,7 @@ import (
 // +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=preflightvalidationsocp,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=preflightvalidationsocp/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=preflightvalidationsocp/finalizers,verbs=update;patch
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=create;get;list;patch;update
 
 const (
 	ModuleReconcilerName = "ModuleReconciler"

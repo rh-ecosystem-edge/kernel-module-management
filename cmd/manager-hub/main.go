@@ -26,7 +26,9 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/config"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mbsc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mic"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/networkpolicy"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/pod"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -77,6 +79,7 @@ func init() {
 	utilruntime.Must(clusterv1.Install(scheme))
 	utilruntime.Must(imagev1.Install(scheme))
 	utilruntime.Must(workv1.Install(scheme))
+	utilruntime.Must(networkingv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -100,7 +103,12 @@ func main() {
 	setupLogger.Info("Creating manager", "version", Version, "git commit", GitCommit)
 
 	ctx := ctrl.SetupSignalHandler()
-	cg := config.NewConfigGetter(setupLogger)
+	directClient, err := ctrlclient.New(ctrl.GetConfigOrDie(), ctrlclient.Options{Scheme: scheme})
+	if err != nil {
+		cmd.FatalError(setupLogger, err, "failed to create direct client")
+	}
+
+	cg := config.NewConfigGetter(setupLogger, directClient)
 
 	cfg, err := cg.GetConfig(ctx, userConfigMapName, operatorNamespace, true)
 	if err != nil {
@@ -109,6 +117,17 @@ func main() {
 		} else {
 			cmd.FatalError(setupLogger, err, "failed to get kmm config")
 		}
+	}
+
+	networkPolicyManager := networkpolicy.NewManager(directClient, scheme)
+
+	operatorReplicaSet, err := cmd.GetOperatorReplicaSet(ctx, directClient, operatorNamespace)
+	if err != nil {
+		cmd.FatalError(setupLogger, err, "failed to get operator replicaset for network policy owner reference")
+	}
+
+	if err := networkPolicyManager.DeployNetworkPolicies(ctx, operatorNamespace, operatorReplicaSet, "kmm-operator-hub"); err != nil {
+		cmd.FatalError(setupLogger, err, "failed to deploy network policies")
 	}
 
 	options := cg.GetManagerOptionsFromConfig(cfg, scheme)

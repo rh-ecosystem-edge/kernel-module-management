@@ -16,6 +16,19 @@ rules:
   - patch
   - watch
 - apiGroups:
+  - apps
+  resources:
+  - replicasets
+  verbs:
+  - get
+- apiGroups:
+  - apps
+  resources:
+  - replicasets/finalizers
+  verbs:
+  - patch
+  - update
+- apiGroups:
   - build.openshift.io
   resources:
   - builds
@@ -173,3 +186,13 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
