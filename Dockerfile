@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM golang:1.23 as builder
+FROM golang:1.25 as builder
 
 # Copy the Go Modules manifests
 COPY go.mod go.mod
