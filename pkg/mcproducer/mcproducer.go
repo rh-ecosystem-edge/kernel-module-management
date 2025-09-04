@@ -3,34 +3,27 @@ package mcproducer
 import (
 	"bytes"
 	"embed"
-	"encoding/base64"
 	"fmt"
+	"strings"
 	"text/template"
 
+	"github.com/Masterminds/sprig/v3"
 	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mcfg"
 )
 
 const (
-	defaultWorkerImage        = "quay.io/edge-infrastructure/kernel-module-management-worker:latest"
-	kernelModuleImageFilepath = "/var/lib/image_file_day1.tar"
-	workerConfigFilepath      = "/var/lib/kmm_day1_config.yaml"
+	defaultWorkerImage = "quay.io/edge-infrastructure/kernel-module-management-worker:latest"
 )
 
 var (
-	//go:embed scripts/pull-image.sh
-	scriptPullImage string
-
-	//go:embed scripts/replace-kernel-module.sh
-	scriptReplaceKmod string
-
-	//go:embed scripts/wait-for-dispatcher.sh
-	scriptWaitForNetworkDispatcher string
-
 	//go:embed templates
 	templateFS embed.FS
 
 	machineConfigTemplate = template.Must(
-		template.ParseFS(templateFS, "templates/machine-config.gotmpl"),
+		template.New("machine-config.gotmpl").
+			Funcs(sprig.TxtFuncMap()).
+			ParseFS(templateFS, "templates/machine-config.gotmpl"),
 	)
 )
 
@@ -52,21 +45,17 @@ func ProduceMachineConfig(machineConfigName,
 		workerImageToUse = workerImage
 	}
 
-	templateParams := map[string]any{
-		"FirmwareFilesPath":         firmwareFilesPath,
-		"KernelModuleImage":         kernelModuleImage,
-		"KernelModule":              kernelModuleName,
-		"MachineConfigPoolRef":      machineConfigPoolRef,
-		"MachineConfigName":         machineConfigName,
-		"KernelModuleImageFilepath": kernelModuleImageFilepath,
-		"InTreeModuleToRemove":      inTreeModuleToRemove,
-		"WorkerImage":               workerImageToUse,
-		"WorkerConfigFilepath":      workerConfigFilepath,
+	mcfgAPI := mcfg.NewMCFG()
+	_, ignition, err := mcfgAPI.GenerateIgnition(kernelModuleImage, kernelModuleName, inTreeModuleToRemove, firmwareFilesPath, workerImageToUse, machineConfigName)
+	if err != nil {
+		return "", fmt.Errorf("failed to create ignition string: %v", err)
 	}
 
-	templateParams["ReplaceInTreeDriverContents"] = base64.StdEncoding.EncodeToString([]byte(scriptReplaceKmod))
-	templateParams["PullKernelModuleContents"] = base64.StdEncoding.EncodeToString([]byte(scriptPullImage))
-	templateParams["WaitForNetworkDispatcherContents"] = base64.StdEncoding.EncodeToString([]byte(scriptWaitForNetworkDispatcher))
+	templateParams := map[string]any{
+		"Ignition":             ignition,
+		"MachineConfigPoolRef": machineConfigPoolRef,
+		"MachineConfigName":    machineConfigName,
+	}
 
 	var machineConfig bytes.Buffer
 
@@ -74,7 +63,7 @@ func ProduceMachineConfig(machineConfigName,
 		return "", fmt.Errorf("could not render the MachineConfig: %v", err)
 	}
 
-	return machineConfig.String(), nil
+	return strings.TrimSpace(machineConfig.String()) + "\n", nil
 }
 
 func verifyKernelModuleImage(image string) error {
