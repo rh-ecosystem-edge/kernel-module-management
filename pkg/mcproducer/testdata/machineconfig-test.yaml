@@ -19,7 +19,6 @@ spec:
             [Service]
             User=root
             Type=oneshot
-            TimeoutSec=10
             EnvironmentFile=/etc/mco/proxy.env
             Environment="FIRMWARE_FILES_PATH=/opt/lib/test/firmware"
             Environment="IN_TREE_MODULE_TO_REMOVE=testInTreeKernelModuleName"
