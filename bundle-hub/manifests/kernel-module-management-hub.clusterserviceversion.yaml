@@ -37,7 +37,7 @@ metadata:
         }
       ]
     capabilities: Seamless Upgrades
-    createdAt: "2025-07-15T14:14:25Z"
+    createdAt: "2025-08-26T14:37:47Z"
     operatorframework.io/suggested-namespace: openshift-kmm-hub
     operators.operatorframework.io/builder: operator-sdk-v1.32.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -227,9 +227,6 @@ spec:
           replicas: 1
           selector:
             matchLabels:
-              app.kubernetes.io/component: kmm-hub
-              app.kubernetes.io/name: kmm-hub
-              app.kubernetes.io/part-of: kmm
               control-plane: controller
           strategy: {}
           template:
@@ -237,9 +234,6 @@ spec:
               annotations:
                 kubectl.kubernetes.io/default-container: manager
               labels:
-                app.kubernetes.io/component: kmm-hub
-                app.kubernetes.io/name: kmm-hub
-                app.kubernetes.io/part-of: kmm
                 control-plane: controller
             spec:
               affinity:
@@ -324,9 +318,6 @@ spec:
           replicas: 1
           selector:
             matchLabels:
-              app.kubernetes.io/component: kmm-hub
-              app.kubernetes.io/name: kmm-hub
-              app.kubernetes.io/part-of: kmm
               control-plane: webhook-server
           strategy: {}
           template:
@@ -334,9 +325,6 @@ spec:
               annotations:
                 kubectl.kubernetes.io/default-container: webhook-server
               labels:
-                app.kubernetes.io/component: kmm-hub
-                app.kubernetes.io/name: kmm-hub
-                app.kubernetes.io/part-of: kmm
                 control-plane: webhook-server
             spec:
               affinity:

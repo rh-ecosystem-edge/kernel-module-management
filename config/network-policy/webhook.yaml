@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: webhook
+  namespace: system
+spec:
+  podSelector:
+    matchLabels:
+      control-plane: webhook-server
+  policyTypes:
+  - Egress
+  - Ingress
+  ingress:
+  - ports:
+    - protocol: TCP
+      port: 9443
+  egress:
+  - ports: # kube api server port
+    - protocol: TCP
+      port: 6443
+    - protocol: TCP
+      port: 443
