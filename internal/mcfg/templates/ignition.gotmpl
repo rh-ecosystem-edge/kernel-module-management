@@ -26,7 +26,7 @@ systemd:
         [Install]
         WantedBy=multi-user.target
       enabled: true
-      name: "{{.ServicePrefix}}-replace-kernel-module.service"
+      name: "{{.ServicePrefix}}-{{.ReplaceKernelModuleSystemdService}}"
     - contents: |
         [Unit]
         Description=Pull oot kernel module image
@@ -48,7 +48,7 @@ systemd:
         [Install]
         WantedBy=multi-user.target
       enabled: true
-      name: "{{.ServicePrefix}}-pull-kernel-module-image.service"
+      name: "{{.ServicePrefix}}-{{.PullKernelModuleSystemdService}}"
     - enabled: false
       mask: true
       name: crio-wipe.service

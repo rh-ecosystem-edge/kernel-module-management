@@ -11,6 +11,9 @@ package mcfg
 import (
 	reflect "reflect"
 
+	v1 "github.com/openshift/api/machineconfiguration/v1"
+	v10 "github.com/openshift/api/operator/v1"
+	v1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -51,4 +54,30 @@ func (m *MockMCFG) GenerateIgnition(kernelModuleImage, kernelModuleName, inTreeM
 func (mr *MockMCFGMockRecorder) GenerateIgnition(kernelModuleImage, kernelModuleName, inTreeModuleToRemove, firmwareFilesPath, workerImage, servicePrefix any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateIgnition", reflect.TypeOf((*MockMCFG)(nil).GenerateIgnition), kernelModuleImage, kernelModuleName, inTreeModuleToRemove, firmwareFilesPath, workerImage, servicePrefix)
+}
+
+// UpdateDisruptionPolicies mocks base method.
+func (m *MockMCFG) UpdateDisruptionPolicies(mc *v10.MachineConfiguration, bmc *v1beta1.BootModuleConfig) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UpdateDisruptionPolicies", mc, bmc)
+}
+
+// UpdateDisruptionPolicies indicates an expected call of UpdateDisruptionPolicies.
+func (mr *MockMCFGMockRecorder) UpdateDisruptionPolicies(mc, bmc any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDisruptionPolicies", reflect.TypeOf((*MockMCFG)(nil).UpdateDisruptionPolicies), mc, bmc)
+}
+
+// UpdateMachineConfig mocks base method.
+func (m *MockMCFG) UpdateMachineConfig(mc *v1.MachineConfig, bmc *v1beta1.BootModuleConfig) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateMachineConfig", mc, bmc)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateMachineConfig indicates an expected call of UpdateMachineConfig.
+func (mr *MockMCFGMockRecorder) UpdateMachineConfig(mc, bmc any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateMachineConfig", reflect.TypeOf((*MockMCFG)(nil).UpdateMachineConfig), mc, bmc)
 }
