@@ -285,9 +285,12 @@ github.com/opencontainers/runtime-spec/specs-go
 # github.com/openshift/api v0.0.0-20240514123321-944467d2cc3b
 ## explicit; go 1.21
 github.com/openshift/api/build/v1
+github.com/openshift/api/config/v1
 github.com/openshift/api/image/docker10
 github.com/openshift/api/image/dockerpre012
 github.com/openshift/api/image/v1
+github.com/openshift/api/machineconfiguration/v1
+github.com/openshift/api/operator/v1
 # github.com/otiai10/copy v1.14.1
 ## explicit; go 1.18
 github.com/otiai10/copy

@@ -5,7 +5,104 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"os"
+
+	"github.com/google/go-cmp/cmp"
+	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
+	apioperatorv1 "github.com/openshift/api/operator/v1"
+	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 )
+
+var _ = Describe("UpdateDisruptionPolicies", func() {
+	It("checking the flow", func() {
+		mc := &apioperatorv1.MachineConfiguration{}
+		bmc := &kmmv1beta1.BootModuleConfig{
+			Spec: kmmv1beta1.BootModuleConfigSpec{
+				MachineConfigName: "test-name",
+			},
+		}
+		mcfgAPI := NewMCFG()
+		mcfgAPI.UpdateDisruptionPolicies(mc, bmc)
+
+		expectedUnit := apioperatorv1.NodeDisruptionPolicySpecUnit{
+			Actions: []apioperatorv1.NodeDisruptionPolicySpecAction{
+				{
+					Type: apioperatorv1.NoneSpecAction,
+				},
+			},
+		}
+
+		expectedFile := apioperatorv1.NodeDisruptionPolicySpecFile{
+			Actions: []apioperatorv1.NodeDisruptionPolicySpecAction{
+				{
+					Type: apioperatorv1.NoneSpecAction,
+				},
+			},
+		}
+
+		By("check the pull service")
+		expectedUnit.Name = "test-name-pull-kernel-module-image.service"
+		res := verifyUnitPresent(mc, expectedUnit)
+		Expect(res).To(BeTrue())
+
+		By("check the replace service")
+		expectedUnit.Name = "test-name-replace-kernel-module.service"
+		res = verifyUnitPresent(mc, expectedUnit)
+		Expect(res).To(BeTrue())
+
+		By("check the crio-wipe service")
+		expectedUnit.Name = "crio-wipe.service"
+		res = verifyUnitPresent(mc, expectedUnit)
+		Expect(res).To(BeTrue())
+
+		By("replace-kernel-module.sh")
+		expectedFile.Path = "/usr/local/bin/replace-kernel-module.sh"
+		res = verifyFilePresent(mc, expectedFile)
+		Expect(res).To(BeTrue())
+
+		By("pull-kernel-module-image.sh")
+		expectedFile.Path = "/usr/local/bin/pull-kernel-module-image.sh"
+		res = verifyFilePresent(mc, expectedFile)
+		Expect(res).To(BeTrue())
+
+		By("wait-for-dispatcher.sh")
+		expectedFile.Path = "/usr/local/bin/wait-for-dispatcher.sh"
+		res = verifyFilePresent(mc, expectedFile)
+		Expect(res).To(BeTrue())
+	})
+})
+
+var _ = Describe("UpdateMachineConfig", func() {
+	It("adding labels", func() {
+		mc := &mcfgv1.MachineConfig{}
+		bmc := &kmmv1beta1.BootModuleConfig{
+			Spec: kmmv1beta1.BootModuleConfigSpec{
+				MachineConfigPoolName: "test-pool-name",
+			},
+		}
+
+		By("machine config labels are empty")
+		mcfgAPI := NewMCFG()
+		err := mcfgAPI.UpdateMachineConfig(mc, bmc)
+		Expect(err).To(BeNil())
+		expectedLabels := map[string]string{"machineconfiguration.openshift.io/role": "test-pool-name"}
+		Expect(mc.GetLabels()).To(Equal(expectedLabels))
+
+		By("machine config labels are not empty")
+		mc.SetLabels(map[string]string{"some label": "some value"})
+		err = mcfgAPI.UpdateMachineConfig(mc, bmc)
+		Expect(err).To(BeNil())
+		expectedLabels = map[string]string{"machineconfiguration.openshift.io/role": "test-pool-name", "some label": "some value"}
+		Expect(mc.GetLabels()).To(Equal(expectedLabels))
+
+		By("machine config labels are not empty and machine pool label is set")
+		mc.SetLabels(map[string]string{"some label": "some value", "machineconfiguration.openshift.io/role": "test-pool-name"})
+		err = mcfgAPI.UpdateMachineConfig(mc, bmc)
+		Expect(err).To(BeNil())
+		expectedLabels = map[string]string{"machineconfiguration.openshift.io/role": "test-pool-name", "some label": "some value"}
+		Expect(mc.GetLabels()).To(Equal(expectedLabels))
+	})
+
+})
 
 var _ = Describe("GenerateIgnition", func() {
 	const (
@@ -38,3 +135,21 @@ var _ = Describe("GenerateIgnition", func() {
 		Expect(string(yamlRes)).To(Equal(string(expectedRes)))
 	})
 })
+
+func verifyUnitPresent(mc *apioperatorv1.MachineConfiguration, expectedUnit apioperatorv1.NodeDisruptionPolicySpecUnit) bool {
+	for _, unit := range mc.Spec.NodeDisruptionPolicy.Units {
+		if cmp.Equal(unit, expectedUnit) {
+			return true
+		}
+	}
+	return false
+}
+
+func verifyFilePresent(mc *apioperatorv1.MachineConfiguration, expectedFile apioperatorv1.NodeDisruptionPolicySpecFile) bool {
+	for _, file := range mc.Spec.NodeDisruptionPolicy.Files {
+		if cmp.Equal(file, expectedFile) {
+			return true
+		}
+	}
+	return false
+}
