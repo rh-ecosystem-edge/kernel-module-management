@@ -18,6 +18,7 @@ patches:
 # patches here are for enabling the conversion webhook for each CRD
 #- path: patches/webhook_in_modules.yaml
 - path: patches/webhook_in_preflightvalidations.yaml
+- path: patches/webhook_in_preflightvalidationsocp.yaml
 #+kubebuilder:scaffold:crdkustomizewebhookpatch
 
 #+kubebuilder:scaffold:crdkustomizecainjectionpatch
