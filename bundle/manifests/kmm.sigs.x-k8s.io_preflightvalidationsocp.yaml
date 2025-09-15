@@ -10,6 +10,17 @@ metadata:
     app.kubernetes.io/part-of: kmm
   name: preflightvalidationsocp.kmm.sigs.x-k8s.io
 spec:
+  conversion:
+    strategy: Webhook
+    webhook:
+      clientConfig:
+        service:
+          name: kmm-operator-webhook-service
+          namespace: system
+          path: /convert
+      conversionReviewVersions:
+      - v1beta2
+      - v1beta1
   group: kmm.sigs.x-k8s.io
   names:
     kind: PreflightValidationOCP

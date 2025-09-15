@@ -47,7 +47,7 @@ metadata:
         }
       ]
     capabilities: Seamless Upgrades
-    createdAt: "2025-09-09T13:35:44Z"
+    createdAt: "2025-09-15T08:02:05Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.41.1
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
@@ -568,8 +568,9 @@ spec:
     containerPort: 443
     conversionCRDs:
     - preflightvalidations.kmm.sigs.x-k8s.io
+    - preflightvalidationsocp.kmm.sigs.x-k8s.io
     deploymentName: kmm-operator-webhook
-    generateName: cpreflightvalidations.kb.io
+    generateName: cpreflightvalidationspreflightvalidationsocp.kb.io
     sideEffects: None
     targetPort: 9443
     type: ConversionWebhook
