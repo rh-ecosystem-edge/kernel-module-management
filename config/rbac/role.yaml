@@ -95,6 +95,30 @@ rules:
 - apiGroups:
   - kmm.sigs.x-k8s.io
   resources:
+  - bootmoduleconfigs
+  - preflightvalidations
+  - preflightvalidationsocp
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kmm.sigs.x-k8s.io
+  resources:
+  - bootmoduleconfigs/finalizers
+  - nodemodulesconfigs/finalizers
+  - preflightvalidations/finalizers
+  - preflightvalidationsocp/finalizers
+  verbs:
+  - patch
+  - update
+- apiGroups:
+  - kmm.sigs.x-k8s.io
+  resources:
   - modulebuildsignconfigs
   verbs:
   - create
@@ -148,23 +172,25 @@ rules:
 - apiGroups:
   - kmm.sigs.x-k8s.io
   resources:
-  - nodemodulesconfigs/finalizers
-  - preflightvalidations/finalizers
-  - preflightvalidationsocp/finalizers
-  verbs:
-  - patch
-  - update
-- apiGroups:
-  - kmm.sigs.x-k8s.io
-  resources:
   - nodemodulesconfigs/status
   verbs:
   - patch
 - apiGroups:
-  - kmm.sigs.x-k8s.io
+  - machineconfiguration.openshift.io
   resources:
-  - preflightvalidations
-  - preflightvalidationsocp
+  - machineconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - operator.openshift.io
+  resources:
+  - machineconfigurations
   verbs:
   - create
   - delete
