@@ -62,6 +62,10 @@ import (
 // +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=preflightvalidationsocp,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=preflightvalidationsocp/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=preflightvalidationsocp/finalizers,verbs=update;patch
+// +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=bootmoduleconfigs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=bootmoduleconfigs/finalizers,verbs=update;patch
+// +kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=operator.openshift.io,resources=machineconfigurations,verbs=get;list;watch;create;update;patch;delete
 
 const (
 	ModuleReconcilerName = "ModuleReconciler"

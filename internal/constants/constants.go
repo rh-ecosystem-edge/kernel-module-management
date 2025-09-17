@@ -19,6 +19,7 @@ const (
 	GCDelayFinalizer  = "kmm.node.kubernetes.io/gc-delay"
 	ModuleFinalizer   = "kmm.node.kubernetes.io/module-finalizer"
 	JobEventFinalizer = "kmm.node.kubernetes.io/job-event-finalizer"
+	BMCFinalizer      = "kmm.node.kubernetes.io/bmc-finalizer"
 
 	ManagedClusterModuleNameLabel  = "kmm.node.kubernetes.io/managedclustermodule.name"
 	KernelVersionsClusterClaimName = "kernel-versions.kmm.node.kubernetes.io"
