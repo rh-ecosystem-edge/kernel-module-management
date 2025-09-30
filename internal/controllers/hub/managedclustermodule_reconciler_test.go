@@ -37,6 +37,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/manifestwork"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mic"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/networkpolicy"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 )
 
@@ -74,17 +75,16 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 			Spec: v1beta1.ManagedClusterModuleSpec{},
 		}
 
-		mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, mcm).
-			Return(&clusterv1.ManagedClusterList{}, errors.New("some error"))
-
-		mcmr := NewManagedClusterModuleReconciler(
-			nil,
-			nil,
-			mockClusterAPI,
-			nil,
-			nil,
-			nil,
+		gomock.InOrder(
+			mockMCMReconHelperAPI.EXPECT().handleHubNetworkPolicies(ctx, mcm).Return(nil),
+			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, mcm).
+				Return(&clusterv1.ManagedClusterList{}, errors.New("some error")),
 		)
+
+		mcmr := &ManagedClusterModuleReconciler{
+			clusterAPI:  mockClusterAPI,
+			reconHelper: mockMCMReconHelperAPI,
+		}
 
 		_, err := mcmr.Reconcile(context.Background(), mcm)
 		Expect(err).To(HaveOccurred())
@@ -105,11 +105,16 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 		}
 
 		gomock.InOrder(
+			mockMCMReconHelperAPI.EXPECT().handleHubNetworkPolicies(ctx, mcm).Return(nil),
 			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, mcm).Return(expectedClusters, nil),
 			mockManifestAPI.EXPECT().GarbageCollect(ctx, *expectedClusters, *mcm).Return(errors.New("some error")),
 		)
 
-		mcmr := NewManagedClusterModuleReconciler(nil, mockManifestAPI, mockClusterAPI, nil, nil, nil)
+		mcmr := &ManagedClusterModuleReconciler{
+			manifestAPI: mockManifestAPI,
+			clusterAPI:  mockClusterAPI,
+			reconHelper: mockMCMReconHelperAPI,
+		}
 
 		_, err := mcmr.Reconcile(context.Background(), mcm)
 		Expect(err).To(HaveOccurred())
@@ -130,12 +135,17 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 		}
 
 		gomock.InOrder(
+			mockMCMReconHelperAPI.EXPECT().handleHubNetworkPolicies(ctx, mcm).Return(nil),
 			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, mcm).Return(expectedClusters, nil),
 			mockManifestAPI.EXPECT().GarbageCollect(ctx, *expectedClusters, *mcm).Return(nil),
 			mockManifestAPI.EXPECT().GetOwnedManifestWorks(ctx, *mcm).Return(nil, errors.New("some error")),
 		)
 
-		mcmr := NewManagedClusterModuleReconciler(nil, mockManifestAPI, mockClusterAPI, nil, nil, nil)
+		mcmr := &ManagedClusterModuleReconciler{
+			manifestAPI: mockManifestAPI,
+			clusterAPI:  mockClusterAPI,
+			reconHelper: mockMCMReconHelperAPI,
+		}
 
 		_, err := mcmr.Reconcile(context.Background(), mcm)
 		Expect(err).To(HaveOccurred())
@@ -160,6 +170,7 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 		}
 
 		gomock.InOrder(
+			mockMCMReconHelperAPI.EXPECT().handleHubNetworkPolicies(ctx, mcm).Return(nil),
 			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, mcm).Return(expectedClusters, nil),
 			mockManifestAPI.EXPECT().GarbageCollect(ctx, *expectedClusters, *mcm).Return(nil),
 			mockManifestAPI.EXPECT().GetOwnedManifestWorks(ctx, *mcm).Return(expectedOwnManifestWork, nil),
@@ -167,7 +178,12 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 				Return(errors.New("some error")),
 		)
 
-		mcmr := NewManagedClusterModuleReconciler(nil, mockManifestAPI, mockClusterAPI, mockStatusupdaterAPI, nil, nil)
+		mcmr := &ManagedClusterModuleReconciler{
+			manifestAPI:      mockManifestAPI,
+			clusterAPI:       mockClusterAPI,
+			statusupdaterAPI: mockStatusupdaterAPI,
+			reconHelper:      mockMCMReconHelperAPI,
+		}
 
 		_, err := mcmr.Reconcile(context.Background(), mcm)
 		Expect(err).To(HaveOccurred())
@@ -198,6 +214,7 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 		}
 
 		gomock.InOrder(
+			mockMCMReconHelperAPI.EXPECT().handleHubNetworkPolicies(ctx, mcm).Return(nil),
 			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, mcm).Return(expectedClusters, nil),
 			mockClusterAPI.EXPECT().KernelVersions(expectedClusters.Items[0]).Return([]string{}, errors.New("some error")),
 			// we expecte all the loop to be skipped with no errors
@@ -206,14 +223,12 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 			mockStatusupdaterAPI.EXPECT().ManagedClusterModuleUpdateStatus(ctx, mcm, expectedOwnManifestWork.Items).Return(nil),
 		)
 
-		mcmr := NewManagedClusterModuleReconciler(
-			nil,
-			mockManifestAPI,
-			mockClusterAPI,
-			mockStatusupdaterAPI,
-			nil,
-			nil,
-		)
+		mcmr := &ManagedClusterModuleReconciler{
+			manifestAPI:      mockManifestAPI,
+			clusterAPI:       mockClusterAPI,
+			statusupdaterAPI: mockStatusupdaterAPI,
+			reconHelper:      mockMCMReconHelperAPI,
+		}
 
 		_, err := mcmr.Reconcile(context.Background(), mcm)
 		Expect(err).NotTo(HaveOccurred())
@@ -245,6 +260,7 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 		}
 
 		gomock.InOrder(
+			mockMCMReconHelperAPI.EXPECT().handleHubNetworkPolicies(ctx, mcm).Return(nil),
 			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, mcm).Return(expectedClusters, nil),
 			mockClusterAPI.EXPECT().KernelVersions(expectedClusters.Items[0]).Return(expectedKernelVersion, nil),
 			mockMCMReconHelperAPI.EXPECT().setMicAsDesired(ctx, mcm, "cluster-1", expectedKernelVersion).Return(errors.New("error")),
@@ -291,6 +307,7 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 		}
 
 		gomock.InOrder(
+			mockMCMReconHelperAPI.EXPECT().handleHubNetworkPolicies(ctx, mcm).Return(nil),
 			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, mcm).Return(expectedClusters, nil),
 			mockClusterAPI.EXPECT().KernelVersions(expectedClusters.Items[0]).Return(expectedKernelVersion, nil),
 			mockMCMReconHelperAPI.EXPECT().setMicAsDesired(ctx, mcm, "cluster-1", expectedKernelVersion).Return(nil),
@@ -338,6 +355,7 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 		}
 
 		gomock.InOrder(
+			mockMCMReconHelperAPI.EXPECT().handleHubNetworkPolicies(ctx, mcm).Return(nil),
 			mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, mcm).Return(expectedClusters, nil),
 			mockClusterAPI.EXPECT().KernelVersions(expectedClusters.Items[0]).Return(expectedKernelVersion, nil),
 			mockMCMReconHelperAPI.EXPECT().setMicAsDesired(ctx, mcm, "cluster-1", expectedKernelVersion).Return(nil),
@@ -389,6 +407,7 @@ var _ = Describe("ManagedClusterModuleReconciler_Reconcile", func() {
 			Items: []workv1.ManifestWork{},
 		}
 
+		mockMCMReconHelperAPI.EXPECT().handleHubNetworkPolicies(ctx, mcm).Return(nil)
 		mockClusterAPI.EXPECT().SelectedManagedClusters(ctx, mcm).Return(expectedClusters, nil)
 		mockClusterAPI.EXPECT().KernelVersions(expectedClusters.Items[0]).Return(expectedKernelVersion, nil)
 		mockClusterAPI.EXPECT().KernelVersions(expectedClusters.Items[1]).Return(expectedKernelVersion, nil)
@@ -426,6 +445,7 @@ var _ = Describe("managedClusterModuleReconcilerHelperAPI_setMicAsDesired", func
 	var (
 		ctx               context.Context
 		ctrl              *gomock.Controller
+		mockClient        *client.MockClient
 		mockClusterAPI    *cluster.MockClusterAPI
 		mockMIC           *mic.MockMIC
 		mcmReconHelperAPI managedClusterModuleReconcilerHelperAPI
@@ -435,9 +455,11 @@ var _ = Describe("managedClusterModuleReconcilerHelperAPI_setMicAsDesired", func
 	BeforeEach(func() {
 		ctx = context.Background()
 		ctrl = gomock.NewController(GinkgoT())
+		mockClient = client.NewMockClient(ctrl)
 		mockClusterAPI = cluster.NewMockClusterAPI(ctrl)
 		mockMIC = mic.NewMockMIC(ctrl)
-		mcmReconHelperAPI = newManagedClusterModuleReconcilerHelper(mockClusterAPI, mockMIC)
+		mockNetworkPolicyAPI := networkpolicy.NewMockNetworkPolicy(ctrl)
+		mcmReconHelperAPI = newManagedClusterModuleReconcilerHelper(mockClient, mockClusterAPI, mockMIC, mockNetworkPolicyAPI)
 	})
 
 	It("should return an error if we faild to get an MLD for a kernel", func() {
@@ -578,6 +600,7 @@ var _ = Describe("managedClusterModuleReconcilerHelperAPI_isMicReady", func() {
 	var (
 		ctx               context.Context
 		ctrl              *gomock.Controller
+		mockClient        *client.MockClient
 		mockClusterAPI    *cluster.MockClusterAPI
 		mockMIC           *mic.MockMIC
 		mcmReconHelperAPI managedClusterModuleReconcilerHelperAPI
@@ -587,9 +610,11 @@ var _ = Describe("managedClusterModuleReconcilerHelperAPI_isMicReady", func() {
 	BeforeEach(func() {
 		ctx = context.Background()
 		ctrl = gomock.NewController(GinkgoT())
+		mockClient = client.NewMockClient(ctrl)
 		mockClusterAPI = cluster.NewMockClusterAPI(ctrl)
 		mockMIC = mic.NewMockMIC(ctrl)
-		mcmReconHelperAPI = newManagedClusterModuleReconcilerHelper(mockClusterAPI, mockMIC)
+		mockNetworkPolicyAPI := networkpolicy.NewMockNetworkPolicy(ctrl)
+		mcmReconHelperAPI = newManagedClusterModuleReconcilerHelper(mockClient, mockClusterAPI, mockMIC, mockNetworkPolicyAPI)
 	})
 
 	It("should return an error if we faild to get the MIC", func() {

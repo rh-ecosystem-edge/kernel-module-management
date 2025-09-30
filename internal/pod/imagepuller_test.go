@@ -34,7 +34,7 @@ var _ = Describe("ListPullPods", func() {
 	testNamespace := "some namespace"
 
 	It("list succeeded", func() {
-		hl := ctrlclient.HasLabels{pullPodTypeLabelKey}
+		hl := ctrlclient.HasLabels{PullPodTypeLabelKey}
 		ml := ctrlclient.MatchingLabels{imageOwnerLabelKey: testName}
 
 		clnt.EXPECT().List(context.Background(), gomock.Any(), ctrlclient.InNamespace(testNamespace), hl, ml).DoAndReturn(
@@ -50,7 +50,7 @@ var _ = Describe("ListPullPods", func() {
 	})
 
 	It("list failed", func() {
-		hl := ctrlclient.HasLabels{pullPodTypeLabelKey}
+		hl := ctrlclient.HasLabels{PullPodTypeLabelKey}
 		ml := ctrlclient.MatchingLabels{imageOwnerLabelKey: testName}
 
 		clnt.EXPECT().List(context.Background(), gomock.Any(), ctrlclient.InNamespace(testNamespace), hl, ml).Return(fmt.Errorf("some error"))
@@ -171,7 +171,7 @@ var _ = Describe("CreatePullPod", func() {
 				Namespace:    testNamespace,
 				Labels: map[string]string{
 					imageOwnerLabelKey:  testName,
-					pullPodTypeLabelKey: pullPodUntilSuccess,
+					PullPodTypeLabelKey: pullPodUntilSuccess,
 				},
 			},
 			Spec: v1.PodSpec{
@@ -259,7 +259,7 @@ var _ = Describe("GetPullPodStatus", func() {
 		Expect(res).To(Equal(PullImageInProcess))
 
 		By("container statuses waiting is not nil and pod is not one time pull pod")
-		testPod.SetLabels(map[string]string{pullPodTypeLabelKey: pullPodUntilSuccess})
+		testPod.SetLabels(map[string]string{PullPodTypeLabelKey: pullPodUntilSuccess})
 		testPod.Status.ContainerStatuses[0].State = v1.ContainerState{
 			Waiting: &v1.ContainerStateWaiting{},
 		}
@@ -267,7 +267,7 @@ var _ = Describe("GetPullPodStatus", func() {
 		Expect(res).To(Equal(PullImageInProcess))
 
 		By("container statuses waiting is not nil and pod is one time pull pod and reason is not image pull error")
-		testPod.SetLabels(map[string]string{pullPodTypeLabelKey: pullPodTypeOneTime})
+		testPod.SetLabels(map[string]string{PullPodTypeLabelKey: pullPodTypeOneTime})
 		testPod.Status.ContainerStatuses[0].State.Waiting.Reason = "some reason"
 		res = ip.GetPullPodStatus(&testPod)
 		Expect(res).To(Equal(PullImageUnexpectedErr))

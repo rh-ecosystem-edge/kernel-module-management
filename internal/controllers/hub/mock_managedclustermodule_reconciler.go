@@ -54,6 +54,20 @@ func (mr *MockmanagedClusterModuleReconcilerHelperAPIMockRecorder) areImagesRead
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "areImagesReady", reflect.TypeOf((*MockmanagedClusterModuleReconcilerHelperAPI)(nil).areImagesReady), ctx, mcmName, clusterName)
 }
 
+// handleHubNetworkPolicies mocks base method.
+func (m *MockmanagedClusterModuleReconcilerHelperAPI) handleHubNetworkPolicies(ctx context.Context, mcm *v1beta1.ManagedClusterModule) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "handleHubNetworkPolicies", ctx, mcm)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// handleHubNetworkPolicies indicates an expected call of handleHubNetworkPolicies.
+func (mr *MockmanagedClusterModuleReconcilerHelperAPIMockRecorder) handleHubNetworkPolicies(ctx, mcm any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "handleHubNetworkPolicies", reflect.TypeOf((*MockmanagedClusterModuleReconcilerHelperAPI)(nil).handleHubNetworkPolicies), ctx, mcm)
+}
+
 // setMicAsDesired mocks base method.
 func (m *MockmanagedClusterModuleReconcilerHelperAPI) setMicAsDesired(ctx context.Context, mcm *v1beta1.ManagedClusterModule, clusterName string, kernelVersions []string) error {
 	m.ctrl.T.Helper()

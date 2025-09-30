@@ -37,7 +37,7 @@ metadata:
         }
       ]
     capabilities: Seamless Upgrades
-    createdAt: "2025-09-25T13:05:55Z"
+    createdAt: "2025-09-30T12:56:44Z"
     operatorframework.io/suggested-namespace: openshift-kmm-hub
     operators.operatorframework.io/builder: operator-sdk-v1.41.1
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
@@ -191,6 +191,24 @@ spec:
           - list
           - patch
           - watch
+        - apiGroups:
+          - networking.k8s.io
+          resources:
+          - networkpolicies
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - watch
+        - apiGroups:
+          - networking.k8s.io
+          resources:
+          - networkpolicies/finalizers
+          verbs:
+          - patch
+          - update
         - apiGroups:
           - work.open-cluster-management.io
           resources:
