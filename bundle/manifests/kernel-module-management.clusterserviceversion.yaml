@@ -299,6 +299,24 @@ spec:
           - update
           - watch
         - apiGroups:
+          - networking.k8s.io
+          resources:
+          - networkpolicies
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - watch
+        - apiGroups:
+          - networking.k8s.io
+          resources:
+          - networkpolicies/finalizers
+          verbs:
+          - patch
+          - update
+        - apiGroups:
           - operator.openshift.io
           resources:
           - machineconfigurations
