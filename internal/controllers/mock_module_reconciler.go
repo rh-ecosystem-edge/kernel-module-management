@@ -113,6 +113,20 @@ func (mr *MockmoduleReconcilerHelperAPIMockRecorder) handleMIC(ctx, mod, nodes a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "handleMIC", reflect.TypeOf((*MockmoduleReconcilerHelperAPI)(nil).handleMIC), ctx, mod, nodes)
 }
 
+// handleNetworkPolicies mocks base method.
+func (m *MockmoduleReconcilerHelperAPI) handleNetworkPolicies(ctx context.Context, mod *v1beta1.Module) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "handleNetworkPolicies", ctx, mod)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// handleNetworkPolicies indicates an expected call of handleNetworkPolicies.
+func (mr *MockmoduleReconcilerHelperAPIMockRecorder) handleNetworkPolicies(ctx, mod any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "handleNetworkPolicies", reflect.TypeOf((*MockmoduleReconcilerHelperAPI)(nil).handleNetworkPolicies), ctx, mod)
+}
+
 // moduleUpdateWorkerPodsStatus mocks base method.
 func (m *MockmoduleReconcilerHelperAPI) moduleUpdateWorkerPodsStatus(ctx context.Context, mod *v1beta1.Module, targetedNodes []v1.Node) error {
 	m.ctrl.T.Helper()
