@@ -32,6 +32,8 @@ import (
 
 	buildv1 "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
+	apimcfgv1 "github.com/openshift/api/machineconfiguration/v1"
+	apioperatorv1 "github.com/openshift/api/operator/v1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta2"
 	buildsignresource "github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign/resource"
@@ -40,6 +42,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/controllers"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mcfg"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
@@ -74,6 +77,8 @@ func init() {
 	utilruntime.Must(v1beta2.AddToScheme(scheme))
 	utilruntime.Must(buildv1.Install(scheme))
 	utilruntime.Must(imagev1.Install(scheme))
+	utilruntime.Must(apimcfgv1.Install(scheme))
+	utilruntime.Must(apioperatorv1.Install(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -139,6 +144,7 @@ func main() {
 	micAPI := mic.New(client, scheme)
 	mbscAPI := mbsc.New(client, scheme)
 	imagePullerAPI := pod.NewImagePuller(client, scheme)
+	mcfgAPI := mcfg.NewMCFG()
 
 	dpc := controllers.NewDevicePluginReconciler(
 		client,
@@ -189,6 +195,10 @@ func main() {
 
 	if err = controllers.NewMICReconciler(client, micAPI, mbscAPI, imagePullerAPI, scheme).SetupWithManager(mgr); err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.MICReconcilerName)
+	}
+
+	if err = controllers.NewBMCReconciler(client, mcfgAPI, scheme).SetupWithManager(mgr); err != nil {
+		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.BMCReconcilerName)
 	}
 
 	if managed {
