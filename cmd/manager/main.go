@@ -45,6 +45,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mcfg"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/networkpolicy"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
 
@@ -145,7 +146,7 @@ func main() {
 	mbscAPI := mbsc.New(client, scheme)
 	imagePullerAPI := pod.NewImagePuller(client, scheme)
 	mcfgAPI := mcfg.NewMCFG(workerImage)
-
+	networkPolicyAPI := networkpolicy.NewNetworkPolicy(client, scheme)
 	dpc := controllers.NewDevicePluginReconciler(
 		client,
 		metricsAPI,
@@ -164,6 +165,7 @@ func main() {
 		nmcHelper,
 		filterAPI,
 		nodeAPI,
+		networkPolicyAPI,
 		operatorNamespace,
 		scheme,
 	)

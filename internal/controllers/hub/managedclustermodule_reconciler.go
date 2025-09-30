@@ -40,6 +40,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/manifestwork"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mic"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/networkpolicy"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 )
@@ -75,6 +76,8 @@ type ManagedClusterModuleReconciler struct {
 //+kubebuilder:rbac:groups="core",resources=serviceaccounts,verbs=get;list;watch
 //+kubebuilder:rbac:groups=build.openshift.io,resources=builds,verbs=get;list;create;delete;watch;patch
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=create;delete;get;list;patch;watch
+//+kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=create;delete;get;list;patch;watch
+//+kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies/finalizers,verbs=update;patch
 
 func NewManagedClusterModuleReconciler(
 	client client.Client,
@@ -83,9 +86,10 @@ func NewManagedClusterModuleReconciler(
 	statusupdaterAPI statusupdater.ManagedClusterModuleStatusUpdater,
 	filter *filter.Filter,
 	micAPI mic.MIC,
+	networkPolicyAPI networkpolicy.NetworkPolicy,
 ) *ManagedClusterModuleReconciler {
 
-	reconHelper := newManagedClusterModuleReconcilerHelper(clusterAPI, micAPI)
+	reconHelper := newManagedClusterModuleReconcilerHelper(client, clusterAPI, micAPI, networkPolicyAPI)
 	return &ManagedClusterModuleReconciler{
 		client:           client,
 		manifestAPI:      manifestAPI,
@@ -102,6 +106,10 @@ func (r *ManagedClusterModuleReconciler) Reconcile(ctx context.Context, mcm *hub
 	logger := log.FromContext(ctx)
 
 	logger.Info("Starting ManagedClusterModule reconciliation")
+
+	if err := r.reconHelper.handleHubNetworkPolicies(ctx, mcm); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to handle NetworkPolicies: %v", err)
+	}
 
 	clusters, err := r.clusterAPI.SelectedManagedClusters(ctx, mcm)
 	if err != nil {
@@ -195,17 +203,22 @@ func (r *ManagedClusterModuleReconciler) SetupWithManager(mgr ctrl.Manager) erro
 type managedClusterModuleReconcilerHelperAPI interface {
 	setMicAsDesired(ctx context.Context, mcm *hubv1beta1.ManagedClusterModule, clusterName string, kernelVersions []string) error
 	areImagesReady(ctx context.Context, mcmName, clusterName string) (bool, error)
+	handleHubNetworkPolicies(ctx context.Context, mcm *hubv1beta1.ManagedClusterModule) error
 }
 
 type managedClusterModuleReconcilerHelper struct {
-	clusterAPI cluster.ClusterAPI
-	micAPI     mic.MIC
+	client           client.Client
+	clusterAPI       cluster.ClusterAPI
+	micAPI           mic.MIC
+	networkPolicyAPI networkpolicy.NetworkPolicy
 }
 
-func newManagedClusterModuleReconcilerHelper(clusterAPI cluster.ClusterAPI, micAPI mic.MIC) managedClusterModuleReconcilerHelperAPI {
+func newManagedClusterModuleReconcilerHelper(client client.Client, clusterAPI cluster.ClusterAPI, micAPI mic.MIC, networkPolicyAPI networkpolicy.NetworkPolicy) managedClusterModuleReconcilerHelperAPI {
 	return &managedClusterModuleReconcilerHelper{
-		clusterAPI: clusterAPI,
-		micAPI:     micAPI,
+		client:           client,
+		clusterAPI:       clusterAPI,
+		micAPI:           micAPI,
+		networkPolicyAPI: networkPolicyAPI,
 	}
 }
 
@@ -255,4 +268,25 @@ func (rh *managedClusterModuleReconcilerHelper) areImagesReady(ctx context.Conte
 	}
 
 	return rh.micAPI.DoAllImagesExist(micObj), nil
+}
+
+func (rh *managedClusterModuleReconcilerHelper) handleHubNetworkPolicies(ctx context.Context, mcm *hubv1beta1.ManagedClusterModule) error {
+	logger := log.FromContext(ctx)
+	logger.Info("Handling Hub NetworkPolicies", "module", mcm.Name, "namespace", mcm.Namespace)
+
+	owner := mcm
+
+	buildSignPolicy := rh.networkPolicyAPI.BuildSignPodsNetworkPolicy(mcm.Namespace)
+	pullPodPolicy := rh.networkPolicyAPI.PullPodNetworkPolicy(mcm.Namespace)
+
+	if err := rh.networkPolicyAPI.CreateOrAddOwnerReference(ctx, buildSignPolicy, owner); err != nil {
+		return fmt.Errorf("failed to ensure BuildSignPods NetworkPolicy %s/%s: %v", buildSignPolicy.Namespace, buildSignPolicy.Name, err)
+	}
+
+	if err := rh.networkPolicyAPI.CreateOrAddOwnerReference(ctx, pullPodPolicy, owner); err != nil {
+		return fmt.Errorf("failed to ensure PullPod NetworkPolicy %s/%s: %v", pullPodPolicy.Namespace, pullPodPolicy.Name, err)
+	}
+
+	logger.Info("Successfully handled Hub NetworkPolicies")
+	return nil
 }
