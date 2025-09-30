@@ -14,6 +14,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/meta"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mic"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/networkpolicy"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
@@ -109,6 +110,7 @@ var _ = Describe("Reconcile", func() {
 			nmcMLDConfigs = map[string]schedulingData{"nodeName": enableSchedulingData}
 		}
 		returnedError := errors.New("some error")
+		mockReconHelper.EXPECT().handleNetworkPolicies(ctx, mod).Return(nil)
 		if c.setLabelError {
 			mockNamespaceHelper.EXPECT().setLabel(ctx, mod.Namespace).Return(returnedError)
 			goto executeTestFunction
@@ -181,6 +183,7 @@ var _ = Describe("Reconcile", func() {
 	It("Good flow, should run on node", func() {
 		nmcMLDConfigs := map[string]schedulingData{nodeName: enableSchedulingData}
 		gomock.InOrder(
+			mockReconHelper.EXPECT().handleNetworkPolicies(ctx, mod).Return(nil),
 			mockNamespaceHelper.EXPECT().setLabel(ctx, mod.Namespace),
 			mockReconHelper.EXPECT().setFinalizerAndStatus(ctx, mod).Return(nil),
 			mn.EXPECT().GetNodesListBySelector(ctx, mod.Spec.Selector, nil).Return(targetedNodes, nil),
@@ -200,6 +203,7 @@ var _ = Describe("Reconcile", func() {
 	It("Good flow, should not run on node", func() {
 		nmcMLDConfigs := map[string]schedulingData{nodeName: disableSchedulingData}
 		gomock.InOrder(
+			mockReconHelper.EXPECT().handleNetworkPolicies(ctx, mod).Return(nil),
 			mockNamespaceHelper.EXPECT().setLabel(ctx, mod.Namespace),
 			mockReconHelper.EXPECT().setFinalizerAndStatus(ctx, mod).Return(nil),
 			mn.EXPECT().GetNodesListBySelector(ctx, mod.Spec.Selector, nil).Return(targetedNodes, nil),
@@ -220,6 +224,7 @@ var _ = Describe("Reconcile", func() {
 		modWithoutModuleLoader := mod
 		modWithoutModuleLoader.Spec.ModuleLoader = nil
 		gomock.InOrder(
+			mockReconHelper.EXPECT().handleNetworkPolicies(ctx, mod).Return(nil),
 			mockNamespaceHelper.EXPECT().setLabel(ctx, mod.Namespace),
 			mockReconHelper.EXPECT().setFinalizerAndStatus(ctx, mod).Return(nil),
 		)
@@ -245,7 +250,8 @@ var _ = Describe("setFinalizerAndStatus", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
 		statusWriter = client.NewMockStatusWriter(ctrl)
-		mrh = newModuleReconcilerHelper(clnt, nil, nil, nil, operatorNamespace, scheme)
+		mockNetworkPolicyAPI := networkpolicy.NewMockNetworkPolicy(ctrl)
+		mrh = newModuleReconcilerHelper(clnt, nil, nil, nil, mockNetworkPolicyAPI, operatorNamespace, scheme)
 		mod = kmmv1beta1.Module{}
 		expectedMod = mod.DeepCopy()
 	})
@@ -297,6 +303,7 @@ var _ = Describe("finalizeModule", func() {
 		ctrl                   *gomock.Controller
 		clnt                   *client.MockClient
 		helper                 *nmc.MockHelper
+		mockNetworkPolicyAPI   *networkpolicy.MockNetworkPolicy
 		mrh                    moduleReconcilerHelperAPI
 		mod                    *kmmv1beta1.Module
 		matchConfiguredModules = map[string]string{nmc.ModuleConfiguredLabel(moduleNamespace, moduleName): ""}
@@ -308,7 +315,8 @@ var _ = Describe("finalizeModule", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
 		helper = nmc.NewMockHelper(ctrl)
-		mrh = newModuleReconcilerHelper(clnt, nil, nil, helper, operatorNamespace, scheme)
+		mockNetworkPolicyAPI = networkpolicy.NewMockNetworkPolicy(ctrl)
+		mrh = newModuleReconcilerHelper(clnt, nil, nil, helper, mockNetworkPolicyAPI, operatorNamespace, scheme)
 		mod = &kmmv1beta1.Module{
 			ObjectMeta: metav1.ObjectMeta{Name: moduleName, Namespace: moduleNamespace},
 		}
@@ -434,7 +442,8 @@ var _ = Describe("handleMIC", func() {
 		mockKernelMapper = module.NewMockKernelMapper(ctrl)
 		mockMICAPI = mic.NewMockMIC(ctrl)
 		helper = nmc.NewMockHelper(ctrl)
-		mrh = newModuleReconcilerHelper(clnt, mockKernelMapper, mockMICAPI, helper, operatorNamespace, scheme)
+		mockNetworkPolicyAPI := networkpolicy.NewMockNetworkPolicy(ctrl)
+		mrh = newModuleReconcilerHelper(clnt, mockKernelMapper, mockMICAPI, helper, mockNetworkPolicyAPI, operatorNamespace, scheme)
 		mod = &kmmv1beta1.Module{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      moduleName,
@@ -521,7 +530,8 @@ var _ = Describe("getNMCsByModuleSet", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
-		mrh = newModuleReconcilerHelper(clnt, nil, nil, nil, operatorNamespace, scheme)
+		mockNetworkPolicyAPI := networkpolicy.NewMockNetworkPolicy(ctrl)
+		mrh = newModuleReconcilerHelper(clnt, nil, nil, nil, mockNetworkPolicyAPI, operatorNamespace, scheme)
 	})
 
 	ctx := context.Background()
@@ -586,7 +596,8 @@ var _ = Describe("prepareSchedulingData", func() {
 		clnt = client.NewMockClient(ctrl)
 		mockKernel = module.NewMockKernelMapper(ctrl)
 		mockHelper = nmc.NewMockHelper(ctrl)
-		mrh = newModuleReconcilerHelper(clnt, mockKernel, nil, mockHelper, operatorNamespace, scheme)
+		mockNetworkPolicyAPI := networkpolicy.NewMockNetworkPolicy(ctrl)
+		mrh = newModuleReconcilerHelper(clnt, mockKernel, nil, mockHelper, mockNetworkPolicyAPI, operatorNamespace, scheme)
 		node = v1.Node{
 			ObjectMeta: metav1.ObjectMeta{Name: nodeName},
 			Status: v1.NodeStatus{
@@ -783,7 +794,8 @@ var _ = Describe("enableModuleOnNode", func() {
 		clnt = client.NewMockClient(ctrl)
 		helper = nmc.NewMockHelper(ctrl)
 		mockMIC = mic.NewMockMIC(ctrl)
-		mrh = newModuleReconcilerHelper(clnt, nil, mockMIC, helper, operatorNamespace, scheme)
+		mockNetworkPolicyAPI := networkpolicy.NewMockNetworkPolicy(ctrl)
+		mrh = newModuleReconcilerHelper(clnt, nil, mockMIC, helper, mockNetworkPolicyAPI, operatorNamespace, scheme)
 		node = v1.Node{
 			ObjectMeta: metav1.ObjectMeta{Name: "nodeName"},
 		}
@@ -894,7 +906,8 @@ var _ = Describe("disableModuleOnNode", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
 		helper = nmc.NewMockHelper(ctrl)
-		mrh = newModuleReconcilerHelper(clnt, nil, nil, helper, operatorNamespace, scheme)
+		mockNetworkPolicyAPI := networkpolicy.NewMockNetworkPolicy(ctrl)
+		mrh = newModuleReconcilerHelper(clnt, nil, nil, helper, mockNetworkPolicyAPI, operatorNamespace, scheme)
 		nodeName = "node name"
 		moduleName = "moduleName"
 		moduleNamespace = "moduleNamespace"
@@ -936,7 +949,8 @@ var _ = Describe("removeModuleFromNMC", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
 		helper = nmc.NewMockHelper(ctrl)
-		mrh = &moduleReconcilerHelper{client: clnt, nmcHelper: helper}
+		mockNetworkPolicyAPI := networkpolicy.NewMockNetworkPolicy(ctrl)
+		mrh = &moduleReconcilerHelper{client: clnt, nmcHelper: helper, networkPolicyAPI: mockNetworkPolicyAPI}
 		nmcName = "NMC name"
 		moduleName = "moduleName"
 		moduleNamespace = "moduleNamespace"
@@ -1028,7 +1042,8 @@ var _ = Describe("moduleUpdateWorkerPodsStatus", func() {
 				Namespace: "modNamespace",
 			},
 		}
-		mrh = &moduleReconcilerHelper{client: clnt, nmcHelper: helper}
+		mockNetworkPolicyAPI := networkpolicy.NewMockNetworkPolicy(ctrl)
+		mrh = &moduleReconcilerHelper{client: clnt, nmcHelper: helper, networkPolicyAPI: mockNetworkPolicyAPI}
 	})
 
 	It("faled to get configured NMCs", func() {

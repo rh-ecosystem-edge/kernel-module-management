@@ -23,7 +23,7 @@ const (
 	errImagePullReason     = "ErrImagePull"
 
 	imageOwnerLabelKey  = "kmm.node.kubernetes.io/image-owner"
-	pullPodTypeLabelKey = "kmm.node.kubernetes.io/pull-pod-type"
+	PullPodTypeLabelKey = "kmm.node.kubernetes.io/pull-pod-type"
 
 	pullerContainerName = "puller"
 
@@ -74,7 +74,7 @@ func (ipi *imagePullerImpl) CreatePullPod(ctx context.Context, name, namespace, 
 			Namespace:    namespace,
 			Labels: map[string]string{
 				imageOwnerLabelKey:  name,
-				pullPodTypeLabelKey: pullPodTypeLabelValue,
+				PullPodTypeLabelKey: pullPodTypeLabelValue,
 			},
 		},
 		Spec: v1.PodSpec{
@@ -108,7 +108,7 @@ func (ipi *imagePullerImpl) ListPullPods(ctx context.Context, name, namespace st
 
 	pl := v1.PodList{}
 
-	hl := client.HasLabels{pullPodTypeLabelKey}
+	hl := client.HasLabels{PullPodTypeLabelKey}
 	ml := client.MatchingLabels{imageOwnerLabelKey: name}
 
 	ctrl.LoggerFrom(ctx).WithValues("module name", name).V(1).Info("Listing module image Pods")
@@ -153,7 +153,7 @@ func (ipi *imagePullerImpl) GetPullPodStatus(pod *v1.Pod) PullPodStatus {
 			return PullImageInProcess
 		}
 
-		pullPodType := pod.GetLabels()[pullPodTypeLabelKey]
+		pullPodType := pod.GetLabels()[PullPodTypeLabelKey]
 		// if pod is targeted to wait till the end - return the InProgress
 		if pullPodType == pullPodUntilSuccess {
 			return PullImageInProcess

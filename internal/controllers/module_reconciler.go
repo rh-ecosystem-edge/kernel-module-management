@@ -15,6 +15,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/meta"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mic"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/networkpolicy"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
@@ -66,6 +67,8 @@ import (
 // +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=bootmoduleconfigs/finalizers,verbs=update;patch
 // +kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=operator.openshift.io,resources=machineconfigurations,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=create;delete;get;list;patch;watch
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies/finalizers,verbs=update;patch
 
 const (
 	ModuleReconcilerName = "ModuleReconciler"
@@ -93,6 +96,7 @@ func NewModuleReconciler(client client.Client,
 	nmcHelper nmc.Helper,
 	filter *filter.Filter,
 	nodeAPI node.Node,
+	networkPolicyAPI networkpolicy.NetworkPolicy,
 	operatorNamespace string,
 	scheme *runtime.Scheme) *ModuleReconciler {
 	reconHelper := newModuleReconcilerHelper(
@@ -100,6 +104,7 @@ func NewModuleReconciler(client client.Client,
 		kernelAPI,
 		micAPI,
 		nmcHelper,
+		networkPolicyAPI,
 		operatorNamespace,
 		scheme,
 	)
@@ -109,6 +114,7 @@ func NewModuleReconciler(client client.Client,
 		nsLabeler:   newNamespaceLabeler(client),
 		reconHelper: reconHelper,
 		nodeAPI:     nodeAPI,
+		micAPI:      micAPI,
 	}
 }
 
@@ -128,6 +134,10 @@ func (mr *ModuleReconciler) Reconcile(ctx context.Context, mod *kmmv1beta1.Modul
 			return ctrl.Result{}, fmt.Errorf("failed to finalize Module %s/%s: %v", mod.Namespace, mod.Name, err)
 		}
 		return ctrl.Result{}, nil
+	}
+
+	if err := mr.reconHelper.handleNetworkPolicies(ctx, mod); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to handle NetworkPolicies: %v", err)
 	}
 
 	if err := mr.nsLabeler.setLabel(ctx, mod.Namespace); err != nil {
@@ -222,6 +232,7 @@ type moduleReconcilerHelperAPI interface {
 	enableModuleOnNode(ctx context.Context, mld *api.ModuleLoaderData, node *v1.Node) error
 	disableModuleOnNode(ctx context.Context, modNamespace, modName, nodeName string) error
 	moduleUpdateWorkerPodsStatus(ctx context.Context, mod *kmmv1beta1.Module, targetedNodes []v1.Node) error
+	handleNetworkPolicies(ctx context.Context, mod *kmmv1beta1.Module) error
 }
 
 type moduleReconcilerHelper struct {
@@ -230,6 +241,7 @@ type moduleReconcilerHelper struct {
 
 	micAPI            mic.MIC
 	nmcHelper         nmc.Helper
+	networkPolicyAPI  networkpolicy.NetworkPolicy
 	operatorNamespace string
 	scheme            *runtime.Scheme
 }
@@ -238,6 +250,7 @@ func newModuleReconcilerHelper(client client.Client,
 	kernelAPI module.KernelMapper,
 	micAPI mic.MIC,
 	nmcHelper nmc.Helper,
+	networkPolicyAPI networkpolicy.NetworkPolicy,
 	operatorNamespace string,
 	scheme *runtime.Scheme) moduleReconcilerHelperAPI {
 	return &moduleReconcilerHelper{
@@ -246,6 +259,7 @@ func newModuleReconcilerHelper(client client.Client,
 
 		micAPI:            micAPI,
 		nmcHelper:         nmcHelper,
+		networkPolicyAPI:  networkPolicyAPI,
 		operatorNamespace: operatorNamespace,
 		scheme:            scheme,
 	}
@@ -533,6 +547,32 @@ func (mrh *moduleReconcilerHelper) moduleUpdateWorkerPodsStatus(ctx context.Cont
 	mod.Status.ModuleLoader.AvailableNumber = int32(numAvailable)
 
 	return mrh.client.Status().Patch(ctx, mod, client.MergeFrom(unmodifiedMod))
+}
+
+func (mrh *moduleReconcilerHelper) handleNetworkPolicies(ctx context.Context, mod *kmmv1beta1.Module) error {
+	logger := log.FromContext(ctx)
+	logger.Info("Handling NetworkPolicies", "module", mod.Name, "namespace", mod.Namespace)
+
+	moduleOwner := mod
+
+	workerPolicy := mrh.networkPolicyAPI.WorkerPodNetworkPolicy(mod.Namespace)
+	buildSignPolicy := mrh.networkPolicyAPI.BuildSignPodsNetworkPolicy(mod.Namespace)
+	pullPodPolicy := mrh.networkPolicyAPI.PullPodNetworkPolicy(mod.Namespace)
+
+	if err := mrh.networkPolicyAPI.CreateOrAddOwnerReference(ctx, workerPolicy, moduleOwner); err != nil {
+		return fmt.Errorf("failed to ensure Worker NetworkPolicy %s/%s: %v", workerPolicy.Namespace, workerPolicy.Name, err)
+	}
+
+	if err := mrh.networkPolicyAPI.CreateOrAddOwnerReference(ctx, buildSignPolicy, moduleOwner); err != nil {
+		return fmt.Errorf("failed to ensure BuildSignPods NetworkPolicy %s/%s: %v", buildSignPolicy.Namespace, buildSignPolicy.Name, err)
+	}
+
+	if err := mrh.networkPolicyAPI.CreateOrAddOwnerReference(ctx, pullPodPolicy, moduleOwner); err != nil {
+		return fmt.Errorf("failed to ensure PullPod NetworkPolicy %s/%s: %v", pullPodPolicy.Namespace, pullPodPolicy.Name, err)
+	}
+
+	logger.Info("Successfully handled NetworkPolicies")
+	return nil
 }
 
 type namespaceLabeler interface {
