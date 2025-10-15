@@ -34,11 +34,11 @@ type BootModuleConfigSpec struct {
 	KernelModuleName string `json:"kernelModuleName"`
 
 	//+optional
-	// the in-tree kernel module to remove prior to loading the OOT kernel mdule
+	// the in-tree kernel module to remove prior to loading the OOT kernel module
 	InTreeModuleToRemove string `json:"inTreeModuleToRemove,omitempty"`
 
 	//+optional
-	// path of the firmare files in the kernel module container image
+	// path of the firmware files in the kernel module container image
 	FirmwareFilesPath string `json:"firmwareFilesPath,omitempty"`
 
 	//+optional
