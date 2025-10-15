@@ -47,7 +47,7 @@ metadata:
         }
       ]
     capabilities: Seamless Upgrades
-    createdAt: "2025-09-25T13:05:44Z"
+    createdAt: "2025-10-15T07:06:35Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.41.1
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
@@ -62,6 +62,11 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
+    - description: BootModuleConfig describes how to load a module during kernel initialization
+      displayName: Boot Module Config
+      kind: BootModuleConfig
+      name: bootmoduleconfigs.kmm.sigs.x-k8s.io
+      version: v1beta1
     - kind: ModuleBuildSignConfig
       name: modulebuildsignconfigs.kmm.sigs.x-k8s.io
       version: v1beta1
