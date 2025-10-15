@@ -12,6 +12,11 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
+    - description: BootModuleConfig describes how to load a module during kernel initialization
+      displayName: Boot Module Config
+      kind: BootModuleConfig
+      name: bootmoduleconfigs.kmm.sigs.x-k8s.io
+      version: v1beta1
     - description: Module describes how to load a module on different kernel versions
       displayName: Module
       kind: Module
