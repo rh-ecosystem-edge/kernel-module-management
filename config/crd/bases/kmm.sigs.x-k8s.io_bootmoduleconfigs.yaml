@@ -42,12 +42,12 @@ spec:
           spec:
             properties:
               firmwareFilesPath:
-                description: path of the firmare files in the kernel module container
+                description: path of the firmware files in the kernel module container
                   image
                 type: string
               inTreeModuleToRemove:
                 description: the in-tree kernel module to remove prior to loading
-                  the OOT kernel mdule
+                  the OOT kernel module
                 type: string
               kernelModuleImage:
                 description: kernel module container image that contains the kernel
