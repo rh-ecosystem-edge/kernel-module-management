@@ -54,6 +54,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/manifestwork"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/networkpolicy"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/statusupdater"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
@@ -133,6 +134,7 @@ func main() {
 	mbscAPI := mbsc.New(client, scheme)
 	imagePullerAPI := pod.NewImagePuller(client, scheme)
 	builSignAPI := buildsign.NewManager(client, resourceManager, scheme)
+	networkPolicyAPI := networkpolicy.NewNetworkPolicy(client, scheme)
 
 	kernelAPI := module.NewKernelMapper(buildArgOverrider)
 
@@ -146,6 +148,7 @@ func main() {
 		statusupdater.NewManagedClusterModuleStatusUpdater(client),
 		filterAPI,
 		micAPI,
+		networkPolicyAPI,
 	)
 
 	if err = controllers.NewMICReconciler(client, micAPI, mbscAPI, imagePullerAPI, scheme).SetupWithManager(mgr); err != nil {
