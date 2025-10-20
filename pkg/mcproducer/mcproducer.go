@@ -40,13 +40,8 @@ func ProduceMachineConfig(machineConfigName,
 		return "", fmt.Errorf("failed to verify kernel module image name %s: %v", kernelModuleImage, err)
 	}
 
-	workerImageToUse := defaultWorkerImage
-	if workerImage != "" {
-		workerImageToUse = workerImage
-	}
-
-	mcfgAPI := mcfg.NewMCFG()
-	_, ignition, err := mcfgAPI.GenerateIgnition(kernelModuleImage, kernelModuleName, inTreeModuleToRemove, firmwareFilesPath, workerImageToUse, machineConfigName)
+	mcfgAPI := mcfg.NewMCFG(defaultWorkerImage)
+	_, ignition, err := mcfgAPI.GenerateIgnition(kernelModuleImage, kernelModuleName, inTreeModuleToRemove, firmwareFilesPath, workerImage, machineConfigName)
 	if err != nil {
 		return "", fmt.Errorf("failed to create ignition string: %v", err)
 	}
