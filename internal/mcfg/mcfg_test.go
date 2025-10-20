@@ -20,7 +20,7 @@ var _ = Describe("UpdateDisruptionPolicies", func() {
 				MachineConfigName: "test-name",
 			},
 		}
-		mcfgAPI := NewMCFG()
+		mcfgAPI := NewMCFG("")
 		mcfgAPI.UpdateDisruptionPolicies(mc, bmc)
 
 		expectedUnit := apioperatorv1.NodeDisruptionPolicySpecUnit{
@@ -81,7 +81,7 @@ var _ = Describe("UpdateMachineConfig", func() {
 		}
 
 		By("machine config labels are empty")
-		mcfgAPI := NewMCFG()
+		mcfgAPI := NewMCFG("")
 		err := mcfgAPI.UpdateMachineConfig(mc, bmc)
 		Expect(err).To(BeNil())
 		expectedLabels := map[string]string{"machineconfiguration.openshift.io/role": "test-pool-name"}
@@ -120,9 +120,25 @@ var _ = Describe("GenerateIgnition", func() {
 	// encoding on testdata/pull-image-test.sh and testdata/replace-kernel-module-test.sh
 	// and setting the values into the testdata/machineconfig-test.yaml
 	It("verify correct ignition output", func() {
-		mcfgAPI := NewMCFG()
+		mcfgAPI := NewMCFG("")
 
 		_, yamlRes, err := mcfgAPI.GenerateIgnition(imageName, kernelModuleName, inTreeKernelModuleName, firmwareFilesPath, workerImage, "test-mc")
+
+		Expect(err).ToNot(HaveOccurred())
+		expectedRes, err := os.ReadFile("testdata/ignition-test.yaml")
+		Expect(err).ToNot(HaveOccurred())
+
+		if string(expectedRes) != yamlRes {
+			fmt.Printf("<%s>\n", yamlRes)
+			fmt.Printf("<%s>\n", expectedRes)
+		}
+		Expect(string(yamlRes)).To(Equal(string(expectedRes)))
+	})
+
+	It("verify the usage of the default worker image", func() {
+		mcfgAPI := NewMCFG(workerImage)
+
+		_, yamlRes, err := mcfgAPI.GenerateIgnition(imageName, kernelModuleName, inTreeKernelModuleName, firmwareFilesPath, "", "test-mc")
 
 		Expect(err).ToNot(HaveOccurred())
 		expectedRes, err := os.ReadFile("testdata/ignition-test.yaml")

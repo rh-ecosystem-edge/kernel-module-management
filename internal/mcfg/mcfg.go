@@ -48,10 +48,13 @@ type MCFG interface {
 }
 
 type mcfgImpl struct {
+	currentWorkerImage string
 }
 
-func NewMCFG() MCFG {
-	return &mcfgImpl{}
+func NewMCFG(currentWorkerImage string) MCFG {
+	return &mcfgImpl{
+		currentWorkerImage: currentWorkerImage,
+	}
 }
 
 func (m *mcfgImpl) UpdateDisruptionPolicies(mc *apioperatorv1.MachineConfiguration, bmc *kmmv1beta1.BootModuleConfig) {
@@ -70,6 +73,9 @@ func (m *mcfgImpl) UpdateMachineConfig(mc *mcfgv1.MachineConfig, bmc *kmmv1beta1
 
 func (m *mcfgImpl) GenerateIgnition(kernelModuleImage, kernelModuleName, inTreeModuleToRemove, firmwareFilesPath,
 	workerImage, servicePrefix string) ([]byte, string, error) {
+	if workerImage == "" {
+		workerImage = m.currentWorkerImage
+	}
 	templateParams := map[string]any{
 		"FirmwareFilesPath":                 firmwareFilesPath,
 		"KernelModuleImage":                 kernelModuleImage,
