@@ -144,7 +144,7 @@ func main() {
 	micAPI := mic.New(client, scheme)
 	mbscAPI := mbsc.New(client, scheme)
 	imagePullerAPI := pod.NewImagePuller(client, scheme)
-	mcfgAPI := mcfg.NewMCFG()
+	mcfgAPI := mcfg.NewMCFG(workerImage)
 
 	dpc := controllers.NewDevicePluginReconciler(
 		client,
