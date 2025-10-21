@@ -43,6 +43,7 @@ var (
 
 type MCFG interface {
 	UpdateDisruptionPolicies(mc *apioperatorv1.MachineConfiguration, bmc *kmmv1beta1.BootModuleConfig)
+	RemoveDisruptionPolicies(mc *apioperatorv1.MachineConfiguration, bmc *kmmv1beta1.BootModuleConfig, removeAll bool)
 	UpdateMachineConfig(mc *mcfgv1.MachineConfig, bmc *kmmv1beta1.BootModuleConfig) error
 	GenerateIgnition(kernelModuleImage, kernelModuleName, inTreeModuleToRemove, firmwareFilesPath, workerImage, servicePrefix string) ([]byte, string, error)
 }
@@ -64,6 +65,17 @@ func (m *mcfgImpl) UpdateDisruptionPolicies(mc *apioperatorv1.MachineConfigurati
 	addFileToDisruptionPolicies(mc, "/usr/local/bin/replace-kernel-module.sh")
 	addFileToDisruptionPolicies(mc, "/usr/local/bin/pull-kernel-module-image.sh")
 	addFileToDisruptionPolicies(mc, "/usr/local/bin/wait-for-dispatcher.sh")
+}
+
+func (m *mcfgImpl) RemoveDisruptionPolicies(mc *apioperatorv1.MachineConfiguration, bmc *kmmv1beta1.BootModuleConfig, removeAll bool) {
+	removeSystemdFromDisruptionPolicies(mc, bmc.Spec.MachineConfigName+"-"+pullImageSystemdService)
+	removeSystemdFromDisruptionPolicies(mc, bmc.Spec.MachineConfigName+"-"+replaceKmodSystemdService)
+	if removeAll {
+		removeSystemdFromDisruptionPolicies(mc, "crio-wipe.service")
+		removeFileFromDisruptionPolicies(mc, "/usr/local/bin/replace-kernel-module.sh")
+		removeFileFromDisruptionPolicies(mc, "/usr/local/bin/pull-kernel-module-image.sh")
+		removeFileFromDisruptionPolicies(mc, "/usr/local/bin/wait-for-dispatcher.sh")
+	}
 }
 
 func (m *mcfgImpl) UpdateMachineConfig(mc *mcfgv1.MachineConfig, bmc *kmmv1beta1.BootModuleConfig) error {
@@ -139,6 +151,16 @@ func addSystemdToDisruptionPolicies(mc *apioperatorv1.MachineConfiguration, syst
 	mc.Spec.NodeDisruptionPolicy.Units = append(mc.Spec.NodeDisruptionPolicy.Units, dpUnit)
 }
 
+func removeSystemdFromDisruptionPolicies(mc *apioperatorv1.MachineConfiguration, systemdName string) {
+	dpSystemdName := apioperatorv1.NodeDisruptionPolicyServiceName(systemdName)
+	for i, unit := range mc.Spec.NodeDisruptionPolicy.Units {
+		if unit.Name == dpSystemdName {
+			mc.Spec.NodeDisruptionPolicy.Units = append(mc.Spec.NodeDisruptionPolicy.Units[:i], mc.Spec.NodeDisruptionPolicy.Units[i+1:]...)
+			return
+		}
+	}
+}
+
 func addFileToDisruptionPolicies(mc *apioperatorv1.MachineConfiguration, filePath string) {
 	for _, file := range mc.Spec.NodeDisruptionPolicy.Files {
 		if file.Path == filePath {
@@ -155,6 +177,15 @@ func addFileToDisruptionPolicies(mc *apioperatorv1.MachineConfiguration, filePat
 		},
 	}
 	mc.Spec.NodeDisruptionPolicy.Files = append(mc.Spec.NodeDisruptionPolicy.Files, dpFile)
+}
+
+func removeFileFromDisruptionPolicies(mc *apioperatorv1.MachineConfiguration, filePath string) {
+	for i, file := range mc.Spec.NodeDisruptionPolicy.Files {
+		if file.Path == filePath {
+			mc.Spec.NodeDisruptionPolicy.Files = append(mc.Spec.NodeDisruptionPolicy.Files[:i], mc.Spec.NodeDisruptionPolicy.Files[i+1:]...)
+			return
+		}
+	}
 }
 
 func updateMachineConfigLabels(mc *mcfgv1.MachineConfig, bmc *kmmv1beta1.BootModuleConfig) {
