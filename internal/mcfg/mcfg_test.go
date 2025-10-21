@@ -23,50 +23,119 @@ var _ = Describe("UpdateDisruptionPolicies", func() {
 		mcfgAPI := NewMCFG("")
 		mcfgAPI.UpdateDisruptionPolicies(mc, bmc)
 
-		expectedUnit := apioperatorv1.NodeDisruptionPolicySpecUnit{
-			Actions: []apioperatorv1.NodeDisruptionPolicySpecAction{
-				{
-					Type: apioperatorv1.NoneSpecAction,
-				},
-			},
-		}
-
-		expectedFile := apioperatorv1.NodeDisruptionPolicySpecFile{
-			Actions: []apioperatorv1.NodeDisruptionPolicySpecAction{
-				{
-					Type: apioperatorv1.NoneSpecAction,
-				},
-			},
-		}
-
 		By("check the pull service")
-		expectedUnit.Name = "test-name-pull-kernel-module-image.service"
-		res := verifyUnitPresent(mc, expectedUnit)
+		res := isUnitPresent(mc, "test-name-pull-kernel-module-image.service")
 		Expect(res).To(BeTrue())
 
 		By("check the replace service")
-		expectedUnit.Name = "test-name-replace-kernel-module.service"
-		res = verifyUnitPresent(mc, expectedUnit)
+		res = isUnitPresent(mc, "test-name-replace-kernel-module.service")
 		Expect(res).To(BeTrue())
 
 		By("check the crio-wipe service")
-		expectedUnit.Name = "crio-wipe.service"
-		res = verifyUnitPresent(mc, expectedUnit)
+		res = isUnitPresent(mc, "crio-wipe.service")
 		Expect(res).To(BeTrue())
 
 		By("replace-kernel-module.sh")
-		expectedFile.Path = "/usr/local/bin/replace-kernel-module.sh"
-		res = verifyFilePresent(mc, expectedFile)
+		res = isFilePresent(mc, "/usr/local/bin/replace-kernel-module.sh")
 		Expect(res).To(BeTrue())
 
 		By("pull-kernel-module-image.sh")
-		expectedFile.Path = "/usr/local/bin/pull-kernel-module-image.sh"
-		res = verifyFilePresent(mc, expectedFile)
+		res = isFilePresent(mc, "/usr/local/bin/pull-kernel-module-image.sh")
 		Expect(res).To(BeTrue())
 
 		By("wait-for-dispatcher.sh")
-		expectedFile.Path = "/usr/local/bin/wait-for-dispatcher.sh"
-		res = verifyFilePresent(mc, expectedFile)
+		res = isFilePresent(mc, "/usr/local/bin/wait-for-dispatcher.sh")
+		Expect(res).To(BeTrue())
+	})
+})
+
+var _ = Describe("RemoveDisruptionPolicies", func() {
+	var (
+		mc      *apioperatorv1.MachineConfiguration
+		bmc     *kmmv1beta1.BootModuleConfig
+		mcfgAPI MCFG
+	)
+
+	BeforeEach(func() {
+		mc = &apioperatorv1.MachineConfiguration{
+			Spec: apioperatorv1.MachineConfigurationSpec{},
+		}
+		bmc = &kmmv1beta1.BootModuleConfig{
+			Spec: kmmv1beta1.BootModuleConfigSpec{
+				MachineConfigName: "test-name",
+			},
+		}
+
+		addUnitSpec(mc, "some unit 1")
+		addUnitSpec(mc, "some unit 2")
+		addUnitSpec(mc, "test-name-pull-kernel-module-image.service")
+		addUnitSpec(mc, "test-name-replace-kernel-module.service")
+		addUnitSpec(mc, "crio-wipe.service")
+		addUnitSpec(mc, "some unit 3")
+		addFileSpec(mc, "some file 1")
+		addFileSpec(mc, "/usr/local/bin/replace-kernel-module.sh")
+		addFileSpec(mc, "/usr/local/bin/pull-kernel-module-image.sh")
+		addFileSpec(mc, "/usr/local/bin/wait-for-dispatcher.sh")
+		addFileSpec(mc, "some file 2")
+		addFileSpec(mc, "some file 3")
+
+		mcfgAPI = NewMCFG("")
+	})
+
+	It("remove all", func() {
+		mcfgAPI.RemoveDisruptionPolicies(mc, bmc, true)
+
+		By("check the pull service")
+		res := isUnitPresent(mc, "test-name-pull-kernel-module-image.service")
+		Expect(res).To(BeFalse())
+
+		By("check the replace service")
+		res = isUnitPresent(mc, "test-name-replace-kernel-module.service")
+		Expect(res).To(BeFalse())
+
+		By("check the crio-wipe service")
+		res = isUnitPresent(mc, "crio-wipe.service")
+		Expect(res).To(BeFalse())
+
+		By("replace-kernel-module.sh")
+		res = isFilePresent(mc, "/usr/local/bin/replace-kernel-module.sh")
+		Expect(res).To(BeFalse())
+
+		By("pull-kernel-module-image.sh")
+		res = isFilePresent(mc, "/usr/local/bin/pull-kernel-module-image.sh")
+		Expect(res).To(BeFalse())
+
+		By("wait-for-dispatcher.sh")
+		res = isFilePresent(mc, "/usr/local/bin/wait-for-dispatcher.sh")
+		Expect(res).To(BeFalse())
+
+	})
+
+	It("remove only current bmc", func() {
+		mcfgAPI.RemoveDisruptionPolicies(mc, bmc, false)
+
+		By("check the pull service")
+		res := isUnitPresent(mc, "test-name-pull-kernel-module-image.service")
+		Expect(res).To(BeFalse())
+
+		By("check the replace service")
+		res = isUnitPresent(mc, "test-name-replace-kernel-module.service")
+		Expect(res).To(BeFalse())
+
+		By("check the crio-wipe service")
+		res = isUnitPresent(mc, "crio-wipe.service")
+		Expect(res).To(BeTrue())
+
+		By("replace-kernel-module.sh")
+		res = isFilePresent(mc, "/usr/local/bin/replace-kernel-module.sh")
+		Expect(res).To(BeTrue())
+
+		By("pull-kernel-module-image.sh")
+		res = isFilePresent(mc, "/usr/local/bin/pull-kernel-module-image.sh")
+		Expect(res).To(BeTrue())
+
+		By("wait-for-dispatcher.sh")
+		res = isFilePresent(mc, "/usr/local/bin/wait-for-dispatcher.sh")
 		Expect(res).To(BeTrue())
 	})
 })
@@ -152,7 +221,15 @@ var _ = Describe("GenerateIgnition", func() {
 	})
 })
 
-func verifyUnitPresent(mc *apioperatorv1.MachineConfiguration, expectedUnit apioperatorv1.NodeDisruptionPolicySpecUnit) bool {
+func isUnitPresent(mc *apioperatorv1.MachineConfiguration, unitName string /*apioperatorv1.NodeDisruptionPolicySpecUnit*/) bool {
+	expectedUnit := apioperatorv1.NodeDisruptionPolicySpecUnit{
+		Name: apioperatorv1.NodeDisruptionPolicyServiceName(unitName),
+		Actions: []apioperatorv1.NodeDisruptionPolicySpecAction{
+			{
+				Type: apioperatorv1.NoneSpecAction,
+			},
+		},
+	}
 	for _, unit := range mc.Spec.NodeDisruptionPolicy.Units {
 		if cmp.Equal(unit, expectedUnit) {
 			return true
@@ -161,11 +238,44 @@ func verifyUnitPresent(mc *apioperatorv1.MachineConfiguration, expectedUnit apio
 	return false
 }
 
-func verifyFilePresent(mc *apioperatorv1.MachineConfiguration, expectedFile apioperatorv1.NodeDisruptionPolicySpecFile) bool {
+func isFilePresent(mc *apioperatorv1.MachineConfiguration, filePath string /*apioperatorv1.NodeDisruptionPolicySpecFile*/) bool {
+	expectedFile := apioperatorv1.NodeDisruptionPolicySpecFile{
+		Path: filePath,
+		Actions: []apioperatorv1.NodeDisruptionPolicySpecAction{
+			{
+				Type: apioperatorv1.NoneSpecAction,
+			},
+		},
+	}
 	for _, file := range mc.Spec.NodeDisruptionPolicy.Files {
 		if cmp.Equal(file, expectedFile) {
 			return true
 		}
 	}
 	return false
+}
+
+func addUnitSpec(mc *apioperatorv1.MachineConfiguration, unitName string) {
+	unitSpec := apioperatorv1.NodeDisruptionPolicySpecUnit{
+		Name: apioperatorv1.NodeDisruptionPolicyServiceName(unitName),
+		Actions: []apioperatorv1.NodeDisruptionPolicySpecAction{
+			{
+				Type: apioperatorv1.NoneSpecAction,
+			},
+		},
+	}
+	mc.Spec.NodeDisruptionPolicy.Units = append(mc.Spec.NodeDisruptionPolicy.Units, unitSpec)
+
+}
+
+func addFileSpec(mc *apioperatorv1.MachineConfiguration, filePath string) {
+	fileSpec := apioperatorv1.NodeDisruptionPolicySpecFile{
+		Path: filePath,
+		Actions: []apioperatorv1.NodeDisruptionPolicySpecAction{
+			{
+				Type: apioperatorv1.NoneSpecAction,
+			},
+		},
+	}
+	mc.Spec.NodeDisruptionPolicy.Files = append(mc.Spec.NodeDisruptionPolicy.Files, fileSpec)
 }

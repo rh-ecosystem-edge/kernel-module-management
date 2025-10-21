@@ -109,8 +109,34 @@ func (brh *bmcReconcilerHelper) setFinalizer(ctx context.Context, bmc *kmmv1beta
 }
 
 func (brh *bmcReconcilerHelper) finalizeBMC(ctx context.Context, bmc *kmmv1beta1.BootModuleConfig) error {
-	// [TODO] determine whether MC was created by user, or by BMC. This can be done by looking at MC labels.
-	// if MC is created by BMC - delete it, otherwise  - ignore
+	logger := log.FromContext(ctx).WithValues("bmc", bmc.GetName())
+	logger.Info("checking the number of BMC in the cluster")
+	bmcList := kmmv1beta1.BootModuleConfigList{}
+	err := brh.client.List(ctx, &bmcList)
+	if err != nil {
+		return fmt.Errorf("failed to list BMC's in the cluster")
+	}
+
+	removeAll := true
+	if len(bmcList.Items) > 1 {
+		removeAll = false
+	}
+
+	logger.Info("removing the BMC's policies from MachineConfiguration", "removeAll", removeAll)
+	mc := &apioperatorv1.MachineConfiguration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+		},
+	}
+	opRes, err := controllerutil.CreateOrPatch(ctx, brh.client, mc, func() error {
+		brh.mcfgAPI.RemoveDisruptionPolicies(mc, bmc, removeAll)
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create/patch MachineConfiguration cluster in order to remove the disruption policies: %v", err)
+	}
+	logger.Info("finalize BMC successfull", "opRes", opRes)
+
 	return nil
 }
 
