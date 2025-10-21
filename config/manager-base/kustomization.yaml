@@ -10,10 +10,10 @@ patches:
 images:
 - name: must-gather
   newName: quay.io/edge-infrastructure/kernel-module-management-must-gather
-  newTag: latest
+  newTag: release-2.5
 - name: signer
   newName: quay.io/edge-infrastructure/kernel-module-management-signimage
-  newTag: latest
+  newTag: release-2.5
 
 configurations:
 - kustomizeconfig.yaml

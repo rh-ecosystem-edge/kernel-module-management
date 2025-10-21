@@ -11,7 +11,7 @@ patches:
 images:
 - name: controller
   newName: quay.io/edge-infrastructure/kernel-module-management-operator
-  newTag: latest
+  newTag: release-2.5
 - name: worker
   newName: quay.io/edge-infrastructure/kernel-module-management-worker
-  newTag: latest
+  newTag: release-2.5

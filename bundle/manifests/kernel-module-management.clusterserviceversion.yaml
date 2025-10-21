@@ -47,7 +47,7 @@ metadata:
         }
       ]
     capabilities: Seamless Upgrades
-    createdAt: "2025-10-15T07:06:35Z"
+    createdAt: "2025-10-21T12:25:07Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.41.1
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
@@ -367,16 +367,16 @@ spec:
                 - --config=kmm-operator-manager-config
                 env:
                 - name: RELATED_IMAGE_WORKER
-                  value: quay.io/edge-infrastructure/kernel-module-management-worker:latest
+                  value: quay.io/edge-infrastructure/kernel-module-management-worker:release-2.5
                 - name: OPERATOR_NAMESPACE
                   valueFrom:
                     fieldRef:
                       fieldPath: metadata.namespace
                 - name: RELATED_IMAGE_MUST_GATHER
-                  value: quay.io/edge-infrastructure/kernel-module-management-must-gather:latest
+                  value: quay.io/edge-infrastructure/kernel-module-management-must-gather:release-2.5
                 - name: RELATED_IMAGE_SIGN
-                  value: quay.io/edge-infrastructure/kernel-module-management-signimage:latest
-                image: quay.io/edge-infrastructure/kernel-module-management-operator:latest
+                  value: quay.io/edge-infrastructure/kernel-module-management-signimage:release-2.5
+                image: quay.io/edge-infrastructure/kernel-module-management-operator:release-2.5
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -472,7 +472,7 @@ spec:
                   valueFrom:
                     fieldRef:
                       fieldPath: metadata.namespace
-                image: quay.io/edge-infrastructure/kernel-module-management-webhook-server:latest
+                image: quay.io/edge-infrastructure/kernel-module-management-webhook-server:release-2.5
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -585,11 +585,11 @@ spec:
     name: Red Hat
     url: https://www.redhat.com
   relatedImages:
-  - image: quay.io/edge-infrastructure/kernel-module-management-worker:latest
+  - image: quay.io/edge-infrastructure/kernel-module-management-worker:release-2.5
     name: worker
-  - image: quay.io/edge-infrastructure/kernel-module-management-must-gather:latest
+  - image: quay.io/edge-infrastructure/kernel-module-management-must-gather:release-2.5
     name: must-gather
-  - image: quay.io/edge-infrastructure/kernel-module-management-signimage:latest
+  - image: quay.io/edge-infrastructure/kernel-module-management-signimage:release-2.5
     name: sign
   version: 0.0.1
   webhookdefinitions:
