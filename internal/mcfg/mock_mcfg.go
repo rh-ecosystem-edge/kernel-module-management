@@ -56,6 +56,18 @@ func (mr *MockMCFGMockRecorder) GenerateIgnition(kernelModuleImage, kernelModule
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateIgnition", reflect.TypeOf((*MockMCFG)(nil).GenerateIgnition), kernelModuleImage, kernelModuleName, inTreeModuleToRemove, firmwareFilesPath, workerImage, servicePrefix)
 }
 
+// RemoveDisruptionPolicies mocks base method.
+func (m *MockMCFG) RemoveDisruptionPolicies(mc *v10.MachineConfiguration, bmc *v1beta1.BootModuleConfig, removeAll bool) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RemoveDisruptionPolicies", mc, bmc, removeAll)
+}
+
+// RemoveDisruptionPolicies indicates an expected call of RemoveDisruptionPolicies.
+func (mr *MockMCFGMockRecorder) RemoveDisruptionPolicies(mc, bmc, removeAll any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveDisruptionPolicies", reflect.TypeOf((*MockMCFG)(nil).RemoveDisruptionPolicies), mc, bmc, removeAll)
+}
+
 // UpdateDisruptionPolicies mocks base method.
 func (m *MockMCFG) UpdateDisruptionPolicies(mc *v10.MachineConfiguration, bmc *v1beta1.BootModuleConfig) {
 	m.ctrl.T.Helper()
