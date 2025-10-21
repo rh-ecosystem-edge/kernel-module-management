@@ -34,7 +34,7 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 IMAGE_TAG_BASE ?= quay.io/edge-infrastructure/kernel-module-management-operator
 
 # This is the default tag of all images made by this Makefile.
-IMAGE_TAG ?= latest
+IMAGE_TAG ?= release-2.5
 
 SIGNER_IMAGE_TAG_BASE ?= quay.io/edge-infrastructure/kernel-module-management-signimage
 SIGNER_IMG ?= $(SIGNER_IMAGE_TAG_BASE):$(IMAGE_TAG)

@@ -8,7 +8,7 @@ resources:
 images:
 - name: webhook-server
   newName: quay.io/edge-infrastructure/kernel-module-management-webhook-server
-  newTag: latest
+  newTag: release-2.5
 labels:
 - includeSelectors: true
   pairs:
