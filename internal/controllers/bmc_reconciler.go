@@ -99,12 +99,14 @@ func newBMCReconcilerHelper(client client.Client, mcfgAPI mcfg.MCFG, scheme *run
 }
 
 func (brh *bmcReconcilerHelper) setFinalizer(ctx context.Context, bmc *kmmv1beta1.BootModuleConfig) error {
+	logger := log.FromContext(ctx).WithValues("bmc", bmc.GetName())
+	logger.Info("Setting finalizer")
 	if controllerutil.ContainsFinalizer(bmc, constants.BMCFinalizer) {
 		return nil
 	}
 
 	bmcCopy := bmc.DeepCopy()
-	controllerutil.AddFinalizer(bmcCopy, constants.BMCFinalizer)
+	controllerutil.AddFinalizer(bmc, constants.BMCFinalizer)
 	return brh.client.Patch(ctx, bmc, client.MergeFrom(bmcCopy))
 }
 
@@ -135,9 +137,14 @@ func (brh *bmcReconcilerHelper) finalizeBMC(ctx context.Context, bmc *kmmv1beta1
 	if err != nil {
 		return fmt.Errorf("failed to create/patch MachineConfiguration cluster in order to remove the disruption policies: %v", err)
 	}
-	logger.Info("finalize BMC successfull", "opRes", opRes)
 
-	return nil
+	logger.Info("removed the node disruption policies succesfully", "opRes", opRes)
+
+	// remove finalizer
+	bmcCopy := bmc.DeepCopy()
+	controllerutil.RemoveFinalizer(bmc, constants.BMCFinalizer)
+
+	return brh.client.Patch(ctx, bmc, client.MergeFrom(bmcCopy))
 }
 
 func (brh *bmcReconcilerHelper) handleMachineConfiguration(ctx context.Context, bmc *kmmv1beta1.BootModuleConfig) error {
