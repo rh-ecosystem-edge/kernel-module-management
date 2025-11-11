@@ -143,3 +143,38 @@ Using kernel version as a tag for kernel module image, allows supporting cluster
 node and then use this value as a tag for kernel module image. This way, all the customer needs to do prior to upgrading the cluster, it to create a kernel module image
 with the appropriate tag, without any need to update day1 MC. Once the node is rebooted, pull service will pull the correct image
 
+## kmod Upgrade support
+Kmod installed using the day1-utility can be managed by the KMM operator for full lifecycle management.
+
+1. A kmod was installed using the day-utility and a `MachineConfig` is present in the cluster.
+2. One can create a `Module` in the cluster targetting the same kmod and kernel as the `MachineConfig` did.
+3. The KMM operator will try to load the kmod - nothing will happen since it is already loaded in the kernel.
+4. From now on, upgrades can be done like day2 operations by updating the `Module` CR in the cluster.
+
+The main caveat of this approach is that upon a sudden node reboot, the node will be rebooted with the kmod from the `MachineConfig` and not the one from the `Module` in case a kmod upgrade was performed.
+
+To overcome this issue, we have introduced the `BootMachineConfig` (BMC) CRD.
+When a day1 kmod was "transitioned" to the KMM operator using a `Module`, a BMC will also need to be created in the cluster to address the sudden reboot issues by ensuring that the `MachineConfig` will be updated will the correct values without triggering a node reboot.
+
+### BootMachineConfig CRD
+```yaml
+ kind: BootMachineConfig
+ metadata:
+  name: example-bmc
+  namespace: openshift-machine-config-operator
+ spec:
+  machineConfigName: worker-kmod-config
+  machineConfigPoolName: worker
+  kernelModuleImage: quay.io/example/kmod:5.14.0-284.59.1.el9_2.x86_64
+  kernelModuleName: my_module
+ status:
+  conditions: []
+```
+
+* `machineConfigName`: the machineConfig that is targeted by the BMC
+* `machineConfigPoolName`: the machineConfig pool that is linked to the targeted machineConfig
+* `kernelModuleImage`: kernel module container image that contains the kernel module .ko file
+* `kernelModuleName`: the name of the kernel module to be loaded (the name of the .ko file without the .ko)
+* `inTreeModulesToRemove`: Optional; a list of the in-tree kernel module to remove prior to loading the OOT kernel module
+* `firmwareFilesPath`: Optional; path of the firmware files in the kernel module container image
+* `workerImage`: Optional; KMM worker image. if missing, the current worker image will be used
