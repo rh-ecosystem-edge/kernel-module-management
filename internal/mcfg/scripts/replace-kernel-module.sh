@@ -19,6 +19,7 @@ inTreeModuleToRemove: $in_tree_module_to_remove
 modprobe:
   dirName: /opt
   moduleName: $kernel_module
+  firmwarePath: $firmware_files_path
 EOF
     echo "logging contents of the worker config file:"
     cat "$kmm_config_file_filepath"
@@ -34,11 +35,14 @@ if [ -n "$(podman images -q "$full_kernel_module_image" 2> /dev/null)" ] && \
     podman pod create --name $worker_pod_name
     echo "creating init container"
     copycmd="mkdir -p /tmp/opt/lib/modules && cp -R /opt/lib/modules/* /tmp/opt/lib/modules;"
+    workerPodArgs="kmod load /etc/kmm-worker/config.yaml"
     if [[ -n "$FIRMWARE_FILES_PATH" ]]; then
       folders=("tmp" "$firmware_files_path");
       path_to_copy_firmware=$(printf '/%s' "${folders[@]%/}")
       copycmd+=" mkdir -p ${path_to_copy_firmware} && \
       cp -R ${firmware_files_path}/* ${path_to_copy_firmware}"
+      mkdir -p /var/lib/firmware
+      workerPodArgs+=" --firmware-path /var/lib/firmware"
     fi
     podman create \
           --pod $worker_pod_name \
@@ -55,8 +59,9 @@ if [ -n "$(podman images -q "$full_kernel_module_image" 2> /dev/null)" ] && \
       -v $worker_volume_name:/tmp \
       -v /lib/modules:/lib/modules \
       -v $kmm_config_file_filepath:/etc/kmm-worker/config.yaml \
+      -v /var/lib/firmware:/var/lib/firmware \
       $worker_image \
-      kmod load /etc/kmm-worker/config.yaml)
+      ${workerPodArgs})
     echo "running worker pod"
     podman pod start $worker_pod_name
     if [ $? -eq 0 ]; then
