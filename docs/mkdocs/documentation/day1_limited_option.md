@@ -140,7 +140,7 @@ A detailed description of MachineConfig and MachineConfigPool can be found in [M
 
 ## Cluster Upgrade support
 Using kernel version as a tag for kernel module image, allows supporting cluster upgrade. Pull service will determine the kernel version of the 
-node and then use this value as a tag for kernel module image. This way, all the customer needs to do prior to upgrading the cluster, it to create a kernel module image
+node and then use this value as a tag for kernel module image. This way, all the customer needs to do prior to upgrading the cluster, is to create a kernel module image
 with the appropriate tag, without any need to update day1 MC. Once the node is rebooted, pull service will pull the correct image
 
 ## kmod Upgrade support
@@ -165,7 +165,7 @@ When a day1 kmod was "transitioned" to the KMM operator using a `Module`, a BMC 
  spec:
   machineConfigName: worker-kmod-config
   machineConfigPoolName: worker
-  kernelModuleImage: quay.io/example/kmod:5.14.0-284.59.1.el9_2.x86_64
+  kernelModuleImage: quay.io/example/kmod
   kernelModuleName: my_module
  status:
   conditions: []
@@ -173,7 +173,8 @@ When a day1 kmod was "transitioned" to the KMM operator using a `Module`, a BMC 
 
 * `machineConfigName`: the machineConfig that is targeted by the BMC
 * `machineConfigPoolName`: the machineConfig pool that is linked to the targeted machineConfig
-* `kernelModuleImage`: kernel module container image that contains the kernel module .ko file
+* `kernelModuleImage`: kernel module container image that contains the kernel module .ko file without the tag
+The pull service will determine the kernel version of the node and then use this value as a tag for kernel module image. This way, all the customer needs to do prior to upgrading the cluster, is to create a kernel module image with the appropriate tag, without any need to update day1 MC. Once the node is rebooted, pull service will pull the correct image.
 * `kernelModuleName`: the name of the kernel module to be loaded (the name of the .ko file without the .ko)
 * `inTreeModulesToRemove`: Optional; a list of the in-tree kernel module to remove prior to loading the OOT kernel module
 * `firmwareFilesPath`: Optional; path of the firmware files in the kernel module container image
