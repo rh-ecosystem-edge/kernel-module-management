@@ -30,15 +30,16 @@ import (
 )
 
 const (
-	nmcName          = "nmc"
-	nsFirst          = "example-ns-1"
-	nsSecond         = "example-ns-2"
-	nameFirst        = "example-name-1"
-	nameSecond       = "example-name-2"
-	imageFirst       = "example-image-1"
-	imageSecond      = "example-image-2"
-	kmodName         = "kmm.node.kubernetes.io/test-ns.test-module.ready"
-	labelNotToRemove = "example.node.kubernetes.io/label-not-to-be-removed"
+	nmcName               = "nmc"
+	nsFirst               = "example-ns-1"
+	nsSecond              = "example-ns-2"
+	nameFirst             = "example-name-1"
+	nameSecond            = "example-name-2"
+	imageFirst            = "example-image-1"
+	imageSecond           = "example-image-2"
+	kmodReadyLabel        = "kmm.node.kubernetes.io/test-ns.test-module.ready"
+	kmodVersionReadyLabel = "kmm.node.kubernetes.io/test-ns.test-module.version.ready"
+	labelNotToRemove      = "example.node.kubernetes.io/label-not-to-be-removed"
 )
 
 var _ = Describe("NodeModulesConfigReconciler_Reconcile", func() {
@@ -137,7 +138,7 @@ var _ = Describe("NodeModulesConfigReconciler_Reconcile", func() {
 		node := v1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: map[string]string{
-					kmodName:         "",
+					kmodReadyLabel:   "",
 					labelNotToRemove: "",
 				},
 			},
@@ -164,9 +165,10 @@ var _ = Describe("NodeModulesConfigReconciler_Reconcile", func() {
 			),
 			wh.EXPECT().SyncStatus(ctx, nmc, &node),
 			nm.EXPECT().IsNodeSchedulable(&node, nil).Return(false),
-			nm.EXPECT().UpdateLabels(ctx, &node, nil, map[string]string{kmodName: ""}).DoAndReturn(
+			nm.EXPECT().UpdateLabels(ctx, &node, nil, map[string]string{kmodReadyLabel: "", kmodVersionReadyLabel: ""}).DoAndReturn(
 				func(_ context.Context, obj ctrlclient.Object, _, _ map[string]string) error {
-					delete(node.ObjectMeta.Labels, kmodName)
+					delete(node.ObjectMeta.Labels, kmodReadyLabel)
+					delete(node.ObjectMeta.Labels, kmodVersionReadyLabel)
 					return nil
 				},
 			),
@@ -193,8 +195,9 @@ var _ = Describe("NodeModulesConfigReconciler_Reconcile", func() {
 		node := v1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: map[string]string{
-					kmodName:         "",
-					labelNotToRemove: "",
+					kmodReadyLabel:        "",
+					kmodVersionReadyLabel: "2",
+					labelNotToRemove:      "",
 				},
 			},
 		}
@@ -220,7 +223,7 @@ var _ = Describe("NodeModulesConfigReconciler_Reconcile", func() {
 			),
 			wh.EXPECT().SyncStatus(ctx, nmc, &node),
 			nm.EXPECT().IsNodeSchedulable(&node, nil).Return(false),
-			nm.EXPECT().UpdateLabels(ctx, &node, nil, map[string]string{kmodName: ""}).DoAndReturn(
+			nm.EXPECT().UpdateLabels(ctx, &node, nil, map[string]string{kmodReadyLabel: "", kmodVersionReadyLabel: ""}).DoAndReturn(
 				func(_ context.Context, obj ctrlclient.Object, _, _ map[string]string) error {
 					return fmt.Errorf("some error")
 				},
