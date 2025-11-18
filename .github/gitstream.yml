@@ -11,7 +11,7 @@ downstream:
 log_level: 1000
 
 diff:
-  commits_since: 2022-08-31T00:00:00.00Z
+  commits_since: 2025-11-01T00:00:00.00Z
 
 sync:
   before_commit:
