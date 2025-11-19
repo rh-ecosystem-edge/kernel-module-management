@@ -2,9 +2,10 @@ package mcfg
 
 import (
 	"fmt"
+	"os"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"os"
 
 	"github.com/google/go-cmp/cmp"
 	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
@@ -175,13 +176,12 @@ var _ = Describe("UpdateMachineConfig", func() {
 
 var _ = Describe("GenerateIgnition", func() {
 	const (
-		name                   = "name"
-		mcpRef                 = "mcpRef"
-		kernelModuleName       = "testKernelModuleName"
-		inTreeKernelModuleName = "testInTreeKernelModuleName"
-		firmwareFilesPath      = "/opt/lib/test/firmware"
-		imageName              = "quay.io/project/repo:some-tag12"
-		workerImage            = "some-worker-image"
+		name              = "name"
+		mcpRef            = "mcpRef"
+		kernelModuleName  = "testKernelModuleName"
+		firmwareFilesPath = "/opt/lib/test/firmware"
+		imageName         = "quay.io/project/repo:some-tag12"
+		workerImage       = "some-worker-image"
 	)
 
 	// unit performs verification of the MC output vs the manually created
@@ -191,7 +191,8 @@ var _ = Describe("GenerateIgnition", func() {
 	It("verify correct ignition output", func() {
 		mcfgAPI := NewMCFG("")
 
-		_, yamlRes, err := mcfgAPI.GenerateIgnition(imageName, kernelModuleName, inTreeKernelModuleName, firmwareFilesPath, workerImage, "test-mc")
+		_, yamlRes, err := mcfgAPI.GenerateIgnition(imageName, kernelModuleName, firmwareFilesPath, workerImage, "test-mc",
+			[]string{"it1", "it2"})
 
 		Expect(err).ToNot(HaveOccurred())
 		expectedRes, err := os.ReadFile("testdata/ignition-test.yaml")
@@ -207,7 +208,8 @@ var _ = Describe("GenerateIgnition", func() {
 	It("verify the usage of the default worker image", func() {
 		mcfgAPI := NewMCFG(workerImage)
 
-		_, yamlRes, err := mcfgAPI.GenerateIgnition(imageName, kernelModuleName, inTreeKernelModuleName, firmwareFilesPath, "", "test-mc")
+		_, yamlRes, err := mcfgAPI.GenerateIgnition(imageName, kernelModuleName, firmwareFilesPath, "", "test-mc",
+			[]string{"it1", "it2"})
 
 		Expect(err).ToNot(HaveOccurred())
 		expectedRes, err := os.ReadFile("testdata/ignition-test.yaml")

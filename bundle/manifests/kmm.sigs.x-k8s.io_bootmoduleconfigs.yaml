@@ -49,10 +49,12 @@ spec:
                 description: path of the firmware files in the kernel module container
                   image
                 type: string
-              inTreeModuleToRemove:
-                description: the in-tree kernel module to remove prior to loading
+              inTreeModulesToRemove:
+                description: the in-tree kernel module list to remove prior to loading
                   the OOT kernel module
-                type: string
+                items:
+                  type: string
+                type: array
               kernelModuleImage:
                 description: kernel module container image that contains the kernel
                   module .ko file
