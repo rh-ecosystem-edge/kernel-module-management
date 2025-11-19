@@ -52,7 +52,8 @@ KMM provides 2 ways to create an MCO YAML manifest for the Day 1 functionality:
 ### API
 
 ```go
-ProduceMachineConfig(machineConfigName, machineConfigPoolRef, kernelModuleImage, kernelModuleName string) (string, error)
+ProduceMachineConfig(machineConfigName, machineConfigPoolRef, kernelModuleImage, kernelModuleName, inTreeModulesToRemove,
+    firmwareFilesPath, workerImage string) (string, error)
 ```
 
 The returned output is a string representation of the MCO YAML manifest to be applied.
@@ -65,13 +66,12 @@ The parameters are:
 - `kernelModuleImage`: the name of the container image that includes the OOT kernel module without the tag
 - `kernelModuleName`: the name of the OOT kernel module. This parameter will be used both to unload the in-tree kernel module
    (if loaded into the kernel) and to load the OOT kernel module.
-- `inTreeModuleToRemove`: optional parameter. The name of the in-tree kernel module to unload prior to loading OOT kernel module.
-                          In case this parameter is not passed, day1 functionality will not try to unload any in-tree
-                          module
+- `inTreeModulesToRemove`: optional parameter. A list of in-tree kernel modules to unload prior to loading OOT kernel module.
+    In case this parameter is not passed, day1 functionality will not try to unload any in-tree modules.
 - `workerImage`: optional parameter. The worker image to use. In case this parameter is not passed, the default worker image 
-                 will be used: quay.io/edge-infrastructure/kernel-module-management-worker:latest.
-  - `firmwareFilesPath`:` optional parameter. In case there is a need to also use firmware,
-                          this parameter should hold the path to the directory containing those files as a string format.
+    will be used: quay.io/edge-infrastructure/kernel-module-management-worker:latest.
+- `firmwareFilesPath`:` optional parameter. In case there is a need to also use firmware,
+    this parameter should hold the path to the directory containing those files as a string format.
                                        
 
 The API is located under `pkg/mcproducer` package of the KMM source code.
@@ -85,13 +85,13 @@ In order to build it the following commands needs to be run:
 `make day1-utility`
 
 Utility uses the following flags:
-`-image <string>`: container image that contains kernel module .ko file.
-`-kernel-module <string>`: name of the OOT module to load.
-`-machine-config <string>`: name of the machine config to create.
-`-machine-config-pool <string>`: name of the machine config pool to use.
-`-in-tree-module-to-remove <string>`: in-tree kernel module that should be removed prior to loading the oot module.
-`-worker-image <string>`: kernel-management worker image to use. If not passed, a default value will be used.
-`-firmware-files-path <string>`: path to the firmware files inside the module image.
+- `machine-config <string>`: name of the machine config to create.
+- `machine-config-pool <string>`: name of the machine config pool to use.
+- `image <string>`: container image that contains kernel module .ko file.
+- `kernel-module <string>`: name of the OOT module to load.
+- `in-tree-modules-to-remove <string>`: in-tree kernel modules (comma-separated) that should be removed prior to loading the oot module.
+- `worker-image <string>`: kernel-management worker image to use. If not passed, a default value will be used.
+- `firmware-files-path <string>`: path to the firmware files inside the module image.
 
 The first 4 flags are mandatory, but the last 2 are optional. They correspond to the parameters of the API
 
@@ -167,6 +167,9 @@ When a day1 kmod was "transitioned" to the KMM operator using a `Module`, a BMC 
   machineConfigPoolName: worker
   kernelModuleImage: quay.io/example/kmod
   kernelModuleName: my_module
+  inTreeModulesToRemove:
+    - intree_module_1
+    - intree_module_2
  status:
   conditions: []
 ```

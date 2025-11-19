@@ -6,8 +6,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"gopkg.in/yaml.v3"
 	"text/template"
+
+	"gopkg.in/yaml.v3"
 
 	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
 	apioperatorv1 "github.com/openshift/api/operator/v1"
@@ -45,7 +46,8 @@ type MCFG interface {
 	UpdateDisruptionPolicies(mc *apioperatorv1.MachineConfiguration, bmc *kmmv1beta1.BootModuleConfig)
 	RemoveDisruptionPolicies(mc *apioperatorv1.MachineConfiguration, bmc *kmmv1beta1.BootModuleConfig, removeAll bool)
 	UpdateMachineConfig(mc *mcfgv1.MachineConfig, bmc *kmmv1beta1.BootModuleConfig) error
-	GenerateIgnition(kernelModuleImage, kernelModuleName, inTreeModuleToRemove, firmwareFilesPath, workerImage, servicePrefix string) ([]byte, string, error)
+	GenerateIgnition(kernelModuleImage, kernelModuleName, firmwareFilesPath, workerImage, servicePrefix string,
+		inTreeModulesToRemove []string) ([]byte, string, error)
 }
 
 type mcfgImpl struct {
@@ -83,8 +85,8 @@ func (m *mcfgImpl) UpdateMachineConfig(mc *mcfgv1.MachineConfig, bmc *kmmv1beta1
 	return m.updateMachineConfigIgnition(mc, bmc)
 }
 
-func (m *mcfgImpl) GenerateIgnition(kernelModuleImage, kernelModuleName, inTreeModuleToRemove, firmwareFilesPath,
-	workerImage, servicePrefix string) ([]byte, string, error) {
+func (m *mcfgImpl) GenerateIgnition(kernelModuleImage, kernelModuleName, firmwareFilesPath,
+	workerImage, servicePrefix string, inTreeModulesToRemove []string) ([]byte, string, error) {
 	if workerImage == "" {
 		workerImage = m.currentWorkerImage
 	}
@@ -93,7 +95,7 @@ func (m *mcfgImpl) GenerateIgnition(kernelModuleImage, kernelModuleName, inTreeM
 		"KernelModuleImage":                 kernelModuleImage,
 		"KernelModule":                      kernelModuleName,
 		"KernelModuleImageFilepath":         kernelModuleImageFilepath,
-		"InTreeModuleToRemove":              inTreeModuleToRemove,
+		"InTreeModulesToRemove":             inTreeModulesToRemove,
 		"WorkerImage":                       workerImage,
 		"WorkerConfigFilepath":              workerConfigFilepath,
 		"ServicePrefix":                     servicePrefix,
@@ -124,8 +126,8 @@ func (m *mcfgImpl) GenerateIgnition(kernelModuleImage, kernelModuleName, inTreeM
 }
 
 func (m *mcfgImpl) updateMachineConfigIgnition(mc *mcfgv1.MachineConfig, bmc *kmmv1beta1.BootModuleConfig) error {
-	ignition, _, err := m.GenerateIgnition(bmc.Spec.KernelModuleImage, bmc.Spec.KernelModuleName, bmc.Spec.InTreeModuleToRemove,
-		bmc.Spec.FirmwareFilesPath, bmc.Spec.WorkerImage, bmc.Spec.MachineConfigName)
+	ignition, _, err := m.GenerateIgnition(bmc.Spec.KernelModuleImage, bmc.Spec.KernelModuleName,
+		bmc.Spec.FirmwareFilesPath, bmc.Spec.WorkerImage, bmc.Spec.MachineConfigName, bmc.Spec.InTreeModulesToRemove)
 	if err != nil {
 		return fmt.Errorf("failed to update runtime BMC object %s: %v", bmc.Name, err)
 	}
