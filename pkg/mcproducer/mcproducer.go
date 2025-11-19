@@ -31,9 +31,9 @@ func ProduceMachineConfig(machineConfigName,
 	machineConfigPoolRef,
 	kernelModuleImage,
 	kernelModuleName,
-	inTreeModuleToRemove,
 	firmwareFilesPath,
-	workerImage string) (string, error) {
+	workerImage string,
+	inTreeModulesToRemove []string) (string, error) {
 
 	err := verifyKernelModuleImage(kernelModuleImage)
 	if err != nil {
@@ -41,7 +41,8 @@ func ProduceMachineConfig(machineConfigName,
 	}
 
 	mcfgAPI := mcfg.NewMCFG(defaultWorkerImage)
-	_, ignition, err := mcfgAPI.GenerateIgnition(kernelModuleImage, kernelModuleName, inTreeModuleToRemove, firmwareFilesPath, workerImage, machineConfigName)
+	_, ignition, err := mcfgAPI.GenerateIgnition(kernelModuleImage, kernelModuleName, firmwareFilesPath, workerImage,
+		machineConfigName, inTreeModulesToRemove)
 	if err != nil {
 		return "", fmt.Errorf("failed to create ignition string: %v", err)
 	}

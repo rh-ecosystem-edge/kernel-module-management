@@ -13,7 +13,7 @@ systemd:
         Type=oneshot
         EnvironmentFile=/etc/mco/proxy.env
         Environment="FIRMWARE_FILES_PATH={{.FirmwareFilesPath}}"
-        Environment="IN_TREE_MODULE_TO_REMOVE={{.InTreeModuleToRemove}}"
+        Environment="IN_TREE_MODULES_TO_REMOVE={{range $i, $module := .InTreeModulesToRemove}}{{if $i}} {{end}}{{$module}}{{end}}"
         Environment="KERNEL_MODULE={{.KernelModule}}"
         Environment="KERNEL_MODULE_IMAGE={{.KernelModuleImage}}"
         Environment="WORKER_CONFIG_FILEPATH={{.WorkerConfigFilepath}}"
