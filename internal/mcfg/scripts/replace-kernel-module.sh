@@ -1,7 +1,7 @@
 #!/bin/bash
 
 kmm_config_file_filepath="$WORKER_CONFIG_FILEPATH"
-in_tree_module_to_remove="$IN_TREE_MODULE_TO_REMOVE"
+in_tree_modules_to_remove="$IN_TREE_MODULES_TO_REMOVE"
 kernel_module="$KERNEL_MODULE"
 worker_image="$WORKER_IMAGE"
 kernel_module_image="$KERNEL_MODULE_IMAGE"
@@ -15,12 +15,21 @@ create_kmm_config() {
     # Write YAML content to the file
     cat <<EOF > "$kmm_config_file_filepath"
 containerImage: $full_kernel_module_image
-inTreeModuleToRemove: $in_tree_module_to_remove
 modprobe:
   dirName: /opt
   moduleName: $kernel_module
   firmwarePath: $firmware_files_path
 EOF
+    
+    # Add inTreeModulesToRemove as a proper YAML array if modules are specified
+    if [[ -n "$in_tree_modules_to_remove" ]]; then
+        echo "inTreeModulesToRemove:" >> "$kmm_config_file_filepath"
+        # Convert space-separated list to YAML array format
+        for module in $in_tree_modules_to_remove; do
+            echo "  - \"$module\"" >> "$kmm_config_file_filepath"
+        done
+    fi
+    
     echo "logging contents of the worker config file:"
     cat "$kmm_config_file_filepath"
 }

@@ -2,24 +2,24 @@ package mcproducer
 
 import (
 	"fmt"
+	"os"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"os"
 )
 
 var _ = Describe("ProduceMachineConfig", func() {
 	const (
-		name                   = "name"
-		mcpRef                 = "mcpRef"
-		kernelModuleName       = "testKernelModuleName"
-		inTreeKernelModuleName = "testInTreeKernelModuleName"
-		firmwareFilesPath      = "/opt/lib/test/firmware"
+		name              = "name"
+		mcpRef            = "mcpRef"
+		kernelModuleName  = "testKernelModuleName"
+		firmwareFilesPath = "/opt/lib/test/firmware"
 	)
 
 	It("image name format is invalid", func() {
 		imageName := "quay.io/project/repo@sha2561f5f1ae25db67aa82707e1b1dc96c8a53ef7094f320b7eeaef12be9a13fa251d"
 
-		res, err := ProduceMachineConfig(name, mcpRef, imageName, kernelModuleName, "", firmwareFilesPath, "")
+		res, err := ProduceMachineConfig(name, mcpRef, imageName, kernelModuleName, firmwareFilesPath, "", nil)
 
 		Expect(err).To(HaveOccurred())
 		Expect(res).To(Equal(""))
@@ -33,7 +33,8 @@ var _ = Describe("ProduceMachineConfig", func() {
 	It("verify correct mco output", func() {
 		imageName := "quay.io/project/repo:some-tag12"
 
-		res, err := ProduceMachineConfig(name, mcpRef, imageName, kernelModuleName, inTreeKernelModuleName, firmwareFilesPath, "")
+		res, err := ProduceMachineConfig(name, mcpRef, imageName, kernelModuleName, firmwareFilesPath, "",
+			[]string{"it1", "it2"})
 
 		Expect(err).ToNot(HaveOccurred())
 		expectedRes, err := os.ReadFile("testdata/machineconfig-test.yaml")

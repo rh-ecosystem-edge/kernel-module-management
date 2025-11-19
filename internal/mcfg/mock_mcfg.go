@@ -41,9 +41,9 @@ func (m *MockMCFG) EXPECT() *MockMCFGMockRecorder {
 }
 
 // GenerateIgnition mocks base method.
-func (m *MockMCFG) GenerateIgnition(kernelModuleImage, kernelModuleName, inTreeModuleToRemove, firmwareFilesPath, workerImage, servicePrefix string) ([]byte, string, error) {
+func (m *MockMCFG) GenerateIgnition(kernelModuleImage, kernelModuleName, firmwareFilesPath, workerImage, servicePrefix string, inTreeModulesToRemove []string) ([]byte, string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GenerateIgnition", kernelModuleImage, kernelModuleName, inTreeModuleToRemove, firmwareFilesPath, workerImage, servicePrefix)
+	ret := m.ctrl.Call(m, "GenerateIgnition", kernelModuleImage, kernelModuleName, firmwareFilesPath, workerImage, servicePrefix, inTreeModulesToRemove)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(string)
 	ret2, _ := ret[2].(error)
@@ -51,9 +51,9 @@ func (m *MockMCFG) GenerateIgnition(kernelModuleImage, kernelModuleName, inTreeM
 }
 
 // GenerateIgnition indicates an expected call of GenerateIgnition.
-func (mr *MockMCFGMockRecorder) GenerateIgnition(kernelModuleImage, kernelModuleName, inTreeModuleToRemove, firmwareFilesPath, workerImage, servicePrefix any) *gomock.Call {
+func (mr *MockMCFGMockRecorder) GenerateIgnition(kernelModuleImage, kernelModuleName, firmwareFilesPath, workerImage, servicePrefix, inTreeModulesToRemove any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateIgnition", reflect.TypeOf((*MockMCFG)(nil).GenerateIgnition), kernelModuleImage, kernelModuleName, inTreeModuleToRemove, firmwareFilesPath, workerImage, servicePrefix)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateIgnition", reflect.TypeOf((*MockMCFG)(nil).GenerateIgnition), kernelModuleImage, kernelModuleName, firmwareFilesPath, workerImage, servicePrefix, inTreeModulesToRemove)
 }
 
 // RemoveDisruptionPolicies mocks base method.
