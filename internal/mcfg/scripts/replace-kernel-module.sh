@@ -45,12 +45,12 @@ if [ -n "$(podman images -q "$full_kernel_module_image" 2> /dev/null)" ] && \
     echo "creating init container"
     copycmd="mkdir -p /tmp/opt/lib/modules && cp -R /opt/lib/modules/* /tmp/opt/lib/modules;"
     workerPodArgs="kmod load /etc/kmm-worker/config.yaml"
+    mkdir -p /var/lib/firmware
     if [[ -n "$FIRMWARE_FILES_PATH" ]]; then
       folders=("tmp" "$firmware_files_path");
       path_to_copy_firmware=$(printf '/%s' "${folders[@]%/}")
       copycmd+=" mkdir -p ${path_to_copy_firmware} && \
       cp -R ${firmware_files_path}/* ${path_to_copy_firmware}"
-      mkdir -p /var/lib/firmware
       workerPodArgs+=" --firmware-path /var/lib/firmware"
     fi
     podman create \
@@ -59,7 +59,11 @@ if [ -n "$(podman images -q "$full_kernel_module_image" 2> /dev/null)" ] && \
           -v $worker_volume_name:/tmp \
           $full_kernel_module_image \
           /bin/sh -c "${copycmd}"
-    echo "creating worker container"
+    if [ $? -eq 0 ]; then
+        echo "init container for pod ${worker_pod_name} has been created"
+    else
+        echo "failed to create init container for pod ${worker_pod_name}"
+    fi
     worker_pod_id=$(
     podman create \
       --pod $worker_pod_name\
@@ -71,12 +75,17 @@ if [ -n "$(podman images -q "$full_kernel_module_image" 2> /dev/null)" ] && \
       -v /var/lib/firmware:/var/lib/firmware \
       $worker_image \
       ${workerPodArgs})
+    if [ $? -eq 0 ]; then
+        echo "worker container for pod ${worker_pod_name} has been created"
+    else
+        echo "failed to create worker container for pod ${worker_pod_name}"
+    fi
     echo "running worker pod"
     podman pod start $worker_pod_name
     if [ $? -eq 0 ]; then
-        echo "OOT kernel module $kernel_module is inserted"
+        echo "worker pod has started"
     else
-        echo "failed to insert OOT kernel module $kernel_module"
+        echo "failed to start worker pod"
     fi
     podman wait $worker_pod_id
     echo "removing kmm-pod"
