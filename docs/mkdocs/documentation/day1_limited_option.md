@@ -158,7 +158,8 @@ When a day1 kmod was "transitioned" to the KMM operator using a `Module`, a BMC 
 
 ### BootMachineConfig CRD
 ```yaml
- kind: BootMachineConfig
+ apiVersion: kmm.sigs.x-k8s.io/v1beta1
+ kind: BootModuleConfig
  metadata:
   name: example-bmc
   namespace: openshift-machine-config-operator
