@@ -47,6 +47,8 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
+	"k8s.io/apimachinery/pkg/api/meta"
+	runtimescheme "k8s.io/apimachinery/pkg/runtime/schema"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -197,8 +199,17 @@ func main() {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.MICReconcilerName)
 	}
 
-	if err = controllers.NewBMCReconciler(client, mcfgAPI, scheme).SetupWithManager(mgr); err != nil {
-		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.BMCReconcilerName)
+	bmcSupported, err := isBMCSupported(mgr.GetRESTMapper())
+	if err != nil {
+		cmd.FatalError(setupLogger, err, "failed to check presence of CRDs needed for BMC controller")
+	}
+
+	if bmcSupported {
+		if err = controllers.NewBMCReconciler(client, mcfgAPI, scheme).SetupWithManager(mgr); err != nil {
+			cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.BMCReconcilerName)
+		}
+	} else {
+		setupLogger.Info("BMC controller is not running on the cluster, since MachineConfig CRD is not provided by MCO")
 	}
 
 	if managed {
@@ -279,4 +290,23 @@ func GetBoolEnv(s string) (bool, error) {
 	}
 
 	return managed, nil
+}
+
+func isBMCSupported(mapper meta.RESTMapper) (bool, error) {
+	gk := runtimescheme.GroupKind{
+		Group: "machineconfiguration.openshift.io",
+		Kind:  "MachineConfig",
+	}
+
+	_, err := mapper.RESTMapping(gk, "v1")
+
+	if err != nil {
+		if meta.IsNoMatchError(err) {
+			return false, nil
+		}
+		// Any other error (network, etc.) should be treated as a failure
+		return false, fmt.Errorf("failed to get the MC CRD due to internal error: %v", err)
+	}
+
+	return true, nil
 }
