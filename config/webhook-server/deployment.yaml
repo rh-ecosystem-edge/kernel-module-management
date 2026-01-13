@@ -44,6 +44,7 @@ spec:
           args: [--config=kmm-operator-manager-config]
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
           livenessProbe:
