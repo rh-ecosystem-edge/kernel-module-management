@@ -47,7 +47,7 @@ metadata:
         }
       ]
     capabilities: Seamless Upgrades
-    createdAt: "2026-01-19T09:20:55Z"
+    createdAt: "2026-01-19T12:38:02Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.41.1
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
@@ -421,6 +421,10 @@ spec:
                     memory: 64Mi
                 securityContext:
                   allowPrivilegeEscalation: false
+                  capabilities:
+                    drop:
+                    - ALL
+                  readOnlyRootFilesystem: true
                 volumeMounts:
                 - mountPath: /certs
                   name: metrics-tls
@@ -520,6 +524,7 @@ spec:
                   capabilities:
                     drop:
                     - ALL
+                  readOnlyRootFilesystem: true
               securityContext:
                 runAsNonRoot: true
               serviceAccountName: kmm-operator-controller
