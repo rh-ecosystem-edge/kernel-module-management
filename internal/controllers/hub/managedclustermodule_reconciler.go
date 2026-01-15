@@ -243,6 +243,7 @@ func (rh *managedClusterModuleReconcilerHelper) setMicAsDesired(ctx context.Cont
 			Build:         mld.Build,
 			Sign:          mld.Sign,
 			RegistryTLS:   mld.RegistryTLS,
+			DirName:       mld.Modprobe.DirName,
 		}
 		images = append(images, mis)
 	}
