@@ -5,13 +5,12 @@ FROM {{ .SignImage }} AS signimage
 
 USER 0
 
-RUN ["mkdir", "/signroot"]
-{{ range .FilesToSign }}
-COPY --from=source {{ . }} /signroot{{ . }}
-RUN /usr/local/bin/sign-file sha256 /run/secrets/key/key /run/secrets/cert/cert /signroot{{ . }}
+COPY --from=source {{ .DirName }} /opt{{ .DirName }}
+{{- range .FilesToSign }}
+RUN for file in /opt{{ . }}; do \
+      [ -e "${file}" ] && /usr/local/bin/sign-file sha256 /run/secrets/key/key /run/secrets/cert/cert "${file}"; \
+    done
 {{- end }}
 
 FROM source
-{{ range .FilesToSign }}
-COPY --from=signimage /signroot{{ . }} {{ . }}
-{{- end }}
+COPY --from=signimage /opt{{ .DirName }} {{ .DirName }}

@@ -353,6 +353,9 @@ var _ = Describe("makeSignTemplate", func() {
 			},
 			ContainerImage: signedImage,
 			RegistryTLS:    &kmmv1beta1.TLSOptions{},
+			Modprobe: kmmv1beta1.ModprobeSpec{
+				DirName: "/modules",
+			},
 		}
 
 	})
@@ -373,14 +376,13 @@ FROM some-signer-image:some-tag AS signimage
 
 USER 0
 
-RUN ["mkdir", "/signroot"]
-
-COPY --from=source /modules/simple-kmod.ko:/modules/simple-procfs-kmod.ko /signroot/modules/simple-kmod.ko:/modules/simple-procfs-kmod.ko
-RUN /usr/local/bin/sign-file sha256 /run/secrets/key/key /run/secrets/cert/cert /signroot/modules/simple-kmod.ko:/modules/simple-procfs-kmod.ko
+COPY --from=source /modules /opt/modules
+RUN for file in /opt/modules/simple-kmod.ko:/modules/simple-procfs-kmod.ko; do \
+      [ -e "${file}" ] && /usr/local/bin/sign-file sha256 /run/secrets/key/key /run/secrets/cert/cert "${file}"; \
+    done
 
 FROM source
-
-COPY --from=signimage /signroot/modules/simple-kmod.ko:/modules/simple-procfs-kmod.ko /modules/simple-kmod.ko:/modules/simple-procfs-kmod.ko
+COPY --from=signimage /opt/modules /modules
 `
 		expected := &buildv1.Build{
 			ObjectMeta: metav1.ObjectMeta{
@@ -546,6 +548,83 @@ COPY --from=signimage /signroot/modules/simple-kmod.ko:/modules/simple-procfs-km
 		Expect(ok).To(BeTrue())
 		Expect(actual.Spec.Output).To(BeZero())
 	})
+
+	DescribeTable("should generate correct Dockerfile for signing",
+		func(filesToSign []string, expectedSubstrings []string, unexpectedSubstrings []string) {
+			GinkgoT().Setenv("RELATED_IMAGE_SIGN", "some-sign-image:some-tag")
+
+			ctx := context.Background()
+			mld.Sign = &kmmv1beta1.Sign{
+				UnsignedImage: unsignedImage,
+				KeySecret:     &v1.LocalObjectReference{Name: "securebootkey"},
+				CertSecret:    &v1.LocalObjectReference{Name: "securebootcert"},
+				FilesToSign:   filesToSign,
+			}
+			mld.ContainerImage = signedImage
+			mld.RegistryTLS = &kmmv1beta1.TLSOptions{}
+
+			gomock.InOrder(
+				clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.KeySecret.Name, Namespace: mld.Namespace}, gomock.Any()).DoAndReturn(
+					func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
+						secret.Data = privateSignData
+						return nil
+					},
+				),
+				clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.CertSecret.Name, Namespace: mld.Namespace}, gomock.Any()).DoAndReturn(
+					func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
+						secret.Data = publicSignData
+						return nil
+					},
+				),
+			)
+
+			actual, err := rm.makeSignTemplate(ctx, &mld, mld.Owner, true)
+			Expect(err).NotTo(HaveOccurred())
+			actualBuild, ok := actual.(*buildv1.Build)
+			Expect(ok).To(BeTrue())
+
+			dockerfile := *actualBuild.Spec.CommonSpec.Source.Dockerfile
+			for _, expected := range expectedSubstrings {
+				Expect(dockerfile).To(ContainSubstring(expected))
+			}
+			for _, unexpected := range unexpectedSubstrings {
+				Expect(dockerfile).NotTo(ContainSubstring(unexpected))
+			}
+		},
+		Entry(
+			"sign explicit paths",
+			[]string{"/modules/test.ko"},
+			[]string{
+				"COPY --from=source /modules /opt/modules",
+				"for file in /opt/modules/test.ko; do",
+				"/usr/local/bin/sign-file sha256",
+				"COPY --from=signimage /opt/modules /modules",
+			},
+			[]string{"source-extract", "find /tmp/source"},
+		),
+		Entry(
+			"sign multiple paths",
+			[]string{"/modules/a.ko", "/modules/b.ko"},
+			[]string{
+				"COPY --from=source /modules /opt/modules",
+				"for file in /opt/modules/a.ko; do",
+				"for file in /opt/modules/b.ko; do",
+				"COPY --from=signimage /opt/modules /modules",
+			},
+			[]string{"source-extract"},
+		),
+		Entry(
+			"sign with glob pattern",
+			[]string{"/modules/*.ko"},
+			[]string{
+				"COPY --from=source /modules /opt/modules",
+				"for file in /opt/modules/*.ko; do",
+				"/usr/local/bin/sign-file sha256",
+				"COPY --from=signimage /opt/modules /modules",
+			},
+			[]string{"source-extract"},
+		),
+	)
 })
 var _ = Describe("resourceLabels", func() {
 
