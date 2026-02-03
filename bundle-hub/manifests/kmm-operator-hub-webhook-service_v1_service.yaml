@@ -16,9 +16,6 @@ spec:
     protocol: TCP
     targetPort: 9443
   selector:
-    app.kubernetes.io/component: kmm-hub
-    app.kubernetes.io/name: kmm-hub
-    app.kubernetes.io/part-of: kmm
     control-plane: webhook-server
 status:
   loadBalancer: {}

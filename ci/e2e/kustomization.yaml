@@ -10,8 +10,10 @@ generatorOptions:
 
 configMapGenerator:
   - name: kmm-kmod-dockerfile
+    namespace: openshift-kmm
     files: [dockerfile=Dockerfile]
 
 secretGenerator:
   - name: build-secret
+    namespace: openshift-kmm
     literals: [ci-build-secret=super-secret-value]

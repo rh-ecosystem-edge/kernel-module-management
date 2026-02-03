@@ -279,8 +279,8 @@ operator-sdk:
 		chmod +x ${OPERATOR_SDK}; \
 	fi
 
-.PHONY: bundle
-bundle: operator-sdk manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
+.PHONY: bundle-old
+bundle-old: operator-sdk manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
 	rm -fr ./bundle
 	${OPERATOR_SDK} generate kustomize manifests --apis-dir api
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG) worker=$(WORKER_IMG)
@@ -295,8 +295,23 @@ bundle: operator-sdk manifests kustomize ## Generate bundle manifests and metada
 
 	${OPERATOR_SDK} bundle validate ./bundle
 
-.PHONY: bundle-hub
-bundle-hub: operator-sdk manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
+.PHONY: bundle
+bundle: operator-sdk manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
+	rm -fr ./bundle
+	${OPERATOR_SDK} generate kustomize manifests --apis-dir api
+	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG) worker=$(WORKER_IMG)
+	cd config/manager-base && $(KUSTOMIZE) edit set image must-gather=$(GATHER_IMG) signer=$(SIGNER_IMG)
+	cd config/webhook-server && $(KUSTOMIZE) edit set image webhook-server=$(WEBHOOK_IMG)
+
+	OPERATOR_SDK="${OPERATOR_SDK}" \
+	BUNDLE_GEN_FLAGS="${BUNDLE_GEN_FLAGS} --extra-service-accounts kmm-operator-module-loader,kmm-operator-device-plugin" \
+	PKG=kernel-module-management \
+	SOURCE_DIR=$(dir $(realpath $(lastword $(MAKEFILE_LIST)))) \
+	INCLUDE_NETWORK_POLICIES=true \
+	./hack/generate-bundle
+
+.PHONY: bundle-hub-old
+bundle-hub-old: operator-sdk manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
 	rm -fr bundle-hub
 
 	${OPERATOR_SDK} generate kustomize manifests \
@@ -317,6 +332,29 @@ bundle-hub: operator-sdk manifests kustomize ## Generate bundle manifests and me
 	./hack/generate-bundle
 
 	${OPERATOR_SDK} bundle validate ./bundle-hub
+
+.PHONY: bundle-hub
+bundle-hub: operator-sdk manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
+	rm -fr bundle-hub
+
+	${OPERATOR_SDK} generate kustomize manifests \
+		--apis-dir api-hub \
+		--output-dir config/manifests-hub \
+		--package kernel-module-management-hub \
+		--input-dir config/manifests-hub
+	cd config/manager-hub && $(KUSTOMIZE) edit set image controller=$(HUB_IMG)
+	cd config/manager-base && $(KUSTOMIZE) edit set image must-gather=$(GATHER_IMG) signer=$(SIGNER_IMG)
+	cd config/webhook-server && $(KUSTOMIZE) edit set image webhook-server=$(WEBHOOK_IMG)
+
+	OPERATOR_SDK="${OPERATOR_SDK}" \
+	BUNDLE_GEN_FLAGS="${BUNDLE_GEN_FLAGS}" \
+	MANIFESTS_DIR=config/manifests-hub \
+	PKG=kernel-module-management-hub \
+	SOURCE_DIR=$(dir $(realpath $(lastword $(MAKEFILE_LIST)))) \
+	SUFFIX="-hub" \
+	INCLUDE_NETWORK_POLICIES=true \
+	./hack/generate-bundle
+
 
 .PHONY: bundle-build-hub
 bundle-build-hub: ## Build the bundle-hub image.

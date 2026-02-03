@@ -17,9 +17,6 @@ spec:
     protocol: TCP
     targetPort: metrics
   selector:
-    app.kubernetes.io/component: kmm-hub
-    app.kubernetes.io/name: kmm-hub
-    app.kubernetes.io/part-of: kmm
     control-plane: controller
 status:
   loadBalancer: {}
