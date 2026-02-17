@@ -96,6 +96,7 @@ rules:
   - kmm.sigs.x-k8s.io
   resources:
   - bootmoduleconfigs
+  - modulebuildsignconfigs
   - preflightvalidations
   - preflightvalidationsocp
   verbs:
@@ -116,17 +117,6 @@ rules:
   verbs:
   - patch
   - update
-- apiGroups:
-  - kmm.sigs.x-k8s.io
-  resources:
-  - modulebuildsignconfigs
-  verbs:
-  - create
-  - get
-  - list
-  - patch
-  - update
-  - watch
 - apiGroups:
   - kmm.sigs.x-k8s.io
   resources:

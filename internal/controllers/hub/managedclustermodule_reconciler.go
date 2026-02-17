@@ -66,7 +66,7 @@ type ManagedClusterModuleReconciler struct {
 //+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=moduleimagesconfigs,verbs=get;list;watch;patch;create;delete
 //+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=moduleimagesconfigs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=moduleimagesconfigs/finalizers,verbs=update
-//+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=modulebuildsignconfigs,verbs=get;list;watch;update;patch;create
+//+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=modulebuildsignconfigs,verbs=get;list;watch;update;patch;create;delete
 //+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=modulebuildsignconfigs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=modulebuildsignconfigs/finalizers,verbs=update
 //+kubebuilder:rbac:groups=work.open-cluster-management.io,resources=manifestworks,verbs=get;list;watch;create;update;patch;delete
