@@ -360,7 +360,7 @@ oc edit module kmm-ci-a
 
 ## Loading soft dependencies
 
-Kernel modules sometimes have dependencies on other modules so these dependencies have to be loaded in advance. If module symbols exist then `modprobe` would load the dependant modules automatically but if there are no symbols and we need to load dependant modules we can set those in our `Module` object definition.
+Kernel modules sometimes have dependencies on other modules so these dependencies have to be loaded in advance. If module symbols exist then `modprobe` would load the dependent modules automatically but if there are no symbols and we need to load dependent modules we can set those in our `Module` object definition.
 
 In the following example `kmm-ci-a` depends on `kmm-ci-b` so we will set `modulesLoadingOrder` and then the list with the `moduleName` as the first entry followed by all of its dependencies. In our case it is just `kmm-ci-b` but it could be a longer list with multiple dependency modules.
 
