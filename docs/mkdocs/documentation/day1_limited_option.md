@@ -13,7 +13,7 @@ The following are the conditions needed by Day 1 functionality:
 1. kernel module is currently not loaded in the kernel
 2. the in-tree kernel module is loaded into the kernel, but can be unloaded and replaced by the OOT kernel module.
    This means that the in-tree module is not referenced by any other kernel modules
-3. in order for the Day 1 functionlity to work, the node must have an functional network interface, meaning: an in-tree kernel driver for that interface.
+3. in order for the Day 1 functionality to work, the node must have a functional network interface, meaning: an in-tree kernel driver for that interface.
    The OOT kernel module can be a network driver that will replace the functional network driver.
 
 ## Day 1 OOT kernel module loading flow
@@ -126,13 +126,13 @@ Defining a MachineConfig that has:
 ```yaml
 metadata:
   labels:
-    machineconfiguration.opensfhit.io/role: master
+    machineconfiguration.openshift.io/role: master
 ```
 will target the master MachineConfigPool, while defining MachineConfig:
 ```yaml
 metadata:
   labels:
-    machineconfiguration.opensfhit.io/role: worker
+    machineconfiguration.openshift.io/role: worker
 ```
 will target the worker MachineConfigPool
 
@@ -147,7 +147,7 @@ with the appropriate tag, without any need to update day1 MC. Once the node is r
 Kmod installed using the day1-utility can be managed by the KMM operator for full lifecycle management.
 
 1. A kmod was installed using the day-utility and a `MachineConfig` is present in the cluster.
-2. One can create a `Module` in the cluster targetting the same kmod and kernel as the `MachineConfig` did.
+2. One can create a `Module` in the cluster targeting the same kmod and kernel as the `MachineConfig` did.
 3. The KMM operator will try to load the kmod - nothing will happen since it is already loaded in the kernel.
 4. From now on, upgrades can be done like day2 operations by updating the `Module` CR in the cluster.
 
