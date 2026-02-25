@@ -6,10 +6,10 @@ POD_NAME=''
 
 wait_for_pod_and_print_logs () {
   # we can't exec a command nor get the logs on a pod that isn't `Running` yet.
-  oc wait "pod/${POD_NAME}" --for jsonpath='{.status.phase}'=Running --timeout=60s
+  oc wait -n openshift-kmm"pod/${POD_NAME}" --for jsonpath='{.status.phase}'=Running --timeout=60s
 
   echo "Print pod ${POD_NAME} logs..."
-  oc logs "pod/${POD_NAME}" -f
+  oc logs -n openshift-kmm "pod/${POD_NAME}" -f
 }
 
 check_module_not_loaded () {
@@ -46,14 +46,14 @@ timeout 1m bash -c 'until oc apply -k ci/e2e; do sleep 3; done'
 # Wait for the build pod to be created. `kubectl wait` doesn't support such option,
 # see https://github.com/kubernetes/kubernetes/issues/83242.
 echo "Waiting for the build pod to be created..."
-timeout 1m bash -c 'until oc get pods -o json | jq -er ".items[].metadata.name | select(.? | match(\"build\"))"; do sleep 1; done'
-POD_NAME=$(oc get pods -o json | jq -r '.items[].metadata.name | select(.? | match("build"))')
+timeout 1m bash -c 'until oc get pods -n openshift-kmm -o json | jq -er ".items[].metadata.name | select(.? | match(\"build\"))"; do sleep 1; done'
+POD_NAME=$(oc get pods -n openshift-kmm -o json | jq -r '.items[].metadata.name | select(.? | match("build"))')
 
 wait_for_pod_and_print_logs
 
 echo "Waiting for the signing pod to be created..."
-timeout 1m bash -c 'until oc get pods -o json | jq -er ".items[].metadata.name | select(.? | match(\"sign\"))"; do sleep 1; done'
-POD_NAME=$(oc get pods -o json | jq -r '.items[].metadata.name | select(.? | match("sign"))')
+timeout 1m bash -c 'until oc get pods -n openshift-kmm -o json | jq -er ".items[].metadata.name | select(.? | match(\"sign\"))"; do sleep 1; done'
+POD_NAME=$(oc get pods -n openshift-kmm -o json | jq -r '.items[].metadata.name | select(.? | match("sign"))')
 
 wait_for_pod_and_print_logs
 
@@ -66,7 +66,7 @@ oc debug "node/${NODE}" -- chroot host/ lsmod | grep kmm_ci_b
 check_module_not_loaded "dummy"
 
 echo "Remove the Module..."
-oc delete modules.kmm.sigs.x-k8s.io/kmm-ci --wait=false
+oc delete modules.kmm.sigs.x-k8s.io/kmm-ci --wait=false -n openshift-kmm
 
 echo "Check that the module gets unloaded from the node..."
 timeout 1m bash -c 'until ! oc debug node/${NODE} -- chroot host/ lsmod | grep kmm_ci_a; do sleep 3; done'
@@ -75,4 +75,4 @@ echo "Check that the dependent module is also unloaded from the node..."
 check_module_not_loaded "kmm_ci_b"
 
 echo "Wait for the Module to be deleted..."
-oc wait --for delete modules.kmm.sigs.x-k8s.io/kmm-ci
+oc wait --for delete modules.kmm.sigs.x-k8s.io/kmm-ci -n openshift-kmm
