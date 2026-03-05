@@ -127,20 +127,6 @@ func (mr *MockmoduleReconcilerHelperAPIMockRecorder) handleNetworkPolicies(ctx, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "handleNetworkPolicies", reflect.TypeOf((*MockmoduleReconcilerHelperAPI)(nil).handleNetworkPolicies), ctx, mod)
 }
 
-// moduleUpdateWorkerPodsStatus mocks base method.
-func (m *MockmoduleReconcilerHelperAPI) moduleUpdateWorkerPodsStatus(ctx context.Context, mod *v1beta1.Module, targetedNodes []v1.Node) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "moduleUpdateWorkerPodsStatus", ctx, mod, targetedNodes)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// moduleUpdateWorkerPodsStatus indicates an expected call of moduleUpdateWorkerPodsStatus.
-func (mr *MockmoduleReconcilerHelperAPIMockRecorder) moduleUpdateWorkerPodsStatus(ctx, mod, targetedNodes any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "moduleUpdateWorkerPodsStatus", reflect.TypeOf((*MockmoduleReconcilerHelperAPI)(nil).moduleUpdateWorkerPodsStatus), ctx, mod, targetedNodes)
-}
-
 // prepareSchedulingData mocks base method.
 func (m *MockmoduleReconcilerHelperAPI) prepareSchedulingData(ctx context.Context, mod *v1beta1.Module, targetedNodes []v1.Node, currentNMCs sets.Set[string]) (map[string]schedulingData, []error) {
 	m.ctrl.T.Helper()
@@ -168,6 +154,20 @@ func (m *MockmoduleReconcilerHelperAPI) setFinalizerAndStatus(ctx context.Contex
 func (mr *MockmoduleReconcilerHelperAPIMockRecorder) setFinalizerAndStatus(ctx, mod any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "setFinalizerAndStatus", reflect.TypeOf((*MockmoduleReconcilerHelperAPI)(nil).setFinalizerAndStatus), ctx, mod)
+}
+
+// updateModuleStatus mocks base method.
+func (m *MockmoduleReconcilerHelperAPI) updateModuleStatus(ctx context.Context, mod *v1beta1.Module, targetedNodes []v1.Node) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "updateModuleStatus", ctx, mod, targetedNodes)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// updateModuleStatus indicates an expected call of updateModuleStatus.
+func (mr *MockmoduleReconcilerHelperAPIMockRecorder) updateModuleStatus(ctx, mod, targetedNodes any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "updateModuleStatus", reflect.TypeOf((*MockmoduleReconcilerHelperAPI)(nil).updateModuleStatus), ctx, mod, targetedNodes)
 }
 
 // MocknamespaceLabeler is a mock of namespaceLabeler interface.
