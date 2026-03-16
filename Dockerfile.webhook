@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM golang:1.23 as builder
+FROM golang:1.25 as builder
 
 # Copy the Go Modules manifests
 COPY go.mod go.mod
@@ -23,7 +23,7 @@ COPY .git .git
 
 # Build
 RUN git config --global --add safe.directory ${PWD}
-RUN make webhook-server
+RUN CGO_ENABLED=0 make webhook-server
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.4
 
