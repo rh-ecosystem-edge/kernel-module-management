@@ -5,25 +5,6 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - build.openshift.io
-  resources:
-  - builds
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - watch
-- apiGroups:
-  - cluster.open-cluster-management.io
-  resources:
-  - managedclusters
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
   - ""
   resources:
   - configmaps
@@ -41,6 +22,25 @@ rules:
   - nodes
   - secrets
   - serviceaccounts
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - build.openshift.io
+  resources:
+  - builds
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
+  - cluster.open-cluster-management.io
+  resources:
+  - managedclusters
   verbs:
   - get
   - list

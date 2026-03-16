@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM golang:1.23 as builder
+FROM golang:1.25 as builder
 
 # Add the vendored dependencies
 COPY vendor vendor
@@ -22,7 +22,7 @@ COPY .git .git
 
 # Build
 RUN git config --global --add safe.directory ${PWD}
-RUN ["make", "worker"]
+RUN CGO_ENABLED=0 make worker
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.4
 
