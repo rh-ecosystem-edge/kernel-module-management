@@ -6,7 +6,7 @@ toolchain go1.25.8
 
 require (
 	github.com/Masterminds/sprig/v3 v3.3.0
-	github.com/a8m/envsubst v1.4.2
+	github.com/a8m/envsubst v1.4.3
 	github.com/budougumi0617/cmpmock v0.1.1
 	github.com/containers/image/v5 v5.35.0
 	github.com/go-logr/logr v1.4.2
