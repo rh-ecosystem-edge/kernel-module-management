@@ -303,6 +303,42 @@ var _ = Describe("makeBuildTemplate", func() {
 			Expect(bct.Spec.CommonSpec.Strategy.DockerStrategy.BuildArgs[0].Value).To(Equal(buildArgs[0].Value))
 		})
 	})
+
+	It("should use the final container image as the build destination even when sign is defined", func() {
+		mld := api.ModuleLoaderData{
+			Name:      moduleName,
+			Namespace: namespace,
+			Owner: &kmmv1beta1.Module{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      moduleName,
+					Namespace: namespace,
+				},
+			},
+			Build: &kmmv1beta1.Build{
+				DockerfileConfigMap: &dockerfileConfigMap,
+			},
+			Sign:                    &kmmv1beta1.Sign{},
+			ContainerImage:          containerImage,
+			KernelVersion:           targetKernel,
+			KernelNormalizedVersion: targetKernel,
+		}
+
+		gomock.InOrder(
+			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: dockerfileConfigMap.Name, Namespace: mld.Namespace}, gomock.Any()).DoAndReturn(
+				func(_ interface{}, _ interface{}, cm *v1.ConfigMap, _ ...ctrlclient.GetOption) error {
+					cm.Data = dockerfileCMData
+					return nil
+				},
+			),
+			mbao.EXPECT().ApplyBuildArgOverrides(gomock.Any(), gomock.Any()),
+		)
+
+		actual, err := rm.makeBuildTemplate(ctx, &mld, mld.Owner, true)
+		Expect(err).NotTo(HaveOccurred())
+		actualBuild, ok := actual.(*buildv1.Build)
+		Expect(ok).To(BeTrue())
+		Expect(actualBuild.Spec.Output.To.Name).To(Equal(containerImage))
+	})
 })
 
 var _ = Describe("makeSignTemplate", func() {
@@ -625,6 +661,42 @@ COPY --from=signimage /opt/modules /modules
 			[]string{"source-extract"},
 		),
 	)
+
+	It("should use the container image as source when build is also defined", func() {
+		GinkgoT().Setenv("RELATED_IMAGE_SIGN", "some-sign-image:some-tag")
+
+		ctx := context.Background()
+		mld.Build = &kmmv1beta1.Build{}
+		mld.Sign = &kmmv1beta1.Sign{
+			KeySecret:   &v1.LocalObjectReference{Name: "securebootkey"},
+			CertSecret:  &v1.LocalObjectReference{Name: "securebootcert"},
+			FilesToSign: []string{"/modules/test.ko"},
+		}
+		mld.ContainerImage = unsignedImage
+		mld.RegistryTLS = &kmmv1beta1.TLSOptions{}
+
+		gomock.InOrder(
+			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.KeySecret.Name, Namespace: mld.Namespace}, gomock.Any()).DoAndReturn(
+				func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
+					secret.Data = privateSignData
+					return nil
+				},
+			),
+			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.CertSecret.Name, Namespace: mld.Namespace}, gomock.Any()).DoAndReturn(
+				func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
+					secret.Data = publicSignData
+					return nil
+				},
+			),
+		)
+
+		actual, err := rm.makeSignTemplate(ctx, &mld, mld.Owner, true)
+		Expect(err).NotTo(HaveOccurred())
+		actualBuild, ok := actual.(*buildv1.Build)
+		Expect(ok).To(BeTrue())
+
+		Expect(*actualBuild.Spec.CommonSpec.Source.Dockerfile).To(ContainSubstring(unsignedImage))
+	})
 })
 var _ = Describe("resourceLabels", func() {
 
