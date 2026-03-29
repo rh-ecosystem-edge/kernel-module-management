@@ -265,19 +265,12 @@ func (rm *resourceManager) getResources(ctx context.Context, namespace string, l
 func (rm *resourceManager) makeBuildTemplate(ctx context.Context, mld *api.ModuleLoaderData, owner metav1.Object,
 	pushImage bool) (metav1.Object, error) {
 
-	// if build AND sign are specified, then we will build an intermediate image
-	// and let sign produce the final image specified in spec.moduleLoader.container.km.containerImage
-	containerImage := mld.ContainerImage
-	if module.ShouldBeSigned(mld) {
-		containerImage = module.IntermediateImageName(mld.Name, mld.Namespace, containerImage)
-	}
-
 	dockerfileData, err := rm.getDockerfileData(ctx, mld.Build, mld.Namespace)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get dockerfile data from configmap: %v", err)
 	}
 
-	buildSpec, err := rm.buildSpec(mld, dockerfileData, containerImage, pushImage)
+	buildSpec, err := rm.buildSpec(mld, dockerfileData, mld.ContainerImage, pushImage)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate Build spec: %v", err)
 	}
@@ -317,13 +310,8 @@ func (rm *resourceManager) makeSignTemplate(ctx context.Context, mld *api.Module
 		DirName:     mld.Modprobe.DirName,
 	}
 
-	imageToSign := ""
 	if module.ShouldBeBuilt(mld) {
-		imageToSign = module.IntermediateImageName(mld.Name, mld.Namespace, mld.ContainerImage)
-	}
-
-	if imageToSign != "" {
-		td.UnsignedImage = imageToSign
+		td.UnsignedImage = mld.ContainerImage
 	} else if signConfig.UnsignedImage != "" {
 		td.UnsignedImage = signConfig.UnsignedImage
 	} else {
