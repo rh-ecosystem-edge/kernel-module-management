@@ -17,7 +17,7 @@ namePrefix: kmm-operator-
 configurations:
 - kustomizeconfig.yaml
 labels:
-- includeSelectors: true
+- includeSelectors: false
   pairs:
     app.kubernetes.io/component: kmm
     app.kubernetes.io/name: kmm
