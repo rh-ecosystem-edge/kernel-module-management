@@ -148,7 +148,7 @@ lint: golangci-lint ## Run golangci-lint against code.
 		gofmt -l $(GOFILES_NO_VENDOR); \
 		exit 1; \
 	fi
-	$(GOLANGCI_LINT) run -v --timeout 10m
+	GOGC=40 $(GOLANGCI_LINT) run -v --timeout 10m
 
 ##@ Build
 
