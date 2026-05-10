@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM golang:1.23 as builder
+FROM golang:1.24 as builder
 
 # Copy the Go Modules manifests
 COPY go.mod go.mod
@@ -25,7 +25,7 @@ ARG TARGET
 
 # Build
 RUN git config --global --add safe.directory ${PWD}
-RUN make ${TARGET}
+RUN CGO_ENABLED=0 make ${TARGET}
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.4
 
