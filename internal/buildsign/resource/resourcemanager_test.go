@@ -54,12 +54,12 @@ var _ = Describe("GetResourceByKernel", func() {
 		Expect(err).To(HaveOccurred())
 	})
 
-	It("should return an error if there are two Builds with the same labels and owner", func() {
+	It("should return error if more than 1 build exists", func() {
 		build1 := buildv1.Build{
-			ObjectMeta: metav1.ObjectMeta{Name: "buildName", Namespace: "moduleNamespace"},
+			ObjectMeta: metav1.ObjectMeta{Name: "buildName1", Namespace: "moduleNamespace"},
 		}
 		build2 := buildv1.Build{
-			ObjectMeta: metav1.ObjectMeta{Name: "buildName", Namespace: "moduleNamespace"},
+			ObjectMeta: metav1.ObjectMeta{Name: "buildName2", Namespace: "moduleNamespace"},
 		}
 
 		err := controllerutil.SetControllerReference(&mod, &build1, scheme)
@@ -71,12 +71,14 @@ var _ = Describe("GetResourceByKernel", func() {
 			EXPECT().
 			List(ctx, &buildv1.BuildList{}, gomock.Any(), gomock.Any()).
 			Do(func(_ context.Context, bcs *buildv1.BuildList, _ ...ctrlclient.ListOption) {
-				bcs.Items = make([]buildv1.Build, 2)
+				bcs.Items = []buildv1.Build{build1, build2}
 			})
 
-		_, err = rm.GetResourceByKernel(ctx, "moduleName", "moduleNamespace", targetKernel, kmmv1beta1.SignImage, &mod)
+		res, err := rm.GetResourceByKernel(ctx, mod.Name, mod.Namespace, "targetKernel", "resourceType", &mod)
 
 		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("expected 0 or 1"))
+		Expect(res).To(BeNil())
 	})
 
 	It("should work as expected", func() {
