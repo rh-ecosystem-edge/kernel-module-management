@@ -118,8 +118,8 @@ var _ = Describe("makeBuildTemplate", func() {
 
 		expected := buildv1.Build{
 			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: moduleName + "-build-",
-				Namespace:    namespace,
+				Name:      mld.Name + "-build-" + mld.KernelNormalizedVersion,
+				Namespace: namespace,
 				OwnerReferences: []metav1.OwnerReference{
 					{
 						APIVersion:         "kmm.sigs.x-k8s.io/v1beta1",
@@ -386,9 +386,9 @@ COPY --from=signimage /opt/modules /modules
 `
 		expected := &buildv1.Build{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace:    namespace,
-				GenerateName: moduleName + "-sign-",
-				Labels:       resourceLabels(moduleName, kernelVersion, kmmv1beta1.SignImage),
+				Name:      mld.Name + "-sign-" + mld.KernelNormalizedVersion,
+				Namespace: namespace,
+				Labels:    resourceLabels(mld.Name, mld.KernelNormalizedVersion, kmmv1beta1.SignImage),
 				OwnerReferences: []metav1.OwnerReference{
 					{
 						APIVersion:         "kmm.sigs.x-k8s.io/v1beta1",
