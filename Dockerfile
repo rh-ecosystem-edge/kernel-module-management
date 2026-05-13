@@ -27,7 +27,7 @@ ARG TARGET
 RUN git config --global --add safe.directory ${PWD}
 RUN CGO_ENABLED=0 make ${TARGET}
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:9.4
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.7
 
 ARG TARGET
 
