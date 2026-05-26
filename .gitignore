@@ -27,3 +27,5 @@ testbin/*
 *.swp
 *.swo
 *~
+
+.artifacts/
