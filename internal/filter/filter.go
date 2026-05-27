@@ -189,6 +189,13 @@ func ModuleReconcilerNodePredicate() predicate.Predicate {
 	)
 }
 
+func DevicePluginReconcilerNodePredicate() predicate.Predicate {
+	return predicate.And(
+		skipDeletions,
+		nodeTaintsChanged,
+	)
+}
+
 func ModuleReconcileBuildPredicate() predicate.Predicate {
 	return predicate.And(
 		skipDeletions,
