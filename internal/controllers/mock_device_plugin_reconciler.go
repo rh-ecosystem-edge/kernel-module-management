@@ -111,6 +111,20 @@ func (mr *MockdevicePluginReconcilerHelperAPIMockRecorder) handleDevicePlugin(ct
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "handleDevicePlugin", reflect.TypeOf((*MockdevicePluginReconcilerHelperAPI)(nil).handleDevicePlugin), ctx, mod, existingDevicePluginDS)
 }
 
+// handleDevicePluginNetworkPolicy mocks base method.
+func (m *MockdevicePluginReconcilerHelperAPI) handleDevicePluginNetworkPolicy(ctx context.Context, mod *v1beta1.Module) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "handleDevicePluginNetworkPolicy", ctx, mod)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// handleDevicePluginNetworkPolicy indicates an expected call of handleDevicePluginNetworkPolicy.
+func (mr *MockdevicePluginReconcilerHelperAPIMockRecorder) handleDevicePluginNetworkPolicy(ctx, mod any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "handleDevicePluginNetworkPolicy", reflect.TypeOf((*MockdevicePluginReconcilerHelperAPI)(nil).handleDevicePluginNetworkPolicy), ctx, mod)
+}
+
 // handleDevicePluginTargetLabels mocks base method.
 func (m *MockdevicePluginReconcilerHelperAPI) handleDevicePluginTargetLabels(ctx context.Context, mod *v1beta1.Module) error {
 	m.ctrl.T.Helper()

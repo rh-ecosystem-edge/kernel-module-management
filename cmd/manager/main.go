@@ -154,6 +154,7 @@ func main() {
 		metricsAPI,
 		filterAPI,
 		nodeAPI,
+		networkPolicyAPI,
 		scheme,
 		operatorNamespace)
 	if err = dpc.SetupWithManager(mgr); err != nil {

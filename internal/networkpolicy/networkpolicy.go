@@ -21,6 +21,7 @@ type NetworkPolicy interface {
 	WorkerPodNetworkPolicy(namespace string) *networkingv1.NetworkPolicy
 	BuildSignPodsNetworkPolicy(namespace string) *networkingv1.NetworkPolicy
 	PullPodNetworkPolicy(namespace string) *networkingv1.NetworkPolicy
+	DevicePluginNetworkPolicy(namespace string) *networkingv1.NetworkPolicy
 }
 
 type networkPolicy struct {
@@ -39,6 +40,7 @@ const (
 	workerPodNetworkPolicyName     = "kmm-worker"
 	buildSignPodsNetworkPolicyName = "kmm-build-and-sign"
 	pullPodNetworkPolicyName       = "kmm-pull"
+	devicePluginNetworkPolicyName  = "kmm-device-plugin"
 	defaultNamespace               = "default"
 )
 
@@ -155,6 +157,26 @@ func (np *networkPolicy) PullPodNetworkPolicy(namespace string) *networkingv1.Ne
 						Key:      pod.PullPodTypeLabelKey,
 						Operator: metav1.LabelSelectorOpExists,
 					},
+				},
+			},
+			PolicyTypes: []networkingv1.PolicyType{
+				networkingv1.PolicyTypeIngress,
+				networkingv1.PolicyTypeEgress,
+			},
+		},
+	}
+}
+
+func (np *networkPolicy) DevicePluginNetworkPolicy(namespace string) *networkingv1.NetworkPolicy {
+	return &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      devicePluginNetworkPolicyName,
+			Namespace: normalizeNamespace(namespace),
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app.kubernetes.io/component": "device-plugin",
 				},
 			},
 			PolicyTypes: []networkingv1.PolicyType{
