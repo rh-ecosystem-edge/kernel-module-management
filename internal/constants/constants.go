@@ -9,7 +9,6 @@ const (
 	TargetKernelTarget     = "kmm.node.kubernetes.io/target-kernel"
 	ResourceType           = "kmm.openshift.io/build.type"
 	ResourceHashAnnotation = "kmm.node.kubernetes.io/last-hash"
-	KernelLabel            = "kmm.node.kubernetes.io/kernel-version.full"
 	NamespaceLabelKey      = "kmm.node.k8s.io/contains-modules"
 
 	WorkerPodVersionLabelPrefix    = "beta.kmm.node.kubernetes.io/version-worker-pod"
@@ -26,6 +25,10 @@ const (
 	DockerfileCMKey                = "dockerfile"
 	PublicSignDataKey              = "cert"
 	PrivateSignDataKey             = "key"
+
+	DaemonSetRole              = "kmm.node.kubernetes.io/role"
+	DevicePluginRoleLabelValue = "device-plugin"
+	DRARoleLabelValue          = "dra"
 
 	OperatorNamespaceEnvVar = "OPERATOR_NAMESPACE"
 )
