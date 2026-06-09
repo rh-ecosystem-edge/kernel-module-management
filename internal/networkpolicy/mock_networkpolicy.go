@@ -68,6 +68,20 @@ func (mr *MockNetworkPolicyMockRecorder) CreateOrAddOwnerReference(ctx, np, owne
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrAddOwnerReference", reflect.TypeOf((*MockNetworkPolicy)(nil).CreateOrAddOwnerReference), ctx, np, owner)
 }
 
+// DevicePluginNetworkPolicy mocks base method.
+func (m *MockNetworkPolicy) DevicePluginNetworkPolicy(namespace string) *v1.NetworkPolicy {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DevicePluginNetworkPolicy", namespace)
+	ret0, _ := ret[0].(*v1.NetworkPolicy)
+	return ret0
+}
+
+// DevicePluginNetworkPolicy indicates an expected call of DevicePluginNetworkPolicy.
+func (mr *MockNetworkPolicyMockRecorder) DevicePluginNetworkPolicy(namespace any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DevicePluginNetworkPolicy", reflect.TypeOf((*MockNetworkPolicy)(nil).DevicePluginNetworkPolicy), namespace)
+}
+
 // PullPodNetworkPolicy mocks base method.
 func (m *MockNetworkPolicy) PullPodNetworkPolicy(namespace string) *v1.NetworkPolicy {
 	m.ctrl.T.Helper()

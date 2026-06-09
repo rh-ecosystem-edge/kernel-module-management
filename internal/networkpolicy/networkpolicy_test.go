@@ -227,6 +227,31 @@ var _ = Describe("NetworkPolicy", func() {
 		})
 	})
 
+	Describe("DevicePluginNetworkPolicy", func() {
+		It("should return correct NetworkPolicy for device plugin pods", func() {
+			result := np.DevicePluginNetworkPolicy(testNamespace)
+
+			Expect(result).NotTo(BeNil())
+			Expect(result.Name).To(Equal(devicePluginNetworkPolicyName))
+			Expect(result.Namespace).To(Equal(testNamespace))
+
+			Expect(result.Spec.PodSelector.MatchLabels).To(HaveKeyWithValue("app.kubernetes.io/component", "device-plugin"))
+
+			Expect(result.Spec.PolicyTypes).To(ContainElements(
+				networkingv1.PolicyTypeIngress,
+				networkingv1.PolicyTypeEgress,
+			))
+
+			Expect(result.Spec.Ingress).To(BeEmpty())
+			Expect(result.Spec.Egress).To(BeEmpty())
+		})
+
+		It("should use default namespace when empty namespace is provided", func() {
+			result := np.DevicePluginNetworkPolicy("")
+			Expect(result.Namespace).To(Equal("default"))
+		})
+	})
+
 	Describe("ensureOwnerReference", func() {
 		var policy *networkingv1.NetworkPolicy
 

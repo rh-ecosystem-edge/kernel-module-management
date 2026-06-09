@@ -26,6 +26,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/networkpolicy"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	appsv1 "k8s.io/api/apps/v1"
@@ -60,10 +61,11 @@ func NewDevicePluginReconciler(
 	metricsAPI metrics.Metrics,
 	filter *filter.Filter,
 	nodeAPI node.Node,
+	networkPolicyAPI networkpolicy.NetworkPolicy,
 	scheme *runtime.Scheme,
 	operatorNamespace string,
 ) *DevicePluginReconciler {
-	reconHelperAPI := newDevicePluginReconcilerHelper(client, metricsAPI, nodeAPI, scheme, operatorNamespace)
+	reconHelperAPI := newDevicePluginReconcilerHelper(client, metricsAPI, nodeAPI, networkPolicyAPI, scheme, operatorNamespace)
 	return &DevicePluginReconciler{
 		client:         client,
 		reconHelperAPI: reconHelperAPI,
@@ -103,6 +105,10 @@ func (r *DevicePluginReconciler) Reconcile(ctx context.Context, mod *kmmv1beta1.
 		}
 		err = r.reconHelperAPI.deleteDevicePluginDaemonSets(ctx, existingDevicePluginDS)
 		return ctrl.Result{}, err
+	}
+
+	if err = r.reconHelperAPI.handleDevicePluginNetworkPolicy(ctx, mod); err != nil {
+		return res, fmt.Errorf("failed to handle device plugin NetworkPolicy: %v", err)
 	}
 
 	r.reconHelperAPI.setKMMOMetrics(ctx)
@@ -147,6 +153,7 @@ type devicePluginReconcilerHelperAPI interface {
 	setKMMOMetrics(ctx context.Context)
 	handleDevicePlugin(ctx context.Context, mod *kmmv1beta1.Module, existingDevicePluginDS []appsv1.DaemonSet) error
 	handleDevicePluginTargetLabels(ctx context.Context, mod *kmmv1beta1.Module) error
+	handleDevicePluginNetworkPolicy(ctx context.Context, mod *kmmv1beta1.Module) error
 	removeDevicePluginTargetLabels(ctx context.Context, mod *kmmv1beta1.Module) error
 	garbageCollect(ctx context.Context, mod *kmmv1beta1.Module, existingDS []appsv1.DaemonSet) error
 	deleteDevicePluginDaemonSets(ctx context.Context, existingDevicePluginDS []appsv1.DaemonSet) error
@@ -156,23 +163,26 @@ type devicePluginReconcilerHelperAPI interface {
 }
 
 type devicePluginReconcilerHelper struct {
-	client          client.Client
-	metricsAPI      metrics.Metrics
-	daemonSetHelper daemonSetCreator
-	nodeAPI         node.Node
+	client           client.Client
+	metricsAPI       metrics.Metrics
+	daemonSetHelper  daemonSetCreator
+	networkPolicyAPI networkpolicy.NetworkPolicy
+	nodeAPI          node.Node
 }
 
 func newDevicePluginReconcilerHelper(client client.Client,
 	metricsAPI metrics.Metrics,
 	nodeAPI node.Node,
+	networkPolicyAPI networkpolicy.NetworkPolicy,
 	scheme *runtime.Scheme,
 	operatorNamespace string) devicePluginReconcilerHelperAPI {
 	daemonSetHelper := newDaemonSetCreator(scheme, operatorNamespace)
 	return &devicePluginReconcilerHelper{
-		client:          client,
-		metricsAPI:      metricsAPI,
-		daemonSetHelper: daemonSetHelper,
-		nodeAPI:         nodeAPI,
+		client:           client,
+		metricsAPI:       metricsAPI,
+		daemonSetHelper:  daemonSetHelper,
+		networkPolicyAPI: networkPolicyAPI,
+		nodeAPI:          nodeAPI,
 	}
 }
 
@@ -253,6 +263,23 @@ func (dprh *devicePluginReconcilerHelper) handleDevicePluginTargetLabels(ctx con
 	}
 
 	return errors.Join(errs...)
+}
+
+func (dprh *devicePluginReconcilerHelper) handleDevicePluginNetworkPolicy(ctx context.Context, mod *kmmv1beta1.Module) error {
+	if mod.Spec.DevicePlugin == nil {
+		return nil
+	}
+
+	logger := log.FromContext(ctx)
+	logger.Info("Handling DevicePlugin NetworkPolicy", "module", mod.Name, "namespace", mod.Namespace)
+
+	devicePluginPolicy := dprh.networkPolicyAPI.DevicePluginNetworkPolicy(mod.Namespace)
+	if err := dprh.networkPolicyAPI.CreateOrAddOwnerReference(ctx, devicePluginPolicy, mod); err != nil {
+		return fmt.Errorf("failed to ensure DevicePlugin NetworkPolicy %s/%s: %v", devicePluginPolicy.Namespace, devicePluginPolicy.Name, err)
+	}
+
+	logger.Info("Successfully handled DevicePlugin NetworkPolicy")
+	return nil
 }
 
 func (dprh *devicePluginReconcilerHelper) removeDevicePluginTargetLabels(ctx context.Context, mod *kmmv1beta1.Module) error {
@@ -444,6 +471,14 @@ func (dsci *daemonSetCreatorImpl) setDevicePluginAsDesired(
 
 	standardLabels, nodeSelector := generateDevicePluginLabelsAndSelector(mod)
 
+	podTemplateLabels := make(map[string]string, len(standardLabels)+3)
+	for k, v := range standardLabels {
+		podTemplateLabels[k] = v
+	}
+	podTemplateLabels["app.kubernetes.io/name"] = "kmm"
+	podTemplateLabels["app.kubernetes.io/component"] = "device-plugin"
+	podTemplateLabels["app.kubernetes.io/part-of"] = "kmm"
+
 	ds.SetLabels(
 		overrideLabels(ds.GetLabels(), standardLabels),
 	)
@@ -461,7 +496,7 @@ func (dsci *daemonSetCreatorImpl) setDevicePluginAsDesired(
 		Selector: &metav1.LabelSelector{MatchLabels: standardLabels},
 		Template: v1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{
-				Labels:     standardLabels,
+				Labels:     podTemplateLabels,
 				Finalizers: []string{constants.NodeLabelerFinalizer},
 			},
 			Spec: v1.PodSpec{

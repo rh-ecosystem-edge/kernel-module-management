@@ -13,11 +13,13 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/networkpolicy"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	"go.uber.org/mock/gomock"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -53,7 +55,7 @@ var _ = Describe("DevicePluginReconciler_Reconcile", func() {
 
 	ctx := context.Background()
 
-	DescribeTable("check error flows", func(getDSError, handleTargetLabelsError, handlePluginError, gcError bool) {
+	DescribeTable("check error flows", func(getDSError, handleNetworkPolicyError, handleTargetLabelsError, handlePluginError, gcError bool) {
 		devicePluginDS := []appsv1.DaemonSet{appsv1.DaemonSet{}}
 		returnedError := fmt.Errorf("some error")
 		if getDSError {
@@ -61,6 +63,11 @@ var _ = Describe("DevicePluginReconciler_Reconcile", func() {
 			goto executeTestFunction
 		}
 		mockReconHelper.EXPECT().getModuleDevicePluginDaemonSets(ctx, mod.Name, mod.Namespace).Return(devicePluginDS, nil)
+		if handleNetworkPolicyError {
+			mockReconHelper.EXPECT().handleDevicePluginNetworkPolicy(ctx, mod).Return(returnedError)
+			goto executeTestFunction
+		}
+		mockReconHelper.EXPECT().handleDevicePluginNetworkPolicy(ctx, mod).Return(nil)
 		mockReconHelper.EXPECT().setKMMOMetrics(ctx)
 		if handleTargetLabelsError {
 			mockReconHelper.EXPECT().handleDevicePluginTargetLabels(ctx, mod).Return(returnedError)
@@ -86,17 +93,19 @@ var _ = Describe("DevicePluginReconciler_Reconcile", func() {
 		Expect(err).To(HaveOccurred())
 
 	},
-		Entry("getDevicePluginDaemonSets failed", true, false, false, false),
-		Entry("handleDevicePluginTargetLabels failed", false, true, false, false),
-		Entry("handleDevicePlugin failed", false, false, true, false),
-		Entry("garbageCollect failed", false, false, false, true),
-		Entry("devicePluginUpdateStatus failed", false, false, false, false),
+		Entry("getDevicePluginDaemonSets failed", true, false, false, false, false),
+		Entry("handleDevicePluginNetworkPolicy failed", false, true, false, false, false),
+		Entry("handleDevicePluginTargetLabels failed", false, false, true, false, false),
+		Entry("handleDevicePlugin failed", false, false, false, true, false),
+		Entry("garbageCollect failed", false, false, false, false, true),
+		Entry("devicePluginUpdateStatus failed", false, false, false, false, false),
 	)
 
 	It("Good flow", func() {
 		devicePluginDS := []appsv1.DaemonSet{appsv1.DaemonSet{}}
 		gomock.InOrder(
 			mockReconHelper.EXPECT().getModuleDevicePluginDaemonSets(ctx, mod.Name, mod.Namespace).Return(devicePluginDS, nil),
+			mockReconHelper.EXPECT().handleDevicePluginNetworkPolicy(ctx, mod).Return(nil),
 			mockReconHelper.EXPECT().setKMMOMetrics(ctx),
 			mockReconHelper.EXPECT().handleDevicePluginTargetLabels(ctx, mod).Return(nil),
 			mockReconHelper.EXPECT().handleDevicePlugin(ctx, mod, devicePluginDS).Return(nil),
@@ -151,6 +160,7 @@ var _ = Describe("DevicePluginReconciler_Reconcile", func() {
 		mod.Spec.DevicePlugin = nil
 		gomock.InOrder(
 			mockReconHelper.EXPECT().getModuleDevicePluginDaemonSets(ctx, mod.Name, mod.Namespace).Return(nil, nil),
+			mockReconHelper.EXPECT().handleDevicePluginNetworkPolicy(ctx, mod).Return(nil),
 			mockReconHelper.EXPECT().setKMMOMetrics(ctx),
 			mockReconHelper.EXPECT().clearDevicePluginStatus(ctx, mod).Return(nil),
 		)
@@ -167,6 +177,7 @@ var _ = Describe("DevicePluginReconciler_Reconcile", func() {
 
 		gomock.InOrder(
 			mockReconHelper.EXPECT().getModuleDevicePluginDaemonSets(ctx, mod.Name, mod.Namespace).Return(devicePluginDS, nil),
+			mockReconHelper.EXPECT().handleDevicePluginNetworkPolicy(ctx, mod).Return(nil),
 			mockReconHelper.EXPECT().setKMMOMetrics(ctx),
 			mockReconHelper.EXPECT().deleteDevicePluginDaemonSets(ctx, devicePluginDS).Return(nil),
 			mockReconHelper.EXPECT().clearDevicePluginStatus(ctx, mod).Return(nil),
@@ -183,6 +194,7 @@ var _ = Describe("DevicePluginReconciler_Reconcile", func() {
 
 		gomock.InOrder(
 			mockReconHelper.EXPECT().getModuleDevicePluginDaemonSets(ctx, mod.Name, mod.Namespace).Return(nil, nil),
+			mockReconHelper.EXPECT().handleDevicePluginNetworkPolicy(ctx, mod).Return(nil),
 			mockReconHelper.EXPECT().setKMMOMetrics(ctx),
 			mockReconHelper.EXPECT().clearDevicePluginStatus(ctx, mod).Return(fmt.Errorf("some error")),
 		)
@@ -300,7 +312,7 @@ var _ = Describe("DevicePluginReconciler_garbageCollect", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
 		mn = node.NewMockNode(ctrl)
-		dprh = newDevicePluginReconcilerHelper(clnt, nil, mn, nil, "")
+		dprh = newDevicePluginReconcilerHelper(clnt, nil, mn, networkpolicy.NewMockNetworkPolicy(ctrl), nil, "")
 	})
 
 	mod := &kmmv1beta1.Module{
@@ -398,7 +410,7 @@ var _ = Describe("DevicePluginReconciler_deleteDevicePluginDaemonSets", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
 		mn = node.NewMockNode(ctrl)
-		dprh = newDevicePluginReconcilerHelper(clnt, nil, mn, nil, "")
+		dprh = newDevicePluginReconcilerHelper(clnt, nil, mn, networkpolicy.NewMockNetworkPolicy(ctrl), nil, "")
 	})
 
 	existingDevicePluginDS := []appsv1.DaemonSet{appsv1.DaemonSet{}}
@@ -433,7 +445,7 @@ var _ = Describe("DevicePluginReconciler_setKMMOMetrics", func() {
 		clnt = client.NewMockClient(ctrl)
 		mockMetrics = metrics.NewMockMetrics(ctrl)
 		mn = node.NewMockNode(ctrl)
-		dprh = newDevicePluginReconcilerHelper(clnt, mockMetrics, mn, nil, "")
+		dprh = newDevicePluginReconcilerHelper(clnt, mockMetrics, mn, networkpolicy.NewMockNetworkPolicy(ctrl), nil, "")
 	})
 
 	ctx := context.Background()
@@ -544,7 +556,7 @@ var _ = Describe("DevicePluginReconciler_moduleUpdateDevicePluginStatus", func()
 		clnt = client.NewMockClient(ctrl)
 		statusWriter = client.NewMockStatusWriter(ctrl)
 		mn = node.NewNode(clnt)
-		dprh = newDevicePluginReconcilerHelper(clnt, nil, mn, nil, "")
+		dprh = newDevicePluginReconcilerHelper(clnt, nil, mn, networkpolicy.NewMockNetworkPolicy(ctrl), nil, "")
 	})
 
 	ctx := context.Background()
@@ -873,6 +885,13 @@ var _ = Describe("DevicePluginReconciler_setDevicePluginAsDesired", func() {
 				constants.ModuleNameLabel: moduleName,
 				constants.DaemonSetRole:   constants.DevicePluginRoleLabelValue,
 			}
+			podTemplateLabels := map[string]string{
+				constants.ModuleNameLabel:     moduleName,
+				constants.DaemonSetRole:       constants.DevicePluginRoleLabelValue,
+				"app.kubernetes.io/name":      "kmm",
+				"app.kubernetes.io/component": "device-plugin",
+				"app.kubernetes.io/part-of":   "kmm",
+			}
 
 			expectedInitContainer := []v1.Container{
 				{
@@ -915,7 +934,7 @@ var _ = Describe("DevicePluginReconciler_setDevicePluginAsDesired", func() {
 					Selector: &metav1.LabelSelector{MatchLabels: podLabels},
 					Template: v1.PodTemplateSpec{
 						ObjectMeta: metav1.ObjectMeta{
-							Labels:     podLabels,
+							Labels:     podTemplateLabels,
 							Finalizers: []string{constants.NodeLabelerFinalizer},
 						},
 						Spec: v1.PodSpec{
@@ -1174,6 +1193,56 @@ var _ = Describe("devicePluginReconcilerHelper_handleDevicePluginTargetLabels", 
 		Expect(err.Error()).NotTo(ContainSubstring("node2"))
 	})
 })
+var _ = Describe("devicePluginReconcilerHelper_handleDevicePluginNetworkPolicy", func() {
+	var (
+		ctrl   *gomock.Controller
+		mockNP *networkpolicy.MockNetworkPolicy
+		dprh   devicePluginReconcilerHelper
+		ctx    context.Context
+		mod    *kmmv1beta1.Module
+	)
+
+	BeforeEach(func() {
+		ctrl = gomock.NewController(GinkgoT())
+		mockNP = networkpolicy.NewMockNetworkPolicy(ctrl)
+		ctx = context.Background()
+		dprh = devicePluginReconcilerHelper{
+			networkPolicyAPI: mockNP,
+		}
+		mod = &kmmv1beta1.Module{
+			ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: moduleName},
+			Spec: kmmv1beta1.ModuleSpec{
+				DevicePlugin: &kmmv1beta1.DevicePluginSpec{},
+			},
+		}
+	})
+
+	It("should return nil when DevicePlugin is nil", func() {
+		mod.Spec.DevicePlugin = nil
+		err := dprh.handleDevicePluginNetworkPolicy(ctx, mod)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should create the device plugin NetworkPolicy", func() {
+		policy := &networkingv1.NetworkPolicy{}
+		mockNP.EXPECT().DevicePluginNetworkPolicy(mod.Namespace).Return(policy)
+		mockNP.EXPECT().CreateOrAddOwnerReference(ctx, policy, mod).Return(nil)
+
+		err := dprh.handleDevicePluginNetworkPolicy(ctx, mod)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should return error if CreateOrAddOwnerReference fails", func() {
+		policy := &networkingv1.NetworkPolicy{}
+		mockNP.EXPECT().DevicePluginNetworkPolicy(mod.Namespace).Return(policy)
+		mockNP.EXPECT().CreateOrAddOwnerReference(ctx, policy, mod).Return(fmt.Errorf("some error"))
+
+		err := dprh.handleDevicePluginNetworkPolicy(ctx, mod)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to ensure DevicePlugin NetworkPolicy"))
+	})
+})
+
 var _ = Describe("DevicePluginSpec backward compatibility", func() {
 	It("should serialize JSON with the same field names as before the type refactoring", func() {
 		spec := kmmv1beta1.DevicePluginSpec{
