@@ -101,11 +101,20 @@ func (r *DevicePluginReconciler) Reconcile(ctx context.Context, mod *kmmv1beta1.
 		if err = r.reconHelperAPI.removeDevicePluginTargetLabels(ctx, mod); err != nil {
 			return ctrl.Result{}, fmt.Errorf("could not remove device-plugin-target labels on deletion: %v", err)
 		}
-		err = r.reconHelperAPI.handleModuleDeletion(ctx, existingDevicePluginDS)
+		err = r.reconHelperAPI.deleteDevicePluginDaemonSets(ctx, existingDevicePluginDS)
 		return ctrl.Result{}, err
 	}
 
 	r.reconHelperAPI.setKMMOMetrics(ctx)
+
+	if mod.Spec.DevicePlugin == nil {
+		if len(existingDevicePluginDS) > 0 {
+			if err = r.reconHelperAPI.deleteDevicePluginDaemonSets(ctx, existingDevicePluginDS); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+		return ctrl.Result{}, r.reconHelperAPI.clearDevicePluginStatus(ctx, mod)
+	}
 
 	if err = r.reconHelperAPI.handleDevicePluginTargetLabels(ctx, mod); err != nil {
 		return res, fmt.Errorf("could not reconcile device-plugin-target labels: %v", err)
@@ -132,7 +141,7 @@ func (r *DevicePluginReconciler) Reconcile(ctx context.Context, mod *kmmv1beta1.
 	return res, nil
 }
 
-//go:generate mockgen -source=device_plugin_reconciler.go -package=controllers -destination=mock_device_plugin_reconciler.go devicePluginReconcilerHelperAPI
+//go:generate mockgen -source=device_plugin_reconciler.go -package=controllers -destination=mock_device_plugin_reconciler.go devicePluginReconcilerHelperAPI,daemonSetCreator
 
 type devicePluginReconcilerHelperAPI interface {
 	setKMMOMetrics(ctx context.Context)
@@ -140,8 +149,9 @@ type devicePluginReconcilerHelperAPI interface {
 	handleDevicePluginTargetLabels(ctx context.Context, mod *kmmv1beta1.Module) error
 	removeDevicePluginTargetLabels(ctx context.Context, mod *kmmv1beta1.Module) error
 	garbageCollect(ctx context.Context, mod *kmmv1beta1.Module, existingDS []appsv1.DaemonSet) error
-	handleModuleDeletion(ctx context.Context, existingDevicePluginDS []appsv1.DaemonSet) error
+	deleteDevicePluginDaemonSets(ctx context.Context, existingDevicePluginDS []appsv1.DaemonSet) error
 	moduleUpdateDevicePluginStatus(ctx context.Context, mod *kmmv1beta1.Module, existingDevicePluginDS []appsv1.DaemonSet) error
+	clearDevicePluginStatus(ctx context.Context, mod *kmmv1beta1.Module) error
 	getModuleDevicePluginDaemonSets(ctx context.Context, name, namespace string) ([]appsv1.DaemonSet, error)
 }
 
@@ -177,11 +187,12 @@ func (dprh *devicePluginReconcilerHelper) getModuleDevicePluginDaemonSets(ctx co
 	}
 
 	devicePluginsList := make([]appsv1.DaemonSet, 0, len(dsList.Items))
-	// remove the older version module loader daemonsets
 	for _, ds := range dsList.Items {
-		if _, ok := ds.GetLabels()[constants.KernelLabel]; !ok {
-			devicePluginsList = append(devicePluginsList, ds)
+		role := ds.GetLabels()[constants.DaemonSetRole]
+		if role == constants.DRARoleLabelValue {
+			continue
 		}
+		devicePluginsList = append(devicePluginsList, ds)
 	}
 
 	return devicePluginsList, nil
@@ -287,7 +298,7 @@ func (dprh *devicePluginReconcilerHelper) garbageCollect(ctx context.Context,
 	return nil
 }
 
-func (dprh *devicePluginReconcilerHelper) handleModuleDeletion(ctx context.Context, existingDevicePluginDS []appsv1.DaemonSet) error {
+func (dprh *devicePluginReconcilerHelper) deleteDevicePluginDaemonSets(ctx context.Context, existingDevicePluginDS []appsv1.DaemonSet) error {
 	// delete all the Device Plugin Daemonset, in order to allow worker pods to delete kernel modules
 	for _, ds := range existingDevicePluginDS {
 		err := dprh.client.Delete(ctx, &ds)
@@ -370,7 +381,18 @@ func (dprh *devicePluginReconcilerHelper) moduleUpdateDevicePluginStatus(ctx con
 	return dprh.client.Status().Patch(ctx, mod, client.MergeFrom(unmodifiedMod))
 }
 
-//go:generate mockgen -source=device_plugin_reconciler.go -package=controllers -destination=mock_device_plugin_reconciler.go daemonSetCreator
+func (dprh *devicePluginReconcilerHelper) clearDevicePluginStatus(ctx context.Context, mod *kmmv1beta1.Module) error {
+	emptyStatus := kmmv1beta1.DaemonSetStatus{}
+	if mod.Status.DevicePlugin == emptyStatus {
+		return nil
+	}
+
+	unmodifiedMod := mod.DeepCopy()
+
+	mod.Status.DevicePlugin = kmmv1beta1.DaemonSetStatus{}
+
+	return dprh.client.Status().Patch(ctx, mod, client.MergeFrom(unmodifiedMod))
+}
 
 type daemonSetCreator interface {
 	setDevicePluginAsDesired(ctx context.Context, ds *appsv1.DaemonSet, mod *kmmv1beta1.Module) error
@@ -479,7 +501,10 @@ func generatePodContainerSpec(containerSpec *kmmv1beta1.DevicePluginContainerSpe
 }
 
 func generateDevicePluginLabelsAndSelector(mod *kmmv1beta1.Module) (map[string]string, map[string]string) {
-	labels := map[string]string{constants.ModuleNameLabel: mod.Name}
+	labels := map[string]string{
+		constants.ModuleNameLabel: mod.Name,
+		constants.DaemonSetRole:   constants.DevicePluginRoleLabelValue,
+	}
 	nodeSelector := map[string]string{
 		utils.GetKernelModuleReadyNodeLabel(mod.Namespace, mod.Name):  "",
 		utils.GetDevicePluginTargetNodeLabel(mod.Namespace, mod.Name): "",
