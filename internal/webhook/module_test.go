@@ -53,7 +53,7 @@ var (
 		},
 	}
 
-	moduleWebhook = NewModuleValidator(GinkgoLogr)
+	moduleWebhook = NewModuleValidator(GinkgoLogr, &OCPVersion{Major: 4, Minor: 21})
 )
 
 var _ = Describe("maxCombinedLength", func() {
@@ -411,7 +411,7 @@ var _ = Describe("validateModule", func() {
 			mod.Name = name
 			mod.Namespace = ns
 
-			_, err := validateModule(&mod)
+			_, err := validateModule(&mod, &OCPVersion{Major: 4, Minor: 21})
 			exp := Expect(err)
 
 			if errExpected {
@@ -426,7 +426,7 @@ var _ = Describe("validateModule", func() {
 	It("should pass when moduleLoader is not defined", func() {
 		mod := validModule
 		mod.Spec.ModuleLoader = nil
-		_, err := validateModule(&mod)
+		_, err := validateModule(&mod, &OCPVersion{Major: 4, Minor: 21})
 		Expect(err).NotTo(HaveOccurred())
 	})
 })
@@ -696,5 +696,135 @@ var _ = Describe("validateTolerations", func() {
 
 		err := validateTolerations(tolerations)
 		Expect(err).To(Not(HaveOccurred()))
+	})
+})
+
+var _ = Describe("parseOCPVersion", func() {
+	DescribeTable(
+		"should parse valid version strings",
+		func(version string, expectedMajor, expectedMinor int) {
+			ov, err := parseOCPVersion(version)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ov.Major).To(Equal(expectedMajor))
+			Expect(ov.Minor).To(Equal(expectedMinor))
+		},
+		Entry("standard version", "4.21.0", 4, 21),
+		Entry("release candidate", "4.21.0-rc.1", 4, 21),
+		Entry("older minor", "4.20.3", 4, 20),
+		Entry("newer minor", "4.22.1", 4, 22),
+		Entry("with v prefix", "v4.21.0", 4, 21),
+		Entry("hypothetical OCP 5.0", "5.0.0", 5, 0),
+	)
+
+	DescribeTable(
+		"should return error for invalid strings",
+		func(version string) {
+			_, err := parseOCPVersion(version)
+			Expect(err).To(HaveOccurred())
+		},
+		Entry("empty string", ""),
+		Entry("garbage", "invalid"),
+		Entry("no minor", "v4"),
+	)
+})
+
+var _ = Describe("validateDRA", func() {
+	validDRASpec := func() *kmmv1beta1.DRASpec {
+		return &kmmv1beta1.DRASpec{
+			DriverName: "example.com",
+			Container: kmmv1beta1.CommonContainerSpec{
+				Image: "driver:latest",
+			},
+		}
+	}
+
+	minValidOCPVersion := &OCPVersion{Major: 4, Minor: 21}
+
+	It("should be a no-op when spec.dra is nil", func() {
+		mod := &kmmv1beta1.Module{}
+		Expect(validateDRA(mod, minValidOCPVersion)).NotTo(HaveOccurred())
+	})
+
+	DescribeTable(
+		"OpenShift version gate",
+		func(ov *OCPVersion, shouldFail bool) {
+			mod := &kmmv1beta1.Module{
+				Spec: kmmv1beta1.ModuleSpec{
+					DRA: validDRASpec(),
+				},
+			}
+			err := validateDRA(mod, ov)
+			if shouldFail {
+				Expect(err).To(MatchError(ContainSubstring("requires OpenShift")))
+			} else {
+				Expect(err).NotTo(HaveOccurred())
+			}
+		},
+		Entry("OCP 4.20 rejects", &OCPVersion{Major: 4, Minor: 20}, true),
+		Entry("OCP 4.21 accepts", &OCPVersion{Major: 4, Minor: 21}, false),
+		Entry("OCP 4.22 accepts", &OCPVersion{Major: 4, Minor: 22}, false),
+		Entry("OCP 5.0 accepts (future major)", &OCPVersion{Major: 5, Minor: 0}, false),
+		Entry("OCP 3.11 rejects (old major)", &OCPVersion{Major: 3, Minor: 11}, true),
+		Entry("nil version skips gate (hub webhook)", nil, false),
+	)
+
+	It("should reject empty driverName", func() {
+		dra := validDRASpec()
+		dra.DriverName = ""
+		mod := &kmmv1beta1.Module{
+			Spec: kmmv1beta1.ModuleSpec{DRA: dra},
+		}
+		Expect(validateDRA(mod, minValidOCPVersion)).To(MatchError(ContainSubstring("driverName is required")))
+	})
+
+	It("should reject invalid driverName", func() {
+		dra := validDRASpec()
+		dra.DriverName = "INVALID_NAME!"
+		mod := &kmmv1beta1.Module{
+			Spec: kmmv1beta1.ModuleSpec{DRA: dra},
+		}
+		Expect(validateDRA(mod, minValidOCPVersion)).To(MatchError(ContainSubstring("not a valid DNS subdomain")))
+	})
+
+	It("should accept valid driverName", func() {
+		mod := &kmmv1beta1.Module{
+			Spec: kmmv1beta1.ModuleSpec{DRA: validDRASpec()},
+		}
+		Expect(validateDRA(mod, minValidOCPVersion)).NotTo(HaveOccurred())
+	})
+
+	It("should reject duplicate deviceClasses names", func() {
+		dra := validDRASpec()
+		dra.DeviceClasses = []kmmv1beta1.DeviceClassSpec{
+			{Name: "gpu"},
+			{Name: "gpu"},
+		}
+		mod := &kmmv1beta1.Module{
+			Spec: kmmv1beta1.ModuleSpec{DRA: dra},
+		}
+		Expect(validateDRA(mod, minValidOCPVersion)).To(MatchError(ContainSubstring("duplicate")))
+	})
+
+	It("should reject invalid deviceClasses name", func() {
+		dra := validDRASpec()
+		dra.DeviceClasses = []kmmv1beta1.DeviceClassSpec{
+			{Name: "INVALID!"},
+		}
+		mod := &kmmv1beta1.Module{
+			Spec: kmmv1beta1.ModuleSpec{DRA: dra},
+		}
+		Expect(validateDRA(mod, minValidOCPVersion)).To(MatchError(ContainSubstring("not a valid DNS subdomain")))
+	})
+
+	It("should accept valid deviceClasses", func() {
+		dra := validDRASpec()
+		dra.DeviceClasses = []kmmv1beta1.DeviceClassSpec{
+			{Name: "gpu"},
+			{Name: "fpga"},
+		}
+		mod := &kmmv1beta1.Module{
+			Spec: kmmv1beta1.ModuleSpec{DRA: dra},
+		}
+		Expect(validateDRA(mod, minValidOCPVersion)).NotTo(HaveOccurred())
 	})
 })
