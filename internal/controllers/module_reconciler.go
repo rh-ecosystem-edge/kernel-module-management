@@ -36,6 +36,7 @@ import (
 
 // +kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=create;delete;get;list;patch;watch
 // +kubebuilder:rbac:groups=build.openshift.io,resources=builds,verbs=create;delete;get;list;patch;watch
+// +kubebuilder:rbac:groups=config.openshift.io,resources=clusterversions,verbs=get
 // +kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=clusterclaims,resourceNames=kernel-versions.kmm.node.kubernetes.io,verbs=delete;patch;update
 // +kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=clusterclaims,verbs=create;get;list;watch
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=delete;get;list;watch

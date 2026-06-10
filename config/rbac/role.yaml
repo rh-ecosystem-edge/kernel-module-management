@@ -85,6 +85,12 @@ rules:
   - patch
   - update
 - apiGroups:
+  - config.openshift.io
+  resources:
+  - clusterversions
+  verbs:
+  - get
+- apiGroups:
   - image.openshift.io
   resources:
   - imagestreams

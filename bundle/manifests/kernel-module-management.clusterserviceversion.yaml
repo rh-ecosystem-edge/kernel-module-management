@@ -47,7 +47,7 @@ metadata:
         }
       ]
     capabilities: Seamless Upgrades
-    createdAt: "2026-06-08T13:01:21Z"
+    createdAt: "2026-06-14T11:58:54Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.41.1
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
@@ -195,6 +195,12 @@ spec:
           - delete
           - patch
           - update
+        - apiGroups:
+          - config.openshift.io
+          resources:
+          - clusterversions
+          verbs:
+          - get
         - apiGroups:
           - image.openshift.io
           resources:

@@ -74,7 +74,9 @@ func main() {
 	options := cg.GetManagerOptionsFromConfig(cfg, scheme)
 	options.LeaderElection = false
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), options)
+	restCfg := ctrl.GetConfigOrDie()
+
+	mgr, err := ctrl.NewManager(restCfg, options)
 	if err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create manager")
 	}
@@ -82,7 +84,13 @@ func main() {
 	if enableModule {
 		logger.Info("Enabling Module webhook")
 
-		if err = webhook.NewModuleValidator(logger).SetupWebhookWithManager(mgr); err != nil {
+		ocpVersion, err := webhook.DiscoverOCPVersion(restCfg)
+		if err != nil {
+			cmd.FatalError(setupLogger, err, "unable to discover OpenShift version")
+		}
+		setupLogger.Info("Detected OpenShift version", "major", ocpVersion.Major, "minor", ocpVersion.Minor)
+
+		if err = webhook.NewModuleValidator(logger, &ocpVersion).SetupWebhookWithManager(mgr); err != nil {
 			cmd.FatalError(setupLogger, err, "unable to create webhook", "webhook", "ModuleValidator")
 		}
 	}
@@ -90,7 +98,7 @@ func main() {
 	if enableManagedClusterModule {
 		logger.Info("Enabling ManagedClusterModule webhook")
 
-		if err = hub.NewManagedClusterModuleValidator(logger).SetupWebhookWithManager(mgr); err != nil {
+		if err = hub.NewManagedClusterModuleValidator(logger, nil).SetupWebhookWithManager(mgr); err != nil {
 			cmd.FatalError(setupLogger, err, "unable to create webhook", "webhook", "ManagedClusterModuleValidator")
 		}
 	}

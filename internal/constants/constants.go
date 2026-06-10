@@ -28,4 +28,7 @@ const (
 	PrivateSignDataKey             = "key"
 
 	OperatorNamespaceEnvVar = "OPERATOR_NAMESPACE"
+
+	MinOCPMajorForDRA = 4
+	MinOCPMinorForDRA = 21
 )
