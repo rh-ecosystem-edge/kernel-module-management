@@ -5,6 +5,7 @@ const (
 	DTKImageStreamNamespace      = "openshift"
 
 	ModuleNameLabel        = "kmm.node.kubernetes.io/module.name"
+	ModuleNamespaceLabel   = "kmm.node.kubernetes.io/module.namespace"
 	NodeLabelerFinalizer   = "kmm.node.kubernetes.io/node-labeler"
 	TargetKernelTarget     = "kmm.node.kubernetes.io/target-kernel"
 	ResourceType           = "kmm.openshift.io/build.type"
