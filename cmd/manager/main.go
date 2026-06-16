@@ -20,15 +20,15 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
-	"strconv"
-
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/buildsign"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mbsc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mic"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/pod"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/preflight"
+	resourcev1 "k8s.io/api/resource/v1"
+	"os"
+	"strconv"
 
 	buildv1 "github.com/openshift/api/build/v1"
 	imagev1 "github.com/openshift/api/image/v1"
@@ -78,6 +78,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(v1beta1.AddToScheme(scheme))
 	utilruntime.Must(v1beta2.AddToScheme(scheme))
+	utilruntime.Must(resourcev1.AddToScheme(scheme))
 	utilruntime.Must(buildv1.Install(scheme))
 	utilruntime.Must(imagev1.Install(scheme))
 	utilruntime.Must(apimcfgv1.Install(scheme))
@@ -192,6 +193,10 @@ func main() {
 
 	if err = controllers.NewDevicePluginPodReconciler(client).SetupWithManager(mgr); err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.DevicePluginPodReconcilerName)
+	}
+
+	if err = controllers.NewDRAReconciler(client, nodeAPI, scheme).SetupWithManager(mgr); err != nil {
+		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.DRAReconcilerName)
 	}
 
 	if err = controllers.NewNodeLabelModuleVersionReconciler(client).SetupWithManager(mgr); err != nil {
