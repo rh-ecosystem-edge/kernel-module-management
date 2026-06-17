@@ -47,7 +47,7 @@ metadata:
         }
       ]
     capabilities: Seamless Upgrades
-    createdAt: "2026-06-14T11:58:54Z"
+    createdAt: "2026-06-22T10:01:21Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.41.1
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
@@ -161,6 +161,7 @@ spec:
           verbs:
           - create
           - delete
+          - deletecollection
           - get
           - list
           - patch
@@ -319,6 +320,19 @@ spec:
           verbs:
           - create
           - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - resource.k8s.io
+          resources:
+          - deviceclasses
+          verbs:
+          - create
+          - delete
+          - deletecollection
           - get
           - list
           - patch

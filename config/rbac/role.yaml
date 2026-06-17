@@ -50,6 +50,7 @@ rules:
   verbs:
   - create
   - delete
+  - deletecollection
   - get
   - list
   - patch
@@ -208,6 +209,19 @@ rules:
   verbs:
   - create
   - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - resource.k8s.io
+  resources:
+  - deviceclasses
+  verbs:
+  - create
+  - delete
+  - deletecollection
   - get
   - list
   - patch
