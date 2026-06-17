@@ -34,7 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-// +kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=create;delete;get;list;patch;watch
+// +kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=create;delete;deletecollection;get;list;patch;watch
 // +kubebuilder:rbac:groups=build.openshift.io,resources=builds,verbs=create;delete;get;list;patch;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=clusterversions,verbs=get
 // +kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=clusterclaims,resourceNames=kernel-versions.kmm.node.kubernetes.io,verbs=delete;patch;update
@@ -71,6 +71,7 @@ import (
 // +kubebuilder:rbac:groups=operator.openshift.io,resources=machineconfigurations,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=create;delete;get;list;patch;watch
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies/finalizers,verbs=update;patch
+//+kubebuilder:rbac:groups=resource.k8s.io,resources=deviceclasses,verbs=create;delete;deletecollection;get;list;patch;update;watch
 
 const (
 	ModuleReconcilerName = "ModuleReconciler"
