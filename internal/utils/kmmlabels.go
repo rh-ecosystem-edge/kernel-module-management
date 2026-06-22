@@ -22,8 +22,8 @@ func GetWorkerPodVersionLabelName(namespace, name string) string {
 	return fmt.Sprintf("%s.%s.%s", constants.WorkerPodVersionLabelPrefix, namespace, name)
 }
 
-func GetDevicePluginVersionLabelName(namespace, name string) string {
-	return fmt.Sprintf("%s.%s.%s", constants.DevicePluginVersionLabelPrefix, namespace, name)
+func GetSchedulePluginVersionLabelName(namespace, name string) string {
+	return fmt.Sprintf("%s.%s.%s", constants.SchedulePluginVersionLabelPrefix, namespace, name)
 }
 
 func GetNamespaceNameFromVersionLabel(label string) (string, string, error) {
@@ -35,7 +35,7 @@ func GetNamespaceNameFromVersionLabel(label string) (string, string, error) {
 }
 
 func IsVersionLabel(label string) bool {
-	return IsModuleVersionLabel(label) || IsWorkerPodVersionLabel(label) || IsDevicePluginVersionLabel(label)
+	return IsModuleVersionLabel(label) || IsWorkerPodVersionLabel(label) || IsSchedulePluginVersionLabel(label)
 }
 
 func IsModuleVersionLabel(label string) bool {
@@ -46,16 +46,14 @@ func IsWorkerPodVersionLabel(label string) bool {
 	return strings.HasPrefix(label, constants.WorkerPodVersionLabelPrefix)
 }
 
-func IsDevicePluginVersionLabel(label string) bool {
-	return strings.HasPrefix(label, constants.DevicePluginVersionLabelPrefix)
+func IsSchedulePluginVersionLabel(label string) bool {
+	return strings.HasPrefix(label, constants.SchedulePluginVersionLabelPrefix)
 }
 
 func GetNodesVersionLabels(nodeLabels map[string]string) map[string]string {
 	versionLabels := map[string]string{}
 	for label, labelValue := range nodeLabels {
-		if strings.HasPrefix(label, constants.WorkerPodVersionLabelPrefix) ||
-			strings.HasPrefix(label, constants.DevicePluginVersionLabelPrefix) ||
-			strings.HasPrefix(label, constants.ModuleVersionLabelPrefix) {
+		if IsVersionLabel(label) {
 			versionLabels[label] = labelValue
 		}
 	}

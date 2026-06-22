@@ -546,7 +546,7 @@ func generateDevicePluginLabelsAndSelector(mod *kmmv1beta1.Module) (map[string]s
 	}
 
 	if mod.Spec.ModuleLoader != nil && mod.Spec.ModuleLoader.Container.Version != "" {
-		versionLabel := utils.GetDevicePluginVersionLabelName(mod.Namespace, mod.Name)
+		versionLabel := utils.GetSchedulePluginVersionLabelName(mod.Namespace, mod.Name)
 		labels[versionLabel] = mod.Spec.ModuleLoader.Container.Version
 		nodeSelector[versionLabel] = mod.Spec.ModuleLoader.Container.Version
 	} else if mod.Spec.ModuleLoader == nil {
@@ -582,7 +582,7 @@ func getExistingDSFromVersion(existingDS []appsv1.DaemonSet,
 		version = moduleLoader.Container.Version
 	}
 
-	versionLabel := utils.GetDevicePluginVersionLabelName(moduleNamespace, moduleName)
+	versionLabel := utils.GetSchedulePluginVersionLabelName(moduleNamespace, moduleName)
 	for _, ds := range existingDS {
 		dsModuleVersion := ds.GetLabels()[versionLabel]
 		if dsModuleVersion == version {
@@ -595,7 +595,7 @@ func getExistingDSFromVersion(existingDS []appsv1.DaemonSet,
 func isOlderVersionUnusedDevicePluginDaemonset(ds *appsv1.DaemonSet, moduleVersion string) bool {
 	moduleName := ds.Labels[constants.ModuleNameLabel]
 	moduleNamespace := ds.Namespace
-	versionLabel := utils.GetDevicePluginVersionLabelName(moduleNamespace, moduleName)
+	versionLabel := utils.GetSchedulePluginVersionLabelName(moduleNamespace, moduleName)
 	return ds.Labels[versionLabel] != moduleVersion && ds.Status.DesiredNumberScheduled == 0
 }
 
