@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"regexp"
@@ -111,6 +113,10 @@ func validateModule(mod *kmmv1beta1.Module) (admission.Warnings, error) {
 		return nil, fmt.Errorf("failed to validate Module's tolerations: %v", err)
 	}
 
+	if err := validateDevicePluginVolumes(mod.Spec.DevicePlugin); err != nil {
+		return nil, fmt.Errorf("failed to validate device plugin volumes: %v", err)
+	}
+
 	if mod.Spec.ModuleLoader == nil {
 		// If ModuleLoader is nil, there is no need to validate related fields
 		return nil, nil
@@ -125,6 +131,35 @@ func validateModule(mod *kmmv1beta1.Module) (admission.Warnings, error) {
 	}
 
 	return nil, validateFilesToSign(mod.Spec.ModuleLoader.Container)
+}
+
+var allowedHostPathPrefixes = []string{"/dev", "/sys", "/var", "/opt"}
+
+func isAllowedHostPath(hostPath string) bool {
+	p := filepath.Clean(hostPath)
+	for _, prefix := range allowedHostPathPrefixes {
+		if p == prefix || strings.HasPrefix(p, prefix+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+func validateDevicePluginVolumes(dp *kmmv1beta1.DevicePluginSpec) error {
+	if dp == nil {
+		return nil
+	}
+
+	for i, vol := range dp.Volumes {
+		if vol.HostPath != nil && !isAllowedHostPath(vol.HostPath.Path) {
+			return fmt.Errorf(
+				"spec.devicePlugin.volumes[%d]: hostPath %q is not allowed; only /dev, /sys, /var and /opt paths are permitted",
+				i, vol.HostPath.Path,
+			)
+		}
+	}
+
+	return nil
 }
 
 func validateImageFormat(img string) error {
