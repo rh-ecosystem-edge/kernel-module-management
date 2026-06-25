@@ -68,6 +68,20 @@ func (mr *MockNetworkPolicyMockRecorder) CreateOrAddOwnerReference(ctx, np, owne
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrAddOwnerReference", reflect.TypeOf((*MockNetworkPolicy)(nil).CreateOrAddOwnerReference), ctx, np, owner)
 }
 
+// DRANetworkPolicy mocks base method.
+func (m *MockNetworkPolicy) DRANetworkPolicy(namespace string) *v1.NetworkPolicy {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DRANetworkPolicy", namespace)
+	ret0, _ := ret[0].(*v1.NetworkPolicy)
+	return ret0
+}
+
+// DRANetworkPolicy indicates an expected call of DRANetworkPolicy.
+func (mr *MockNetworkPolicyMockRecorder) DRANetworkPolicy(namespace any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DRANetworkPolicy", reflect.TypeOf((*MockNetworkPolicy)(nil).DRANetworkPolicy), namespace)
+}
+
 // DevicePluginNetworkPolicy mocks base method.
 func (m *MockNetworkPolicy) DevicePluginNetworkPolicy(namespace string) *v1.NetworkPolicy {
 	m.ctrl.T.Helper()

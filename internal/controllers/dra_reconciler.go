@@ -24,6 +24,7 @@ import (
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/networkpolicy"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	appsv1 "k8s.io/api/apps/v1"
@@ -58,9 +59,10 @@ type DRAReconciler struct {
 func NewDRAReconciler(
 	client client.Client,
 	nodeAPI node.Node,
+	networkPolicyAPI networkpolicy.NetworkPolicy,
 	scheme *runtime.Scheme,
 ) *DRAReconciler {
-	reconHelperAPI := newDRAReconcilerHelper(client, nodeAPI, scheme)
+	reconHelperAPI := newDRAReconcilerHelper(client, nodeAPI, networkPolicyAPI, scheme)
 	return &DRAReconciler{
 		client:         client,
 		reconHelperAPI: reconHelperAPI,
@@ -101,6 +103,10 @@ func (r *DRAReconciler) Reconcile(ctx context.Context, mod *kmmv1beta1.Module) (
 		return ctrl.Result{}, r.reconHelperAPI.deleteDRAResources(ctx, mod.Name, mod.Namespace)
 	}
 
+	if err = r.reconHelperAPI.handleDRANetworkPolicy(ctx, mod); err != nil {
+		return res, fmt.Errorf("failed to handle DRA NetworkPolicy: %v", err)
+	}
+
 	if mod.Spec.DRA == nil {
 		if err = r.reconHelperAPI.deleteDRAResources(ctx, mod.Name, mod.Namespace); err != nil {
 			return ctrl.Result{}, err
@@ -138,6 +144,7 @@ func (r *DRAReconciler) Reconcile(ctx context.Context, mod *kmmv1beta1.Module) (
 type draReconcilerHelperAPI interface {
 	getModuleDRADaemonSets(ctx context.Context, name, namespace string) ([]appsv1.DaemonSet, error)
 	handleDRA(ctx context.Context, mod *kmmv1beta1.Module, existingDRADS []appsv1.DaemonSet) error
+	handleDRANetworkPolicy(ctx context.Context, mod *kmmv1beta1.Module) error
 	garbageCollectDRADaemonSets(ctx context.Context, mod *kmmv1beta1.Module, existingDS []appsv1.DaemonSet) error
 	deleteDRAResources(ctx context.Context, moduleName, moduleNamespace string) error
 	moduleUpdateDRAStatus(ctx context.Context, mod *kmmv1beta1.Module, existingDRADS []appsv1.DaemonSet) error
@@ -147,20 +154,23 @@ type draReconcilerHelperAPI interface {
 }
 
 type draReconcilerHelper struct {
-	client          client.Client
-	daemonSetHelper draDaemonSetCreator
-	nodeAPI         node.Node
+	client           client.Client
+	daemonSetHelper  draDaemonSetCreator
+	networkPolicyAPI networkpolicy.NetworkPolicy
+	nodeAPI          node.Node
 }
 
 func newDRAReconcilerHelper(client client.Client,
 	nodeAPI node.Node,
+	networkPolicyAPI networkpolicy.NetworkPolicy,
 	scheme *runtime.Scheme,
 ) draReconcilerHelperAPI {
 	daemonSetHelper := newDRADaemonSetCreator(scheme)
 	return &draReconcilerHelper{
-		client:          client,
-		daemonSetHelper: daemonSetHelper,
-		nodeAPI:         nodeAPI,
+		client:           client,
+		daemonSetHelper:  daemonSetHelper,
+		networkPolicyAPI: networkPolicyAPI,
+		nodeAPI:          nodeAPI,
 	}
 }
 
@@ -204,6 +214,23 @@ func (drh *draReconcilerHelper) handleDRA(ctx context.Context, mod *kmmv1beta1.M
 	}
 
 	return err
+}
+
+func (drh *draReconcilerHelper) handleDRANetworkPolicy(ctx context.Context, mod *kmmv1beta1.Module) error {
+	if mod.Spec.DRA == nil {
+		return nil
+	}
+
+	logger := log.FromContext(ctx)
+	logger.Info("Handling DRA NetworkPolicy", "module", mod.Name, "namespace", mod.Namespace)
+
+	draPolicy := drh.networkPolicyAPI.DRANetworkPolicy(mod.Namespace)
+	if err := drh.networkPolicyAPI.CreateOrAddOwnerReference(ctx, draPolicy, mod); err != nil {
+		return fmt.Errorf("failed to ensure DRA NetworkPolicy %s/%s: %v", draPolicy.Namespace, draPolicy.Name, err)
+	}
+
+	logger.Info("Successfully handled DRA NetworkPolicy")
+	return nil
 }
 
 func (drh *draReconcilerHelper) garbageCollectDRADaemonSets(ctx context.Context, mod *kmmv1beta1.Module, existingDS []appsv1.DaemonSet) error {
@@ -462,11 +489,19 @@ func (dsci *draDaemonSetCreatorImpl) setDRAAsDesired(
 		overrideLabels(ds.GetLabels(), standardLabels),
 	)
 
+	podTemplateLabels := make(map[string]string, len(standardLabels)+3)
+	for k, v := range standardLabels {
+		podTemplateLabels[k] = v
+	}
+	podTemplateLabels["app.kubernetes.io/name"] = "kmm"
+	podTemplateLabels["app.kubernetes.io/component"] = "dra"
+	podTemplateLabels["app.kubernetes.io/part-of"] = "kmm"
+
 	ds.Spec = appsv1.DaemonSetSpec{
 		Selector: &metav1.LabelSelector{MatchLabels: standardLabels},
 		Template: v1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{
-				Labels:     standardLabels,
+				Labels:     podTemplateLabels,
 				Finalizers: []string{constants.NodeLabelerFinalizer},
 			},
 			Spec: v1.PodSpec{

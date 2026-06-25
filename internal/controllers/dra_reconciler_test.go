@@ -26,11 +26,13 @@ import (
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/networkpolicy"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	"go.uber.org/mock/gomock"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	resourcev1 "k8s.io/api/resource/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -69,7 +71,7 @@ var _ = Describe("DRAReconciler_Reconcile", func() {
 
 	ctx := context.Background()
 
-	DescribeTable("check error flows", func(getDSError, getDCError, handleDRAError, gcError, handleDCError bool) {
+	DescribeTable("check error flows", func(getDSError, getDCError, handleNPError, handleDRAError, gcError, handleDCError bool) {
 		draDS := []appsv1.DaemonSet{{}}
 		returnedError := fmt.Errorf("some error")
 		if getDSError {
@@ -82,6 +84,11 @@ var _ = Describe("DRAReconciler_Reconcile", func() {
 			goto executeTestFunction
 		}
 		mockReconHelper.EXPECT().getModuleDeviceClasses(ctx, mod.Name, mod.Namespace).Return(nil, nil)
+		if handleNPError {
+			mockReconHelper.EXPECT().handleDRANetworkPolicy(ctx, mod).Return(returnedError)
+			goto executeTestFunction
+		}
+		mockReconHelper.EXPECT().handleDRANetworkPolicy(ctx, mod).Return(nil)
 		if handleDRAError {
 			mockReconHelper.EXPECT().handleDRA(ctx, mod, draDS).Return(returnedError)
 			goto executeTestFunction
@@ -106,12 +113,13 @@ var _ = Describe("DRAReconciler_Reconcile", func() {
 		Expect(err).To(HaveOccurred())
 
 	},
-		Entry("getModuleDRADaemonSets failed", true, false, false, false, false),
-		Entry("getModuleDeviceClasses failed", false, true, false, false, false),
-		Entry("handleDRA failed", false, false, true, false, false),
-		Entry("garbageCollectDRADaemonSets failed", false, false, false, true, false),
-		Entry("handleDeviceClasses failed", false, false, false, false, true),
-		Entry("moduleUpdateDRAStatus failed", false, false, false, false, false),
+		Entry("getModuleDRADaemonSets failed", true, false, false, false, false, false),
+		Entry("getModuleDeviceClasses failed", false, true, false, false, false, false),
+		Entry("handleDRANetworkPolicy failed", false, false, true, false, false, false),
+		Entry("handleDRA failed", false, false, false, true, false, false),
+		Entry("garbageCollectDRADaemonSets failed", false, false, false, false, true, false),
+		Entry("handleDeviceClasses failed", false, false, false, false, false, true),
+		Entry("moduleUpdateDRAStatus failed", false, false, false, false, false, false),
 	)
 
 	It("Good flow", func() {
@@ -119,6 +127,7 @@ var _ = Describe("DRAReconciler_Reconcile", func() {
 		gomock.InOrder(
 			mockReconHelper.EXPECT().getModuleDRADaemonSets(ctx, mod.Name, mod.Namespace).Return(draDS, nil),
 			mockReconHelper.EXPECT().getModuleDeviceClasses(ctx, mod.Name, mod.Namespace).Return(nil, nil),
+			mockReconHelper.EXPECT().handleDRANetworkPolicy(ctx, mod).Return(nil),
 			mockReconHelper.EXPECT().handleDRA(ctx, mod, draDS).Return(nil),
 			mockReconHelper.EXPECT().garbageCollectDRADaemonSets(ctx, mod, draDS).Return(nil),
 			mockReconHelper.EXPECT().handleDeviceClasses(ctx, mod, []resourcev1.DeviceClass(nil)).Return(nil),
@@ -164,6 +173,7 @@ var _ = Describe("DRAReconciler_Reconcile", func() {
 		gomock.InOrder(
 			mockReconHelper.EXPECT().getModuleDRADaemonSets(ctx, mod.Name, mod.Namespace).Return(nil, nil),
 			mockReconHelper.EXPECT().getModuleDeviceClasses(ctx, mod.Name, mod.Namespace).Return(nil, nil),
+			mockReconHelper.EXPECT().handleDRANetworkPolicy(ctx, mod).Return(nil),
 			mockReconHelper.EXPECT().deleteDRAResources(ctx, mod.Name, mod.Namespace).Return(nil),
 			mockReconHelper.EXPECT().clearDRAStatus(ctx, mod).Return(nil),
 		)
@@ -182,6 +192,7 @@ var _ = Describe("DRAReconciler_Reconcile", func() {
 		gomock.InOrder(
 			mockReconHelper.EXPECT().getModuleDRADaemonSets(ctx, mod.Name, mod.Namespace).Return(draDS, nil),
 			mockReconHelper.EXPECT().getModuleDeviceClasses(ctx, mod.Name, mod.Namespace).Return(existingDCs, nil),
+			mockReconHelper.EXPECT().handleDRANetworkPolicy(ctx, mod).Return(nil),
 			mockReconHelper.EXPECT().deleteDRAResources(ctx, mod.Name, mod.Namespace).Return(nil),
 			mockReconHelper.EXPECT().clearDRAStatus(ctx, mod).Return(nil),
 		)
@@ -198,6 +209,7 @@ var _ = Describe("DRAReconciler_Reconcile", func() {
 		gomock.InOrder(
 			mockReconHelper.EXPECT().getModuleDRADaemonSets(ctx, mod.Name, mod.Namespace).Return(nil, nil),
 			mockReconHelper.EXPECT().getModuleDeviceClasses(ctx, mod.Name, mod.Namespace).Return(nil, nil),
+			mockReconHelper.EXPECT().handleDRANetworkPolicy(ctx, mod).Return(nil),
 			mockReconHelper.EXPECT().deleteDRAResources(ctx, mod.Name, mod.Namespace).Return(nil),
 			mockReconHelper.EXPECT().clearDRAStatus(ctx, mod).Return(fmt.Errorf("some error")),
 		)
@@ -314,7 +326,7 @@ var _ = Describe("DRAReconciler_moduleUpdateDRAStatus", func() {
 		clnt = client.NewMockClient(ctrl)
 		statusWriter = client.NewMockStatusWriter(ctrl)
 		mn = node.NewNode(clnt)
-		drh = newDRAReconcilerHelper(clnt, mn, nil)
+		drh = newDRAReconcilerHelper(clnt, mn, nil, nil)
 	})
 
 	ctx := context.Background()
@@ -585,9 +597,17 @@ var _ = Describe("DRAReconciler_setDRAAsDesired", func() {
 			err := dsc.setDRAAsDesired(context.Background(), &ds, &mod)
 			Expect(err).NotTo(HaveOccurred())
 
-			podLabels := map[string]string{
+			dsLabels := map[string]string{
 				constants.ModuleNameLabel: draModuleName,
 				constants.DaemonSetRole:   constants.DRARoleLabelValue,
+			}
+
+			podLabels := map[string]string{
+				constants.ModuleNameLabel:     draModuleName,
+				constants.DaemonSetRole:       constants.DRARoleLabelValue,
+				"app.kubernetes.io/name":      "kmm",
+				"app.kubernetes.io/component": "dra",
+				"app.kubernetes.io/part-of":   "kmm",
 			}
 
 			expectedInitContainer := []v1.Container{
@@ -618,7 +638,7 @@ var _ = Describe("DRAReconciler_setDRAAsDesired", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      dsName,
 					Namespace: namespace,
-					Labels:    podLabels,
+					Labels:    dsLabels,
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							APIVersion:         mod.APIVersion,
@@ -631,7 +651,7 @@ var _ = Describe("DRAReconciler_setDRAAsDesired", func() {
 					},
 				},
 				Spec: appsv1.DaemonSetSpec{
-					Selector: &metav1.LabelSelector{MatchLabels: podLabels},
+					Selector: &metav1.LabelSelector{MatchLabels: dsLabels},
 					Template: v1.PodTemplateSpec{
 						ObjectMeta: metav1.ObjectMeta{
 							Labels:     podLabels,
@@ -1237,5 +1257,55 @@ var _ = Describe("DRAReconciler_deleteDRAResources", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("DaemonSets"))
 		Expect(err.Error()).To(ContainSubstring("DeviceClasses"))
+	})
+})
+
+var _ = Describe("draReconcilerHelper_handleDRANetworkPolicy", func() {
+	var (
+		ctrl   *gomock.Controller
+		mockNP *networkpolicy.MockNetworkPolicy
+		drh    draReconcilerHelper
+		ctx    context.Context
+		mod    *kmmv1beta1.Module
+	)
+
+	BeforeEach(func() {
+		ctrl = gomock.NewController(GinkgoT())
+		mockNP = networkpolicy.NewMockNetworkPolicy(ctrl)
+		ctx = context.Background()
+		drh = draReconcilerHelper{
+			networkPolicyAPI: mockNP,
+		}
+		mod = &kmmv1beta1.Module{
+			ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "dra-module"},
+			Spec: kmmv1beta1.ModuleSpec{
+				DRA: &kmmv1beta1.DRASpec{},
+			},
+		}
+	})
+
+	It("should return nil when DRA is nil", func() {
+		mod.Spec.DRA = nil
+		err := drh.handleDRANetworkPolicy(ctx, mod)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should create the DRA NetworkPolicy", func() {
+		policy := &networkingv1.NetworkPolicy{}
+		mockNP.EXPECT().DRANetworkPolicy(mod.Namespace).Return(policy)
+		mockNP.EXPECT().CreateOrAddOwnerReference(ctx, policy, mod).Return(nil)
+
+		err := drh.handleDRANetworkPolicy(ctx, mod)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should return error if CreateOrAddOwnerReference fails", func() {
+		policy := &networkingv1.NetworkPolicy{}
+		mockNP.EXPECT().DRANetworkPolicy(mod.Namespace).Return(policy)
+		mockNP.EXPECT().CreateOrAddOwnerReference(ctx, policy, mod).Return(fmt.Errorf("some error"))
+
+		err := drh.handleDRANetworkPolicy(ctx, mod)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to ensure DRA NetworkPolicy"))
 	})
 })
