@@ -252,6 +252,31 @@ var _ = Describe("NetworkPolicy", func() {
 		})
 	})
 
+	Describe("DRANetworkPolicy", func() {
+		It("should return correct NetworkPolicy for DRA pods", func() {
+			result := np.DRANetworkPolicy(testNamespace)
+
+			Expect(result).NotTo(BeNil())
+			Expect(result.Name).To(Equal(draNetworkPolicyName))
+			Expect(result.Namespace).To(Equal(testNamespace))
+
+			Expect(result.Spec.PodSelector.MatchLabels).To(HaveKeyWithValue("app.kubernetes.io/component", "dra"))
+
+			Expect(result.Spec.PolicyTypes).To(ContainElements(
+				networkingv1.PolicyTypeIngress,
+				networkingv1.PolicyTypeEgress,
+			))
+
+			Expect(result.Spec.Ingress).To(BeEmpty())
+			Expect(result.Spec.Egress).To(BeEmpty())
+		})
+
+		It("should use default namespace when empty namespace is provided", func() {
+			result := np.DRANetworkPolicy("")
+			Expect(result.Namespace).To(Equal("default"))
+		})
+	})
+
 	Describe("ensureOwnerReference", func() {
 		var policy *networkingv1.NetworkPolicy
 
