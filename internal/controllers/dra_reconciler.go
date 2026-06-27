@@ -483,6 +483,8 @@ func (dsci *draDaemonSetCreatorImpl) setDRAAsDesired(
 		versionLabel := utils.GetSchedulePluginVersionLabelName(mod.Namespace, mod.Name)
 		standardLabels[versionLabel] = mod.Spec.ModuleLoader.Container.Version
 		nodeSelector[versionLabel] = mod.Spec.ModuleLoader.Container.Version
+	} else if mod.Spec.ModuleLoader == nil {
+		nodeSelector = mod.Spec.Selector
 	}
 
 	ds.SetLabels(
