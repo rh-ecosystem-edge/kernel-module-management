@@ -201,6 +201,9 @@ func (np *networkPolicy) DRANetworkPolicy(namespace string) *networkingv1.Networ
 					"app.kubernetes.io/component": "dra",
 				},
 			},
+			Egress: []networkingv1.NetworkPolicyEgressRule{
+				{}, // Allow all egress — DRA kubelet plugin needs API server access for ResourceSlice management
+			},
 			PolicyTypes: []networkingv1.PolicyType{
 				networkingv1.PolicyTypeIngress,
 				networkingv1.PolicyTypeEgress,
