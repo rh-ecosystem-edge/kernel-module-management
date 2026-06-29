@@ -10,10 +10,13 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/pod"
 	"go.uber.org/mock/gomock"
+	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -268,7 +271,14 @@ var _ = Describe("NetworkPolicy", func() {
 			))
 
 			Expect(result.Spec.Ingress).To(BeEmpty())
-			Expect(result.Spec.Egress).To(BeEmpty())
+			Expect(result.Spec.Egress).To(HaveLen(2))
+			Expect(result.Spec.Egress[0].Ports).To(ConsistOf(
+				networkingv1.NetworkPolicyPort{Protocol: ptr.To(v1.ProtocolTCP), Port: ptr.To(intstr.FromInt32(443))},
+			))
+			Expect(result.Spec.Egress[1].Ports).To(ConsistOf(
+				networkingv1.NetworkPolicyPort{Protocol: ptr.To(v1.ProtocolTCP), Port: ptr.To(intstr.FromInt32(53))},
+				networkingv1.NetworkPolicyPort{Protocol: ptr.To(v1.ProtocolUDP), Port: ptr.To(intstr.FromInt32(53))},
+			))
 		})
 
 		It("should use default namespace when empty namespace is provided", func() {
