@@ -326,7 +326,7 @@ var _ = Describe("DRAReconciler_moduleUpdateDRAStatus", func() {
 		clnt = client.NewMockClient(ctrl)
 		statusWriter = client.NewMockStatusWriter(ctrl)
 		mn = node.NewNode(clnt)
-		drh = newDRAReconcilerHelper(clnt, mn, nil, nil)
+		drh = newDRAReconcilerHelper(clnt, mn, nil, nil, "")
 	})
 
 	ctx := context.Background()
@@ -447,6 +447,7 @@ var _ = Describe("DRAReconciler_setDRAAsDesired", func() {
 	const (
 		draImage      = "dra-image"
 		draModuleName = "dra-module"
+		draOperatorNS = "operatorNamespace"
 	)
 
 	var (
@@ -454,7 +455,7 @@ var _ = Describe("DRAReconciler_setDRAAsDesired", func() {
 	)
 
 	BeforeEach(func() {
-		dsc = newDRADaemonSetCreator(scheme)
+		dsc = newDRADaemonSetCreator(scheme, draOperatorNS)
 	})
 
 	It("should return an error if the DaemonSet is nil", func() {
@@ -497,6 +498,35 @@ var _ = Describe("DRAReconciler_setDRAAsDesired", func() {
 		Expect(ds.Spec.Template.Spec.Volumes[2].Name).To(Equal("cdi"))
 		Expect(ds.Spec.Template.Spec.Volumes[3]).To(Equal(vol))
 	})
+
+	DescribeTable("should set the correct ServiceAccount on the DRA DaemonSet",
+		func(moduleNamespace, specSA, expectedSA string) {
+			mod := kmmv1beta1.Module{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: moduleNamespace,
+				},
+				Spec: kmmv1beta1.ModuleSpec{
+					DRA: &kmmv1beta1.DRASpec{
+						ServiceAccountName: specSA,
+						Container:          kmmv1beta1.CommonContainerSpec{Image: draImage},
+					},
+				},
+			}
+
+			ds := appsv1.DaemonSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: moduleNamespace,
+				},
+			}
+
+			err := dsc.setDRAAsDesired(context.Background(), &ds, &mod)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ds.Spec.Template.Spec.ServiceAccountName).To(Equal(expectedSA))
+		},
+		Entry("not in operator namespace, no SA specified", "some-namespace", "", ""),
+		Entry("in operator namespace, no SA specified", draOperatorNS, "", "kmm-operator-dra"),
+		Entry("in operator namespace, explicit SA specified", draOperatorNS, "custom-sa", "custom-sa"),
+	)
 
 	DescribeTable("should work as expected",
 		func(withInitContainer bool) {

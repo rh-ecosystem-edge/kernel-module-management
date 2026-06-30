@@ -288,7 +288,7 @@ bundle: operator-sdk manifests kustomize ## Generate bundle manifests and metada
 	cd config/webhook-server && $(KUSTOMIZE) edit set image webhook-server=$(WEBHOOK_IMG)
 
 	OPERATOR_SDK="${OPERATOR_SDK}" \
-	BUNDLE_GEN_FLAGS="${BUNDLE_GEN_FLAGS} --extra-service-accounts kmm-operator-module-loader,kmm-operator-device-plugin" \
+	BUNDLE_GEN_FLAGS="${BUNDLE_GEN_FLAGS} --extra-service-accounts kmm-operator-module-loader,kmm-operator-device-plugin,kmm-operator-dra" \
 	PKG=kernel-module-management \
 	SOURCE_DIR=$(dir $(realpath $(lastword $(MAKEFILE_LIST)))) \
 	./hack/generate-bundle

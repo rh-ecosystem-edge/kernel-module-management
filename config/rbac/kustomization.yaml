@@ -6,6 +6,9 @@ resources:
   - device_plugin_service_account.yaml
   - device_plugin_cluster_role.yaml
   - device_plugin_role_binding.yaml
+  - dra_service_account.yaml
+  - dra_cluster_role.yaml
+  - dra_cluster_role_binding.yaml
   - module_loader_service_account.yaml
   - module_loader_cluster_role.yaml
   - module_loader_role_binding.yaml
