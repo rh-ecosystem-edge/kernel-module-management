@@ -245,7 +245,7 @@ func validateDRA(mod *kmmv1beta1.Module, ocpVersion *OCPVersion) error {
 	return nil
 }
 
-var allowedHostPathPrefixes = []string{"/dev", "/sys", "/var", "/opt"}
+var allowedHostPathPrefixes = []string{"/dev", "/sys", "/var", "/opt", "/run"}
 
 func isAllowedHostPath(hostPath string) bool {
 	p := filepath.Clean(hostPath)
