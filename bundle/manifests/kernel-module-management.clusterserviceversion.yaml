@@ -47,7 +47,7 @@ metadata:
         }
       ]
     capabilities: Seamless Upgrades
-    createdAt: "2026-06-22T10:01:21Z"
+    createdAt: "2026-06-30T14:21:01Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.41.1
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
@@ -351,6 +351,28 @@ spec:
           verbs:
           - create
         serviceAccountName: kmm-operator-controller
+      - rules:
+        - apiGroups:
+          - security.openshift.io
+          resourceNames:
+          - privileged
+          resources:
+          - securitycontextconstraints
+          verbs:
+          - use
+        - apiGroups:
+          - resource.k8s.io
+          resources:
+          - resourceslices
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        serviceAccountName: kmm-operator-dra
       deployments:
       - label:
           app.kubernetes.io/component: kmm

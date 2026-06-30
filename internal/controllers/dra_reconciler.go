@@ -66,8 +66,9 @@ func NewDRAReconciler(
 	nodeAPI node.Node,
 	networkPolicyAPI networkpolicy.NetworkPolicy,
 	scheme *runtime.Scheme,
+	operatorNamespace string,
 ) *DRAReconciler {
-	reconHelperAPI := newDRAReconcilerHelper(client, nodeAPI, networkPolicyAPI, scheme)
+	reconHelperAPI := newDRAReconcilerHelper(client, nodeAPI, networkPolicyAPI, scheme, operatorNamespace)
 	return &DRAReconciler{
 		client:         client,
 		reconHelperAPI: reconHelperAPI,
@@ -169,8 +170,9 @@ func newDRAReconcilerHelper(client client.Client,
 	nodeAPI node.Node,
 	networkPolicyAPI networkpolicy.NetworkPolicy,
 	scheme *runtime.Scheme,
+	operatorNamespace string,
 ) draReconcilerHelperAPI {
-	daemonSetHelper := newDRADaemonSetCreator(scheme)
+	daemonSetHelper := newDRADaemonSetCreator(scheme, operatorNamespace)
 	return &draReconcilerHelper{
 		client:           client,
 		daemonSetHelper:  daemonSetHelper,
@@ -425,12 +427,14 @@ type draDaemonSetCreator interface {
 }
 
 type draDaemonSetCreatorImpl struct {
-	scheme *runtime.Scheme
+	scheme            *runtime.Scheme
+	operatorNamespace string
 }
 
-func newDRADaemonSetCreator(scheme *runtime.Scheme) draDaemonSetCreator {
+func newDRADaemonSetCreator(scheme *runtime.Scheme, operatorNamespace string) draDaemonSetCreator {
 	return &draDaemonSetCreatorImpl{
-		scheme: scheme,
+		scheme:            scheme,
+		operatorNamespace: operatorNamespace,
 	}
 }
 
@@ -557,6 +561,15 @@ func (dsci *draDaemonSetCreatorImpl) setDRAAsDesired(
 	podTemplateLabels["app.kubernetes.io/component"] = "dra"
 	podTemplateLabels["app.kubernetes.io/part-of"] = "kmm"
 
+	serviceAccountName := mod.Spec.DRA.ServiceAccountName
+	if serviceAccountName == "" {
+		if mod.Namespace == dsci.operatorNamespace {
+			serviceAccountName = "kmm-operator-dra"
+		} else {
+			log.FromContext(ctx).Info(utils.WarnString("No ServiceAccount set for the DRA DaemonSet"))
+		}
+	}
+
 	ds.Spec = appsv1.DaemonSetSpec{
 		Selector: &metav1.LabelSelector{MatchLabels: standardLabels},
 		Template: v1.PodTemplateSpec{
@@ -571,7 +584,7 @@ func (dsci *draDaemonSetCreatorImpl) setDRAAsDesired(
 				HostNetwork:                  true,
 				ImagePullSecrets:             getPodPullSecrets(mod.Spec.ImageRepoSecret),
 				NodeSelector:                 nodeSelector,
-				ServiceAccountName:           mod.Spec.DRA.ServiceAccountName,
+				ServiceAccountName:           serviceAccountName,
 				Volumes:                      append([]v1.Volume{pluginsVolume, registryVolume, cdiVolume}, mod.Spec.DRA.Volumes...),
 				Tolerations:                  mod.Spec.Tolerations,
 				AutomountServiceAccountToken: mod.Spec.DRA.AutomountServiceAccountToken,
