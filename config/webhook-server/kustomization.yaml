@@ -10,6 +10,5 @@ images:
   newName: quay.io/edge-infrastructure/kernel-module-management-webhook-server
   newTag: latest
 labels:
-- includeSelectors: true
-  pairs:
+- pairs:
     app.kubernetes.io/component: webhook-server

@@ -6,6 +6,8 @@ generatorOptions:
 
 secretGenerator:
   - name: kmm-kmod-signing-cert
+    namespace: openshift-kmm
     files: [cert=signing-cert.pem]
   - name: kmm-kmod-signing-key
+    namespace: openshift-kmm
     files: [key=signing-key.pem]

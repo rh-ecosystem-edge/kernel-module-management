@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: controller
+  namespace: system
+spec:
+  podSelector:
+    matchLabels:
+      control-plane: controller
+  policyTypes:
+    - Egress
+    - Ingress
+  ingress:
+    - ports:
+        - protocol: TCP # metrics port
+          port: 8443
+        - protocol: TCP
+          port: 8081 # Healthz
+  egress:
+    - to:
+        - namespaceSelector: # DNS
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-dns
+          podSelector:
+            matchLabels:
+              dns.operator.openshift.io/daemonset-dns: default
+      ports:
+        - protocol: UDP # DNS
+          port: 53
+        - protocol: TCP # DNS
+          port: 53
+    - ports: # kube api server
+        - protocol: TCP
+          port: 6443
+        - protocol: TCP
+          port: 443
