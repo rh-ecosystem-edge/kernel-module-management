@@ -23,6 +23,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/rh-ecosystem-edge/kernel-module-management/api-hub/v1beta1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/version"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/webhook"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -34,7 +35,7 @@ type ManagedClusterModuleValidator struct {
 	m      admission.CustomValidator
 }
 
-func NewManagedClusterModuleValidator(logger logr.Logger, ocpVersion *webhook.OCPVersion) *ManagedClusterModuleValidator {
+func NewManagedClusterModuleValidator(logger logr.Logger, ocpVersion *version.OCPVersion) *ManagedClusterModuleValidator {
 	return &ManagedClusterModuleValidator{
 		logger: logger,
 		m:      webhook.NewModuleValidator(logger, ocpVersion),

@@ -9,6 +9,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/cmd"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/config"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/version"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/webhook"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/webhook/hub"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -84,7 +85,7 @@ func main() {
 	if enableModule {
 		logger.Info("Enabling Module webhook")
 
-		ocpVersion, err := webhook.DiscoverOCPVersion(restCfg)
+		ocpVersion, err := version.DiscoverOCPVersion(restCfg)
 		if err != nil {
 			cmd.FatalError(setupLogger, err, "unable to discover OpenShift version")
 		}
