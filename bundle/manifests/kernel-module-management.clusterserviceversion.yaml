@@ -47,7 +47,7 @@ metadata:
         }
       ]
     capabilities: Seamless Upgrades
-    createdAt: "2026-06-30T14:21:01Z"
+    createdAt: "2026-07-01T07:49:10Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.41.1
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
@@ -372,6 +372,22 @@ spec:
           - update
           - patch
           - delete
+        - apiGroups:
+          - resource.k8s.io
+          resources:
+          - resourceclaims
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - nodes
+          verbs:
+          - get
+          - list
+          - watch
         serviceAccountName: kmm-operator-dra
       deployments:
       - label:
