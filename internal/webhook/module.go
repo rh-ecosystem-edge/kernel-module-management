@@ -22,21 +22,17 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/go-logr/logr"
-	configv1 "github.com/openshift/api/config/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/version"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
@@ -45,64 +41,13 @@ import (
 // 63 (max label key length after slash) - len("version-schedule-plugin.") = 38
 const maxCombinedLength = 38
 
-var ocpVersionRe = regexp.MustCompile(`^v?(\d+)\.(\d+)`)
-
-// OCPVersion holds the parsed major and minor version of an OpenShift cluster.
-type OCPVersion struct {
-	Major int
-	Minor int
-}
-
 type ModuleValidator struct {
 	logger     logr.Logger
-	ocpVersion *OCPVersion
+	ocpVersion *version.OCPVersion
 }
 
-func NewModuleValidator(logger logr.Logger, ocpVersion *OCPVersion) *ModuleValidator {
+func NewModuleValidator(logger logr.Logger, ocpVersion *version.OCPVersion) *ModuleValidator {
 	return &ModuleValidator{logger: logger, ocpVersion: ocpVersion}
-}
-
-// DiscoverOCPVersion queries the OpenShift ClusterVersion resource and returns the cluster version.
-func DiscoverOCPVersion(cfg *rest.Config) (OCPVersion, error) {
-	ocpScheme := runtime.NewScheme()
-	if err := configv1.Install(ocpScheme); err != nil {
-		return OCPVersion{}, fmt.Errorf("failed to register OpenShift config scheme: %v", err)
-	}
-
-	cfgCopy := *cfg
-	cfgCopy.GroupVersion = &schema.GroupVersion{Group: "config.openshift.io", Version: "v1"}
-	cfgCopy.APIPath = "/apis"
-	cfgCopy.NegotiatedSerializer = serializer.NewCodecFactory(ocpScheme)
-
-	client, err := rest.RESTClientFor(&cfgCopy)
-	if err != nil {
-		return OCPVersion{}, fmt.Errorf("failed to create REST client for OpenShift config API: %v", err)
-	}
-
-	cv := &configv1.ClusterVersion{}
-	if err = client.Get().Resource("clusterversions").Name("version").Do(context.Background()).Into(cv); err != nil {
-		return OCPVersion{}, fmt.Errorf("failed to get ClusterVersion: %v", err)
-	}
-
-	return parseOCPVersion(cv.Status.Desired.Version)
-}
-
-// parseOCPVersion extracts the major and minor version from an OpenShift
-// version string such as "4.21.0" or "4.21.0-rc.1".
-func parseOCPVersion(version string) (OCPVersion, error) {
-	m := ocpVersionRe.FindStringSubmatch(version)
-	if m == nil {
-		return OCPVersion{}, fmt.Errorf("cannot parse OpenShift version from %q", version)
-	}
-	major, err := strconv.Atoi(m[1])
-	if err != nil {
-		return OCPVersion{}, fmt.Errorf("cannot parse OpenShift major version from %q: %v", version, err)
-	}
-	minor, err := strconv.Atoi(m[2])
-	if err != nil {
-		return OCPVersion{}, fmt.Errorf("cannot parse OpenShift minor version from %q: %v", version, err)
-	}
-	return OCPVersion{Major: major, Minor: minor}, nil
 }
 
 func (m *ModuleValidator) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -157,7 +102,7 @@ func (m *ModuleValidator) ValidateDelete(ctx context.Context, obj runtime.Object
 	return nil, NotImplemented
 }
 
-func validateModule(mod *kmmv1beta1.Module, ocpVersion *OCPVersion) (admission.Warnings, error) {
+func validateModule(mod *kmmv1beta1.Module, ocpVersion *version.OCPVersion) (admission.Warnings, error) {
 	nameLength := len(mod.Name + mod.Namespace)
 
 	if nameLength > maxCombinedLength {
@@ -204,18 +149,18 @@ func validateModule(mod *kmmv1beta1.Module, ocpVersion *OCPVersion) (admission.W
 	return nil, validateFilesToSign(mod.Spec.ModuleLoader.Container)
 }
 
-func validateDRA(mod *kmmv1beta1.Module, ocpVersion *OCPVersion) error {
+func validateDRA(mod *kmmv1beta1.Module, ocpVersion *version.OCPVersion) error {
 	if mod.Spec.DRA == nil {
 		return nil
 	}
 
-	if ocpVersion != nil {
-		if ocpVersion.Major < constants.MinOCPMajorForDRA || (ocpVersion.Major == constants.MinOCPMajorForDRA && ocpVersion.Minor < constants.MinOCPMinorForDRA) {
-			return fmt.Errorf(
-				"spec.dra requires OpenShift %d.%d or later; current cluster version is %d.%d",
-				constants.MinOCPMajorForDRA, constants.MinOCPMinorForDRA, ocpVersion.Major, ocpVersion.Minor,
-			)
-		}
+	// Skip version gating when ocpVersion is nil (e.g. hub webhook validating
+	// a ManagedClusterModule — the spoke's own webhook will enforce its version).
+	if ocpVersion != nil && !ocpVersion.AtLeast(constants.MinOCPMajorForDRA, constants.MinOCPMinorForDRA) {
+		return fmt.Errorf(
+			"spec.dra requires OpenShift %d.%d or later; current cluster version is %d.%d",
+			constants.MinOCPMajorForDRA, constants.MinOCPMinorForDRA, ocpVersion.Major, ocpVersion.Minor,
+		)
 	}
 	driverName := mod.Spec.DRA.DriverName
 	if driverName == "" {
@@ -261,7 +206,7 @@ func validateHostPathVolumes(fieldPath string, volumes []corev1.Volume) error {
 	for i, vol := range volumes {
 		if vol.HostPath != nil && !isAllowedHostPath(vol.HostPath.Path) {
 			return fmt.Errorf(
-				"%s.volumes[%d]: hostPath %q is not allowed; only /dev, /sys, /var and /opt paths are permitted",
+				"%s.volumes[%d]: hostPath %q is not allowed; only /dev, /sys, /var, /opt and /run paths are permitted",
 				fieldPath, i, vol.HostPath.Path,
 			)
 		}

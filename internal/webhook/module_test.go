@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/version"
 )
 
 func getLengthAfterSlash(s string) int {
@@ -53,7 +54,7 @@ var (
 		},
 	}
 
-	moduleWebhook = NewModuleValidator(GinkgoLogr, &OCPVersion{Major: 4, Minor: 21})
+	moduleWebhook = NewModuleValidator(GinkgoLogr, &version.OCPVersion{Major: 4, Minor: 21})
 )
 
 var _ = Describe("maxCombinedLength", func() {
@@ -411,7 +412,7 @@ var _ = Describe("validateModule", func() {
 			mod.Name = name
 			mod.Namespace = ns
 
-			_, err := validateModule(&mod, &OCPVersion{Major: 4, Minor: 21})
+			_, err := validateModule(&mod, &version.OCPVersion{Major: 4, Minor: 21})
 			exp := Expect(err)
 
 			if errExpected {
@@ -426,7 +427,7 @@ var _ = Describe("validateModule", func() {
 	It("should pass when moduleLoader is not defined", func() {
 		mod := validModule
 		mod.Spec.ModuleLoader = nil
-		_, err := validateModule(&mod, &OCPVersion{Major: 4, Minor: 21})
+		_, err := validateModule(&mod, &version.OCPVersion{Major: 4, Minor: 21})
 		Expect(err).NotTo(HaveOccurred())
 	})
 })
@@ -699,35 +700,6 @@ var _ = Describe("validateTolerations", func() {
 	})
 })
 
-var _ = Describe("parseOCPVersion", func() {
-	DescribeTable(
-		"should parse valid version strings",
-		func(version string, expectedMajor, expectedMinor int) {
-			ov, err := parseOCPVersion(version)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(ov.Major).To(Equal(expectedMajor))
-			Expect(ov.Minor).To(Equal(expectedMinor))
-		},
-		Entry("standard version", "4.21.0", 4, 21),
-		Entry("release candidate", "4.21.0-rc.1", 4, 21),
-		Entry("older minor", "4.20.3", 4, 20),
-		Entry("newer minor", "4.22.1", 4, 22),
-		Entry("with v prefix", "v4.21.0", 4, 21),
-		Entry("hypothetical OCP 5.0", "5.0.0", 5, 0),
-	)
-
-	DescribeTable(
-		"should return error for invalid strings",
-		func(version string) {
-			_, err := parseOCPVersion(version)
-			Expect(err).To(HaveOccurred())
-		},
-		Entry("empty string", ""),
-		Entry("garbage", "invalid"),
-		Entry("no minor", "v4"),
-	)
-})
-
 var _ = Describe("validateDRA", func() {
 	validDRASpec := func() *kmmv1beta1.DRASpec {
 		return &kmmv1beta1.DRASpec{
@@ -738,7 +710,7 @@ var _ = Describe("validateDRA", func() {
 		}
 	}
 
-	minValidOCPVersion := &OCPVersion{Major: 4, Minor: 21}
+	minValidOCPVersion := &version.OCPVersion{Major: 4, Minor: 21}
 
 	It("should be a no-op when spec.dra is nil", func() {
 		mod := &kmmv1beta1.Module{}
@@ -747,7 +719,7 @@ var _ = Describe("validateDRA", func() {
 
 	DescribeTable(
 		"OpenShift version gate",
-		func(ov *OCPVersion, shouldFail bool) {
+		func(ov *version.OCPVersion, shouldFail bool) {
 			mod := &kmmv1beta1.Module{
 				Spec: kmmv1beta1.ModuleSpec{
 					DRA: validDRASpec(),
@@ -760,11 +732,11 @@ var _ = Describe("validateDRA", func() {
 				Expect(err).NotTo(HaveOccurred())
 			}
 		},
-		Entry("OCP 4.20 rejects", &OCPVersion{Major: 4, Minor: 20}, true),
-		Entry("OCP 4.21 accepts", &OCPVersion{Major: 4, Minor: 21}, false),
-		Entry("OCP 4.22 accepts", &OCPVersion{Major: 4, Minor: 22}, false),
-		Entry("OCP 5.0 accepts (future major)", &OCPVersion{Major: 5, Minor: 0}, false),
-		Entry("OCP 3.11 rejects (old major)", &OCPVersion{Major: 3, Minor: 11}, true),
+		Entry("OCP 4.20 rejects", &version.OCPVersion{Major: 4, Minor: 20}, true),
+		Entry("OCP 4.21 accepts", &version.OCPVersion{Major: 4, Minor: 21}, false),
+		Entry("OCP 4.22 accepts", &version.OCPVersion{Major: 4, Minor: 22}, false),
+		Entry("OCP 5.0 accepts (future major)", &version.OCPVersion{Major: 5, Minor: 0}, false),
+		Entry("OCP 3.11 rejects (old major)", &version.OCPVersion{Major: 3, Minor: 11}, true),
 		Entry("nil version skips gate (hub webhook)", nil, false),
 	)
 

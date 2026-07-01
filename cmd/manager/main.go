@@ -48,6 +48,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/networkpolicy"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/nmc"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/syncronizedmap"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/version"
 	"k8s.io/apimachinery/pkg/api/meta"
 	runtimescheme "k8s.io/apimachinery/pkg/runtime/schema"
 
@@ -126,8 +127,16 @@ func main() {
 	}
 
 	options := cg.GetManagerOptionsFromConfig(cfg, scheme)
+	restCfg := ctrl.GetConfigOrDie()
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), options)
+	ocpVersion, err := version.DiscoverOCPVersion(restCfg)
+	if err != nil {
+		cmd.FatalError(setupLogger, err, "unable to discover Openshift version")
+	}
+
+	setupLogger.Info("Detected Openshift version", "major", ocpVersion.Major, "minor", ocpVersion.Minor)
+
+	mgr, err := ctrl.NewManager(restCfg, options)
 	if err != nil {
 		cmd.FatalError(setupLogger, err, "unable to create manager")
 	}
@@ -195,8 +204,16 @@ func main() {
 		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.PodNodeLabelReconcilerName)
 	}
 
-	if err = controllers.NewDRAReconciler(client, nodeAPI, networkPolicyAPI, scheme, operatorNamespace).SetupWithManager(mgr); err != nil {
-		cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.DRAReconcilerName)
+	if ocpVersion.AtLeast(constants.MinOCPMajorForDRA, constants.MinOCPMinorForDRA) {
+		if err = controllers.NewDRAReconciler(client, nodeAPI, networkPolicyAPI, scheme, operatorNamespace).SetupWithManager(mgr); err != nil {
+			cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.DRAReconcilerName)
+		}
+	} else {
+		setupLogger.Info(
+			fmt.Sprintf("Skipping DRA controller; requires Openshift >= %d.%d", constants.MinOCPMajorForDRA, constants.MinOCPMinorForDRA),
+			"detectedMajor", ocpVersion.Major,
+			"detectedMinor", ocpVersion.Minor,
+		)
 	}
 
 	if err = controllers.NewNodeLabelModuleVersionReconciler(client).SetupWithManager(mgr); err != nil {
