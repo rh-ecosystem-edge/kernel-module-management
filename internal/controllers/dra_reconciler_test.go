@@ -844,7 +844,7 @@ var _ = Describe("DRAReconciler_setDRAAsDesired", func() {
 		err := dsc.setDRAAsDesired(context.Background(), &ds, &mod)
 		Expect(err).NotTo(HaveOccurred())
 
-		versionLabel := utils.GetSchedulePluginVersionLabelName(namespace, draModuleName)
+		versionLabel := utils.GetSchedulePodVersionLabelName(namespace, draModuleName)
 
 		Expect(ds.Labels).To(HaveKeyWithValue(versionLabel, "1"))
 		Expect(ds.Spec.Template.Spec.NodeSelector).To(HaveKeyWithValue(versionLabel, "1"))
@@ -882,7 +882,7 @@ var _ = Describe("DRAReconciler_garbageCollectDRADaemonSets", func() {
 			},
 		},
 	}
-	schedulePluginVersionLabel := utils.GetSchedulePluginVersionLabelName(mod.Namespace, mod.Name)
+	schedulePodVersionLabel := utils.GetSchedulePodVersionLabelName(mod.Namespace, mod.Name)
 
 	DescribeTable("DRA GC", func(formerDSExists bool, formerDesired int) {
 		currentDS := appsv1.DaemonSet{
@@ -890,8 +890,8 @@ var _ = Describe("DRAReconciler_garbageCollectDRADaemonSets", func() {
 				Name:      "dra-current",
 				Namespace: "namespace",
 				Labels: map[string]string{
-					schedulePluginVersionLabel: currentModuleVersion,
-					constants.ModuleNameLabel:  mod.Name,
+					schedulePodVersionLabel:   currentModuleVersion,
+					constants.ModuleNameLabel: mod.Name,
 				},
 			},
 		}
@@ -901,7 +901,7 @@ var _ = Describe("DRAReconciler_garbageCollectDRADaemonSets", func() {
 		if formerDSExists {
 			formerDS = currentDS.DeepCopy()
 			formerDS.SetName("dra-former")
-			formerDS.Labels[schedulePluginVersionLabel] = "former"
+			formerDS.Labels[schedulePodVersionLabel] = "former"
 			formerDS.Status.DesiredNumberScheduled = int32(formerDesired)
 			existingDS = append(existingDS, *formerDS)
 		}
@@ -922,7 +922,7 @@ var _ = Describe("DRAReconciler_garbageCollectDRADaemonSets", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "dra-old",
 				Namespace: "namespace",
-				Labels:    map[string]string{constants.ModuleNameLabel: mod.Name, schedulePluginVersionLabel: "formerVersion"},
+				Labels:    map[string]string{constants.ModuleNameLabel: mod.Name, schedulePodVersionLabel: "formerVersion"},
 			},
 		}
 		clnt.EXPECT().Delete(context.Background(), &deleteDS).Return(fmt.Errorf("some error"))
@@ -938,7 +938,7 @@ var _ = Describe("DRAReconciler_garbageCollectDRADaemonSets", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "dra-old",
 				Namespace: "namespace",
-				Labels:    map[string]string{constants.ModuleNameLabel: mod.Name, schedulePluginVersionLabel: "formerVersion"},
+				Labels:    map[string]string{constants.ModuleNameLabel: mod.Name, schedulePodVersionLabel: "formerVersion"},
 			},
 		}
 
