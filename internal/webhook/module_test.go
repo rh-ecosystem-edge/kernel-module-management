@@ -429,6 +429,36 @@ var _ = Describe("validateModule", func() {
 		_, err := validateModule(&mod)
 		Expect(err).NotTo(HaveOccurred())
 	})
+
+	It("should reject startupProbe on devicePlugin initContainer", func() {
+		mod := validModule
+		mod.Spec.DevicePlugin = &kmmv1beta1.DevicePluginSpec{
+			Container: kmmv1beta1.DevicePluginContainerSpec{
+				Image: "plugin:latest",
+			},
+			InitContainer: &kmmv1beta1.DevicePluginContainerSpec{
+				Image:        "init:latest",
+				StartupProbe: &v1.Probe{},
+			},
+		}
+		_, err := validateModule(&mod)
+		Expect(err).To(MatchError(ContainSubstring("spec.devicePlugin.initContainer.startupProbe is not supported")))
+	})
+
+	It("should reject livenessProbe on devicePlugin initContainer", func() {
+		mod := validModule
+		mod.Spec.DevicePlugin = &kmmv1beta1.DevicePluginSpec{
+			Container: kmmv1beta1.DevicePluginContainerSpec{
+				Image: "plugin:latest",
+			},
+			InitContainer: &kmmv1beta1.DevicePluginContainerSpec{
+				Image:         "init:latest",
+				LivenessProbe: &v1.Probe{},
+			},
+		}
+		_, err := validateModule(&mod)
+		Expect(err).To(MatchError(ContainSubstring("spec.devicePlugin.initContainer.livenessProbe is not supported")))
+	})
 })
 
 var _ = Describe("ValidateCreate", func() {
