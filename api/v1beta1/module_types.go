@@ -297,6 +297,16 @@ type DevicePluginContainerSpec struct {
 	// VolumeMounts is a list of volume mounts that are appended to the default ones.
 	// +optional
 	VolumeMounts []v1.VolumeMount `json:"volumeMounts,omitempty"`
+
+	// StartupProbe allows a startup probe to be set for this container.
+	// When nil, no startup probes are configured.
+	// +optional
+	StartupProbe *v1.Probe `json:"startupProbe,omitempty"`
+
+	// LivenessProbe allows a liveness probe to be set for this container.
+	// When nil, no liveness probe is configured.
+	// +optional
+	LivenessProbe *v1.Probe `json:"livenessProbe,omitempty"`
 }
 
 type DevicePluginSpec struct {
