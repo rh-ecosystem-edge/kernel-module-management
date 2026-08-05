@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -800,7 +801,7 @@ var _ = Describe("DevicePluginReconciler_setDevicePluginAsDesired", func() {
 	})
 
 	DescribeTable("should work as expected",
-		func(moduleLoader *kmmv1beta1.ModuleLoaderSpec, expectedNodeSelector map[string]string, withInitContainer bool) {
+		func(moduleLoader *kmmv1beta1.ModuleLoaderSpec, expectedNodeSelector map[string]string, withInitContainer bool, customLiveness *v1.Probe, customStartup *v1.Probe) {
 			const (
 				dsName             = "ds-name"
 				serviceAccountName = "some-service-account"
@@ -880,6 +881,8 @@ var _ = Describe("DevicePluginReconciler_setDevicePluginAsDesired", func() {
 							ImagePullPolicy: ipp,
 							Resources:       resources,
 							VolumeMounts:    []v1.VolumeMount{dpVolMount},
+							LivenessProbe:   customLiveness,
+							StartupProbe:    customStartup,
 						},
 						ServiceAccountName:           serviceAccountName,
 						Volumes:                      []v1.Volume{dpVol},
@@ -977,6 +980,8 @@ var _ = Describe("DevicePluginReconciler_setDevicePluginAsDesired", func() {
 										},
 										dpVolMount,
 									},
+									LivenessProbe: customLiveness,
+									StartupProbe:  customStartup,
 								},
 							},
 							ImagePullSecrets:   []v1.LocalObjectReference{repoSecret},
@@ -1011,6 +1016,7 @@ var _ = Describe("DevicePluginReconciler_setDevicePluginAsDesired", func() {
 			nil,
 			map[string]string{"has-feature-x": "true"},
 			false,
+			nil, nil,
 		),
 		Entry("moduleLoader is defined",
 			&kmmv1beta1.ModuleLoaderSpec{},
@@ -1019,6 +1025,51 @@ var _ = Describe("DevicePluginReconciler_setDevicePluginAsDesired", func() {
 				utils.GetDevicePluginTargetNodeLabel(namespace, moduleName): "",
 			},
 			true,
+			nil, nil,
+		),
+		Entry("with custom liveness probe",
+			nil,
+			map[string]string{"has-feature-x": "true"},
+			false,
+			&v1.Probe{
+				ProbeHandler: v1.ProbeHandler{
+					HTTPGet: &v1.HTTPGetAction{Path: "/healthz", Port: intstr.FromInt32(8080)},
+				},
+				PeriodSeconds: 30,
+			}, nil,
+		),
+		Entry("with custom startup probe",
+			nil,
+			map[string]string{"has-feature-x": "true"},
+			false,
+			nil,
+			&v1.Probe{
+				ProbeHandler: v1.ProbeHandler{
+					HTTPGet: &v1.HTTPGetAction{Path: "/ready", Port: intstr.FromInt32(8080)},
+				},
+				InitialDelaySeconds: 10,
+				PeriodSeconds:       5,
+				FailureThreshold:    30,
+			},
+		),
+		Entry("with custom liveness and startup probes",
+			nil,
+			map[string]string{"has-feature-x": "true"},
+			false,
+			&v1.Probe{
+				ProbeHandler: v1.ProbeHandler{
+					HTTPGet: &v1.HTTPGetAction{Path: "/healthz", Port: intstr.FromInt32(8080)},
+				},
+				PeriodSeconds: 30,
+			},
+			&v1.Probe{
+				ProbeHandler: v1.ProbeHandler{
+					HTTPGet: &v1.HTTPGetAction{Path: "/ready", Port: intstr.FromInt32(8080)},
+				},
+				InitialDelaySeconds: 10,
+				PeriodSeconds:       5,
+				FailureThreshold:    30,
+			},
 		),
 	)
 })
