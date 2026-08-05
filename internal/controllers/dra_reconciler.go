@@ -573,6 +573,10 @@ func (dsci *draDaemonSetCreatorImpl) setDRAAsDesired(
 			log.FromContext(ctx).Info(utils.WarnString("No ServiceAccount set for the DRA DaemonSet"))
 		}
 	}
+	effectiveLivenessProbe := draLivenessProbe
+	if mod.Spec.DRA.Container.LivenessProbe != nil {
+		effectiveLivenessProbe = mod.Spec.DRA.Container.LivenessProbe
+	}
 
 	ds.Spec = appsv1.DaemonSetSpec{
 		Selector: &metav1.LabelSelector{MatchLabels: standardLabels},
@@ -582,8 +586,8 @@ func (dsci *draDaemonSetCreatorImpl) setDRAAsDesired(
 				Finalizers: []string{constants.NodeLabelerFinalizer},
 			},
 			Spec: v1.PodSpec{
-				InitContainers:               generatePodContainerSpec(mod.Spec.DRA.InitContainer, "dra-init", nil, nil, nil),
-				Containers:                   generatePodContainerSpec(&mod.Spec.DRA.Container, "dra", containerVolumeMounts, presetEnv, draLivenessProbe),
+				InitContainers:               generatePodContainerSpec(mod.Spec.DRA.InitContainer, "dra-init", nil, nil, nil, nil),
+				Containers:                   generatePodContainerSpec(&mod.Spec.DRA.Container, "dra", containerVolumeMounts, presetEnv, effectiveLivenessProbe, mod.Spec.DRA.Container.StartupProbe),
 				PriorityClassName:            "system-node-critical",
 				HostNetwork:                  true,
 				ImagePullSecrets:             getPodPullSecrets(mod.Spec.ImageRepoSecret),
