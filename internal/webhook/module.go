@@ -117,6 +117,15 @@ func validateModule(mod *kmmv1beta1.Module) (admission.Warnings, error) {
 		return nil, fmt.Errorf("failed to validate device plugin volumes: %v", err)
 	}
 
+	if mod.Spec.DevicePlugin != nil && mod.Spec.DevicePlugin.InitContainer != nil {
+		if mod.Spec.DevicePlugin.InitContainer.StartupProbe != nil {
+			return nil, fmt.Errorf("spec.devicePlugin.initContainer.startupProbe is not supported")
+		}
+		if mod.Spec.DevicePlugin.InitContainer.LivenessProbe != nil {
+			return nil, fmt.Errorf("spec.devicePlugin.initContainer.livenessProbe is not supported")
+		}
+	}
+
 	if mod.Spec.ModuleLoader == nil {
 		// If ModuleLoader is nil, there is no need to validate related fields
 		return nil, nil
