@@ -308,6 +308,14 @@ type DevicePluginContainerSpec struct {
 	// When nil, no liveness probe is configured.
 	// +optional
 	LivenessProbe *v1.Probe `json:"livenessProbe,omitempty"`
+
+	// SecurityContext overrides the default security context for this container.
+	// When nil, the default privileged security context is applied.
+	// Ensure the specified context grants sufficient permissions for the
+	// container's operation (e.g., device access); an overly restrictive
+	// context will cause the pod to fail at runtime.
+	// +optional
+	SecurityContext *v1.SecurityContext `json:"securityContext,omitempty"`
 }
 
 type DevicePluginSpec struct {
