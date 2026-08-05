@@ -443,8 +443,9 @@ func (dsci *daemonSetCreatorImpl) setDevicePluginAsDesired(
 				Finalizers: []string{constants.NodeLabelerFinalizer},
 			},
 			Spec: v1.PodSpec{
-				InitContainers:               generatePodContainerSpec(mod.Spec.DevicePlugin.InitContainer, "device-plugin-init", nil),
-				Containers:                   generatePodContainerSpec(&mod.Spec.DevicePlugin.Container, "device-plugin", containerVolumeMounts),
+				InitContainers: generatePodContainerSpec(mod.Spec.DevicePlugin.InitContainer, "device-plugin-init", nil, nil, nil),
+				// DevicePlugin has no default probe, so the CR value (possibly nil) is passed directly.
+				Containers:                   generatePodContainerSpec(&mod.Spec.DevicePlugin.Container, "device-plugin", containerVolumeMounts, mod.Spec.DevicePlugin.Container.LivenessProbe, mod.Spec.DevicePlugin.Container.StartupProbe),
 				PriorityClassName:            "system-node-critical",
 				ImagePullSecrets:             getPodPullSecrets(mod.Spec.ImageRepoSecret),
 				NodeSelector:                 nodeSelector,
@@ -459,7 +460,13 @@ func (dsci *daemonSetCreatorImpl) setDevicePluginAsDesired(
 	return controllerutil.SetControllerReference(mod, ds, dsci.scheme)
 }
 
-func generatePodContainerSpec(containerSpec *kmmv1beta1.DevicePluginContainerSpec, containerName string, presetVolumeMounts []v1.VolumeMount) []v1.Container {
+func generatePodContainerSpec(
+	containerSpec *kmmv1beta1.DevicePluginContainerSpec,
+	containerName string,
+	presetVolumeMounts []v1.VolumeMount,
+	livenessProbe *v1.Probe,
+	startupProbe *v1.Probe,
+) []v1.Container {
 	if containerSpec == nil {
 		return nil
 	}
@@ -474,6 +481,8 @@ func generatePodContainerSpec(containerSpec *kmmv1beta1.DevicePluginContainerSpe
 			Resources:       containerSpec.Resources,
 			SecurityContext: &v1.SecurityContext{Privileged: ptr.To(true)},
 			VolumeMounts:    append(containerSpec.VolumeMounts, presetVolumeMounts...),
+			LivenessProbe:   livenessProbe,
+			StartupProbe:    startupProbe,
 		},
 	}
 }
