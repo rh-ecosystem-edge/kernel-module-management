@@ -50,7 +50,7 @@ spec:
 The command below installs the bleeding edge version of KMM.
 
 ```shell
-oc apply -k https://github.com/rh-ecosystem-edge/kernel-module-management/config/default
+oc apply --server-side --force-conflicts -k https://github.com/rh-ecosystem-edge/kernel-module-management/config/default
 ```
 
 ## OpenShift versions below 4.12
