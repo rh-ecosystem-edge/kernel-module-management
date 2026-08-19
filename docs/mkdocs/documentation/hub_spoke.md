@@ -57,7 +57,7 @@ spec:
 The command below installs the bleeding edge version of KMM-Hub.
 
 ```shell
-oc apply -k https://github.com/rh-ecosystem-edge/kernel-module-management/config/default-hub
+oc apply --server-side --force-conflicts -k https://github.com/rh-ecosystem-edge/kernel-module-management/config/default-hub
 ```
 
 ### The `ManagedClusterModule` CRD
