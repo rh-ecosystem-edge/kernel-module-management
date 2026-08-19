@@ -11,8 +11,7 @@ the kernel modules for new incoming kernel versions attached to upgrades.
 ## Getting started
 Install the bleeding edge KMM in one command:
 ```shell
-oc apply -k https://github.com/rh-ecosystem-edge/kernel-module-management/config/default?ref=release-2.6
-
+oc apply --server-side --force-conflicts -k https://github.com/rh-ecosystem-edge/kernel-module-management/config/default?ref=release-2.6
 ```
 
 ## Documentation and lab
