@@ -184,7 +184,7 @@ var _ = Describe("Sync", func() {
 		Expect(err).To(BeNil())
 	})
 
-	It("IsResourceChanged failed", func() {
+	It("ShouldResourceBeRestarted failed", func() {
 		testTemplate := buildv1.Build{}
 		testBuild := buildv1.Build{}
 		gomock.InOrder(
@@ -193,13 +193,13 @@ var _ = Describe("Sync", func() {
 			mockResourceManager.EXPECT().GetResourceByKernel(ctx, mbscName, mbscNamespace, kernelVersion,
 				kmmv1beta1.BuildImage, &testMBSC).
 				Return(&testBuild, nil),
-			mockResourceManager.EXPECT().IsResourceChanged(&testBuild, &testTemplate).Return(false, fmt.Errorf("some error")),
+			mockResourceManager.EXPECT().ShouldResourceBeRestarted(&testBuild, &testTemplate).Return(false, fmt.Errorf("some error")),
 		)
 		err := mgr.Sync(ctx, testMLD, true, kmmv1beta1.BuildImage, &testMBSC)
 		Expect(err).To(HaveOccurred())
 	})
 
-	It("DeleteResource failed should not cause failure", func() {
+	It("DeleteResource failed should cause failure so the restart is retried", func() {
 		testTemplate := buildv1.Build{}
 		testBuild := buildv1.Build{}
 		gomock.InOrder(
@@ -208,8 +208,41 @@ var _ = Describe("Sync", func() {
 			mockResourceManager.EXPECT().GetResourceByKernel(ctx, mbscName, mbscNamespace, kernelVersion,
 				kmmv1beta1.BuildImage, &testMBSC).
 				Return(&testBuild, nil),
-			mockResourceManager.EXPECT().IsResourceChanged(&testBuild, &testTemplate).Return(true, nil),
+			mockResourceManager.EXPECT().ShouldResourceBeRestarted(&testBuild, &testTemplate).Return(true, nil),
 			mockResourceManager.EXPECT().DeleteResource(ctx, &testBuild).Return(fmt.Errorf("some error")),
+		)
+		err := mgr.Sync(ctx, testMLD, true, kmmv1beta1.BuildImage, &testMBSC)
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("DeleteResource returning NotFound should also cause failure", func() {
+		testTemplate := buildv1.Build{}
+		testBuild := buildv1.Build{}
+		notFoundErr := k8serrors.NewNotFound(buildv1.Resource("builds"), "some-name")
+		gomock.InOrder(
+			mockResourceManager.EXPECT().MakeResourceTemplate(ctx, testMLD, &testMBSC, true, kmmv1beta1.BuildImage).
+				Return(&testTemplate, nil),
+			mockResourceManager.EXPECT().GetResourceByKernel(ctx, mbscName, mbscNamespace, kernelVersion,
+				kmmv1beta1.BuildImage, &testMBSC).
+				Return(&testBuild, nil),
+			mockResourceManager.EXPECT().ShouldResourceBeRestarted(&testBuild, &testTemplate).Return(true, nil),
+			mockResourceManager.EXPECT().DeleteResource(ctx, &testBuild).Return(notFoundErr),
+		)
+		err := mgr.Sync(ctx, testMLD, true, kmmv1beta1.BuildImage, &testMBSC)
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("unchanged but recoverable resource gets deleted so it can be retried", func() {
+		testTemplate := buildv1.Build{}
+		testBuild := buildv1.Build{}
+		gomock.InOrder(
+			mockResourceManager.EXPECT().MakeResourceTemplate(ctx, testMLD, &testMBSC, true, kmmv1beta1.BuildImage).
+				Return(&testTemplate, nil),
+			mockResourceManager.EXPECT().GetResourceByKernel(ctx, mbscName, mbscNamespace, kernelVersion,
+				kmmv1beta1.BuildImage, &testMBSC).
+				Return(&testBuild, nil),
+			mockResourceManager.EXPECT().ShouldResourceBeRestarted(&testBuild, &testTemplate).Return(true, nil),
+			mockResourceManager.EXPECT().DeleteResource(ctx, &testBuild).Return(nil),
 		)
 		err := mgr.Sync(ctx, testMLD, true, kmmv1beta1.BuildImage, &testMBSC)
 		Expect(err).To(BeNil())
@@ -240,7 +273,7 @@ var _ = Describe("Sync", func() {
 			mockResourceManager.EXPECT().CreateResource(ctx, &testBuildTemplate).Return(nil)
 			goto executeTestFunction
 		}
-		mockResourceManager.EXPECT().IsResourceChanged(&existingTestBuild, &testBuildTemplate).Return(buildChanged, nil)
+		mockResourceManager.EXPECT().ShouldResourceBeRestarted(&existingTestBuild, &testBuildTemplate).Return(buildChanged, nil)
 		if buildChanged {
 			mockResourceManager.EXPECT().DeleteResource(ctx, &existingTestBuild).Return(nil)
 		}

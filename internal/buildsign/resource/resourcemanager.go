@@ -111,7 +111,7 @@ func (rm *resourceManager) GetResourceStatus(obj metav1.Object) (buildsign.Statu
 	}
 }
 
-func (rm *resourceManager) IsResourceChanged(existingObj metav1.Object, newObj metav1.Object) (bool, error) {
+func (rm *resourceManager) ShouldResourceBeRestarted(existingObj metav1.Object, newObj metav1.Object) (bool, error) {
 
 	existingResource, ok := existingObj.(*buildv1.Build)
 	if !ok {
@@ -122,15 +122,17 @@ func (rm *resourceManager) IsResourceChanged(existingObj metav1.Object, newObj m
 		return false, errors.New("the new resource cannot be converted to the corect resource")
 	}
 
+	if existingResource.Status.Phase == buildv1.BuildPhaseError &&
+		existingResource.Status.Reason == buildv1.StatusReasonBuildPodDeleted {
+		return true, nil
+	}
+
 	existingAnnotations := existingResource.GetAnnotations()
 	newAnnotations := newResource.GetAnnotations()
 	if existingAnnotations == nil {
 		return false, fmt.Errorf("annotations are not present in the existing resource %s", existingResource.Name)
 	}
-	if existingAnnotations[constants.ResourceHashAnnotation] == newAnnotations[constants.ResourceHashAnnotation] {
-		return false, nil
-	}
-	return true, nil
+	return existingAnnotations[constants.ResourceHashAnnotation] != newAnnotations[constants.ResourceHashAnnotation], nil
 }
 
 func (rm *resourceManager) GetModuleResources(ctx context.Context, modName, namespace string,
