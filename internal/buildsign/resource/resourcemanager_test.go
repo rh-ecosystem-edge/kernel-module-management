@@ -309,7 +309,7 @@ var _ = Describe("GetResourceStatus", func() {
 	)
 })
 
-var _ = Describe("IsResourceChanged", func() {
+var _ = Describe("ShouldResourceBeRestarted", func() {
 	var (
 		ctrl                   *gomock.Controller
 		mockKubeClient         *client.MockClient
@@ -325,26 +325,56 @@ var _ = Describe("IsResourceChanged", func() {
 		rm = NewResourceManager(mockKubeClient, mockBuildArgOverrider, mockKernelOSDTKMapping, scheme)
 	})
 
-	DescribeTable("should detect if a build has changed",
-		func(annotation map[string]string, expectchanged bool, expectsErr bool) {
+	newBuild := buildv1.Build{
+		ObjectMeta: metav1.ObjectMeta{
+			Annotations: map[string]string{constants.ResourceHashAnnotation: "some hash"},
+		},
+	}
+
+	DescribeTable("should flag a build as needing a restart when its pod was deleted, regardless of spec changes",
+		func(existingBuild *buildv1.Build, expectedRestart bool) {
+			res, err := rm.ShouldResourceBeRestarted(existingBuild, &newBuild)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res).To(Equal(expectedRestart))
+		},
+		Entry("error phase, pod deleted", &buildv1.Build{
+			ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{constants.ResourceHashAnnotation: "some hash"}},
+			Status:     buildv1.BuildStatus{Phase: buildv1.BuildPhaseError, Reason: buildv1.StatusReasonBuildPodDeleted},
+		}, true),
+		Entry("error phase, other reason", &buildv1.Build{
+			ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{constants.ResourceHashAnnotation: "some hash"}},
+			Status:     buildv1.BuildStatus{Phase: buildv1.BuildPhaseError, Reason: buildv1.StatusReasonGenericBuildFailed},
+		}, false),
+		Entry("failed phase, pod deleted reason is irrelevant to Failed phase", &buildv1.Build{
+			ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{constants.ResourceHashAnnotation: "some hash"}},
+			Status:     buildv1.BuildStatus{Phase: buildv1.BuildPhaseFailed, Reason: buildv1.StatusReasonBuildPodDeleted},
+		}, false),
+		Entry("completed", &buildv1.Build{
+			ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{constants.ResourceHashAnnotation: "some hash"}},
+			Status:     buildv1.BuildStatus{Phase: buildv1.BuildPhaseComplete},
+		}, false),
+	)
+
+	It("errors out on an unexpected resource type", func() {
+		_, err := rm.ShouldResourceBeRestarted(&metav1.ObjectMeta{}, &newBuild)
+		Expect(err).To(HaveOccurred())
+	})
+
+	DescribeTable("should detect if a build's spec has changed",
+		func(annotation map[string]string, expectRestart bool, expectsErr bool) {
 			existingBuild := buildv1.Build{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: annotation,
 				},
 			}
-			newBuild := buildv1.Build{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{constants.ResourceHashAnnotation: "some hash"},
-				},
-			}
 
-			changed, err := rm.IsResourceChanged(&existingBuild, &newBuild)
+			restart, err := rm.ShouldResourceBeRestarted(&existingBuild, &newBuild)
 
 			if expectsErr {
 				Expect(err).To(HaveOccurred())
 				return
 			}
-			Expect(expectchanged).To(Equal(changed))
+			Expect(restart).To(Equal(expectRestart))
 		},
 
 		Entry("should error if build has no annotations", nil, false, true),
