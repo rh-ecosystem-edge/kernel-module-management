@@ -129,21 +129,6 @@ func (mr *MockResourceManagerMockRecorder) HasResourcesCompletedSuccessfully(ctx
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasResourcesCompletedSuccessfully", reflect.TypeOf((*MockResourceManager)(nil).HasResourcesCompletedSuccessfully), ctx, obj)
 }
 
-// IsResourceChanged mocks base method.
-func (m *MockResourceManager) IsResourceChanged(existingObj, newObj v1.Object) (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsResourceChanged", existingObj, newObj)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// IsResourceChanged indicates an expected call of IsResourceChanged.
-func (mr *MockResourceManagerMockRecorder) IsResourceChanged(existingObj, newObj any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsResourceChanged", reflect.TypeOf((*MockResourceManager)(nil).IsResourceChanged), existingObj, newObj)
-}
-
 // MakeResourceTemplate mocks base method.
 func (m *MockResourceManager) MakeResourceTemplate(ctx context.Context, mld *api.ModuleLoaderData, owner v1.Object, pushImage bool, resourceType v1beta1.BuildOrSignAction) (v1.Object, error) {
 	m.ctrl.T.Helper()
@@ -157,4 +142,19 @@ func (m *MockResourceManager) MakeResourceTemplate(ctx context.Context, mld *api
 func (mr *MockResourceManagerMockRecorder) MakeResourceTemplate(ctx, mld, owner, pushImage, resourceType any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MakeResourceTemplate", reflect.TypeOf((*MockResourceManager)(nil).MakeResourceTemplate), ctx, mld, owner, pushImage, resourceType)
+}
+
+// ShouldResourceBeRestarted mocks base method.
+func (m *MockResourceManager) ShouldResourceBeRestarted(existingObj, newObj v1.Object) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ShouldResourceBeRestarted", existingObj, newObj)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ShouldResourceBeRestarted indicates an expected call of ShouldResourceBeRestarted.
+func (mr *MockResourceManagerMockRecorder) ShouldResourceBeRestarted(existingObj, newObj any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ShouldResourceBeRestarted", reflect.TypeOf((*MockResourceManager)(nil).ShouldResourceBeRestarted), existingObj, newObj)
 }
