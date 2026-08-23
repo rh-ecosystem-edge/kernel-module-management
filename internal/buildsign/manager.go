@@ -103,18 +103,19 @@ func (m *manager) Sync(ctx context.Context, mld *api.ModuleLoaderData, pushImage
 		return nil
 	}
 
-	changed, err := m.resourceManager.IsResourceChanged(resource, resourceTemplate)
+	shouldRestart, err := m.resourceManager.ShouldResourceBeRestarted(resource, resourceTemplate)
 	if err != nil {
-		return fmt.Errorf("could not determine if the resource has changed: %v", err)
+		return fmt.Errorf("could not determine if the resource should be restarted: %v", err)
 	}
 
-	if changed {
-		logger.Info("The module's spec has been changed, deleting the current resource so a new one can be created",
-			"name", resource.GetName(), "action", action)
-		err = m.resourceManager.DeleteResource(ctx, resource)
-		if err != nil {
-			logger.Info(utils.WarnString(fmt.Sprintf("failed to delete %s resource %s: %v", action, resource.GetName(), err)))
-		}
+	if !shouldRestart {
+		return nil
+	}
+
+	logger.Info("Deleting the current resource so a new one can be created",
+		"name", resource.GetName(), "action", action)
+	if err = m.resourceManager.DeleteResource(ctx, resource); err != nil {
+		return fmt.Errorf("could not delete %s resource %s: %w", action, resource.GetName(), err)
 	}
 
 	return nil
