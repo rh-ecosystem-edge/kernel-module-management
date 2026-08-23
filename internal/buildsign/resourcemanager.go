@@ -30,7 +30,7 @@ type ResourceManager interface {
 	GetResourceByKernel(ctx context.Context, name, namespace, targetKernel string, resourceType kmmv1beta1.BuildOrSignAction,
 		owner metav1.Object) (metav1.Object, error)
 	GetResourceStatus(obj metav1.Object) (Status, error)
-	IsResourceChanged(existingObj metav1.Object, newObj metav1.Object) (bool, error)
+	ShouldResourceBeRestarted(existingObj metav1.Object, newObj metav1.Object) (bool, error)
 	GetModuleResources(ctx context.Context, modName, namespace string, resourceType kmmv1beta1.BuildOrSignAction,
 		owner metav1.Object) ([]metav1.Object, error)
 	HasResourcesCompletedSuccessfully(ctx context.Context, obj metav1.Object) (bool, error)
