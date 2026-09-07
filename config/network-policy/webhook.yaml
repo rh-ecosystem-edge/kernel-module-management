@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: webhook
+  namespace: system
+spec:
+  podSelector:
+    matchLabels:
+      control-plane: webhook-server
+  policyTypes:
+  - Egress
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          policy-group.network.openshift.io/host-network: ""
+    ports:
+    - protocol: TCP
+      port: 9443
+  egress:
+  - ports:
+    - protocol: TCP
+      port: 6443
+    - protocol: TCP
+      port: 443

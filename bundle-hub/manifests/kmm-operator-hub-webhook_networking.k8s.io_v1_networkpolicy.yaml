@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/component: kmm-hub
+    app.kubernetes.io/name: kmm-hub
+    app.kubernetes.io/part-of: kmm
+  name: kmm-operator-hub-webhook
+spec:
+  egress:
+  - ports:
+    - port: 6443
+      protocol: TCP
+    - port: 443
+      protocol: TCP
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          policy-group.network.openshift.io/host-network: ""
+    ports:
+    - port: 9443
+      protocol: TCP
+  podSelector:
+    matchLabels:
+      control-plane: webhook-server
+  policyTypes:
+  - Egress
+  - Ingress

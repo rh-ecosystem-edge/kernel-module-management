@@ -1,0 +1,21 @@
+apiVersion: builtin
+kind: LabelTransformer
+metadata:
+  name: kmm-hub-labels
+labels:
+  app.kubernetes.io/component: kmm-hub
+  app.kubernetes.io/name: kmm-hub
+  app.kubernetes.io/part-of: kmm
+fieldSpecs:
+- path: metadata/labels
+  create: true
+- kind: Service
+  version: v1
+  path: spec/selector
+  create: true
+- kind: Deployment
+  path: spec/selector/matchLabels
+  create: true
+- kind: Deployment
+  path: spec/template/metadata/labels
+  create: true
