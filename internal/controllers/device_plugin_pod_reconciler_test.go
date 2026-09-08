@@ -45,13 +45,14 @@ var _ = Describe("DevicePluginPodReconciler_Reconcile", func() {
 	It("should return an error if we failed to get the list of pods", func() {
 		pod := &v1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Labels: map[string]string{constants.ModuleNameLabel: moduleName},
-				Name:   podName,
+				Labels:    map[string]string{constants.ModuleNameLabel: moduleName},
+				Name:      podName,
+				Namespace: podNamespace,
 			},
 			Spec: v1.PodSpec{NodeName: nodeName},
 		}
 
-		kubeClient.EXPECT().List(ctx, gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("some error"))
+		kubeClient.EXPECT().List(ctx, gomock.Any(), client.InNamespace(podNamespace), gomock.Any(), gomock.Any()).Return(errors.New("some error"))
 
 		_, err := r.Reconcile(ctx, pod)
 		Expect(err).To(HaveOccurred())
@@ -64,7 +65,7 @@ var _ = Describe("DevicePluginPodReconciler_Reconcile", func() {
 		)
 
 		gomock.InOrder(
-			kubeClient.EXPECT().List(ctx, gomock.Any(), labelSelector, fieldSelector).Return(nil),
+			kubeClient.EXPECT().List(ctx, gomock.Any(), client.InNamespace(podNamespace), labelSelector, fieldSelector).Return(nil),
 			kubeClient.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).Do(
 				func(_ interface{}, _ interface{}, node *v1.Node, _ ...client.GetOption) {
 					node.SetLabels(map[string]string{utils.GetDevicePluginNodeLabel(podNamespace, moduleName): ""})
@@ -97,7 +98,7 @@ var _ = Describe("DevicePluginPodReconciler_Reconcile", func() {
 			fieldSelector = client.MatchingFields{"spec.nodeName": nodeName}
 		)
 
-		kubeClient.EXPECT().List(ctx, gomock.Any(), labelSelector, fieldSelector).Do(
+		kubeClient.EXPECT().List(ctx, gomock.Any(), client.InNamespace(podNamespace), labelSelector, fieldSelector).Do(
 			func(_ interface{}, modulePodsList *v1.PodList, _ ...client.ListOption) {
 				modulePodsList.Items = []v1.Pod{
 					{
@@ -116,8 +117,63 @@ var _ = Describe("DevicePluginPodReconciler_Reconcile", func() {
 
 		pod := &v1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Labels: map[string]string{constants.ModuleNameLabel: moduleName},
-				Name:   podName,
+				Labels:    map[string]string{constants.ModuleNameLabel: moduleName},
+				Name:      podName,
+				Namespace: podNamespace,
+			},
+			Spec: v1.PodSpec{NodeName: nodeName},
+		}
+
+		_, err := r.Reconcile(ctx, pod)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should ignore a ready Pod of a same-named Module in another namespace", func() {
+		other := v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels:    map[string]string{constants.ModuleNameLabel: moduleName},
+				Name:      "other-namespace-pod",
+				Namespace: "other-namespace",
+			},
+			Spec:   v1.PodSpec{NodeName: nodeName},
+			Status: v1.PodStatus{Conditions: []v1.PodCondition{{Type: v1.PodReady, Status: v1.ConditionTrue}}},
+		}
+
+		gomock.InOrder(
+			kubeClient.EXPECT().List(ctx, gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, list client.ObjectList, opts ...client.ListOption) error {
+					o := client.ListOptions{}
+					for _, opt := range opts {
+						opt.ApplyToList(&o)
+					}
+					if o.Namespace == "" || o.Namespace == other.Namespace {
+						list.(*v1.PodList).Items = []v1.Pod{other}
+					}
+					return nil
+				},
+			),
+			kubeClient.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).Do(
+				func(_ interface{}, _ interface{}, node *v1.Node, _ ...client.GetOption) {
+					node.SetLabels(map[string]string{
+						utils.GetDevicePluginNodeLabel(podNamespace, moduleName):    "",
+						utils.GetDevicePluginNodeLabel(other.Namespace, moduleName): "",
+					})
+				},
+			),
+			kubeClient.EXPECT().Patch(ctx, gomock.Any(), gomock.Any()).Do(
+				func(_ interface{}, node *v1.Node, p client.Patch, _ ...client.GetOption) {
+					Expect(p.Data(node)).To(Equal([]byte(
+						`{"metadata":{"labels":{"` + utils.GetDevicePluginNodeLabel(podNamespace, moduleName) + `":null}}}`,
+					)))
+				},
+			),
+		)
+
+		pod := &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels:    map[string]string{constants.ModuleNameLabel: moduleName},
+				Name:      podName,
+				Namespace: podNamespace,
 			},
 			Spec: v1.PodSpec{NodeName: nodeName},
 		}
@@ -192,7 +248,7 @@ var _ = Describe("DevicePluginPodReconciler_Reconcile", func() {
 		)
 
 		gomock.InOrder(
-			kubeClient.EXPECT().List(ctx, gomock.Any(), labelSelector, fieldSelector).Return(nil),
+			kubeClient.EXPECT().List(ctx, gomock.Any(), client.InNamespace(podNamespace), labelSelector, fieldSelector).Return(nil),
 			kubeClient.EXPECT().Get(ctx, gomock.Any(), gomock.Any()).Return(nil),
 			kubeClient.EXPECT().Patch(ctx, gomock.Any(), gomock.Any()).Return(nil),
 			kubeClient.EXPECT().Patch(ctx, gomock.Any(), gomock.Any()).Do(patchRemoveFinalizerFunc),
@@ -204,6 +260,7 @@ var _ = Describe("DevicePluginPodReconciler_Reconcile", func() {
 				Finalizers:        []string{constants.NodeLabelerFinalizer},
 				Labels:            map[string]string{constants.ModuleNameLabel: moduleName},
 				Name:              podName,
+				Namespace:         podNamespace,
 			},
 			Spec: v1.PodSpec{NodeName: nodeName},
 		}
