@@ -63,9 +63,9 @@ func (dppr *DevicePluginPodReconciler) Reconcile(ctx context.Context, pod *v1.Po
 			labelSelector := client.MatchingLabels{constants.ModuleNameLabel: moduleName}
 			fieldSelector := client.MatchingFields{"spec.nodeName": nodeName}
 			var modulePodsList v1.PodList
-			err := dppr.client.List(ctx, &modulePodsList, labelSelector, fieldSelector)
+			err := dppr.client.List(ctx, &modulePodsList, client.InNamespace(pod.Namespace), labelSelector, fieldSelector)
 			if err != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to get list of all pods for module %s on node %s: %v", moduleName, nodeName, err)
+				return ctrl.Result{}, fmt.Errorf("failed to get list of pods for module %s on node %s: %v", moduleName, nodeName, err)
 			}
 			var foundRunningPod bool
 			for _, p := range modulePodsList.Items {
