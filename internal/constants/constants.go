@@ -21,6 +21,10 @@ const (
 	JobEventFinalizer = "kmm.node.kubernetes.io/job-event-finalizer"
 	BMCFinalizer      = "kmm.node.kubernetes.io/bmc-finalizer"
 
+	// The DRA reconciler holds the Module itself, because ModuleFinalizer is released as soon as no
+	// NMC lists the Module as in use, which says nothing about whether the cleanup has finished.
+	DRAFinalizer = "kmm.node.kubernetes.io/dra-finalizer"
+
 	ManagedClusterModuleNameLabel  = "kmm.node.kubernetes.io/managedclustermodule.name"
 	KernelVersionsClusterClaimName = "kernel-versions.kmm.node.kubernetes.io"
 	DockerfileCMKey                = "dockerfile"
