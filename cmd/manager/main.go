@@ -205,7 +205,7 @@ func main() {
 	}
 
 	if ocpVersion.AtLeast(constants.MinOCPMajorForDRA, constants.MinOCPMinorForDRA) {
-		if err = controllers.NewDRAReconciler(client, nodeAPI, networkPolicyAPI, scheme, operatorNamespace).SetupWithManager(mgr); err != nil {
+		if err = controllers.NewDRAReconciler(client, filterAPI, nodeAPI, networkPolicyAPI, scheme, operatorNamespace).SetupWithManager(mgr); err != nil {
 			cmd.FatalError(setupLogger, err, "unable to create controller", "name", controllers.DRAReconcilerName)
 		}
 	} else {
