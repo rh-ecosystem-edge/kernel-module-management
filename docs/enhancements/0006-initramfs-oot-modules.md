@@ -86,7 +86,7 @@ flowchart TD
 - **FR-17:** After a targeted node successfully reboots into the new initramfs that contains the OOT kernel modules, KMM must set a dedicated label on that node so applications that require the OOT driver can be scheduled onto it. [User]
 - **FR-18:** Once the generated initramfs is applied, that node stays booted. KMM must not reboot it again solely because it remains selected. [User]
 - **FR-19:** When the operator changes the node selector on the custom resource, nodes that are newly targeted must receive the generated initramfs (create and KMM reboot as in FR-11). [User]
-- **FR-20:** When the operator removes a node from the selector, KMM must not reboot that node. The node continues running the generated initramfs until the next reboot (by the operator, an admin, or any other cause). KMM must ensure that next reboot uses the original in-tree initramfs. [User]
+- **FR-20:** When the operator removes a node from the selector, KMM must not reboot that node. The node continues running the generated initramfs. KMM does not manage that node anymore, and it is up to the user/admin to revert to the original initramfs. [User]
 - **FR-21:** When the operator changes the custom resource spec in a way that requires the initramfs to be updated, every currently targeted node must generate a new initramfs and KMM must reboot that node into it. Nodes that are not targeted (including deselected nodes) must not be rebooted for that spec change. [User]
 
 The following flow shows what the operator observes when the selector changes after the generated initramfs is already applied.
