@@ -61,7 +61,7 @@ oc -n ${HUB_OPERATOR_NAMESPACE} wait --for=condition=complete --timeout=3m build
 # Wait for the sign build to be created and completed
 timeout 1m bash -c 'until oc -n ${HUB_OPERATOR_NAMESPACE} get builds -o json | jq -er ".items[].metadata.name | select(.? | match(\"sign\"))"; do sleep 1; done'
 export sign_build=$(oc -n ${HUB_OPERATOR_NAMESPACE} get builds -o json | jq -r '.items[].metadata.name | select(.? | match("sign"))')
-oc -n ${HUB_OPERATOR_NAMESPACE} wait --for=condition=complete --timeout=1m build/${sign_build}
+oc -n ${HUB_OPERATOR_NAMESPACE} wait --for=condition=complete --timeout=3m build/${sign_build}
 
 # Waiting for the manifestwork to be created
 timeout 1m bash -c 'until oc -n ${CLUSTER_NAME} get manifestwork/mod-example; do sleep 1; done'
