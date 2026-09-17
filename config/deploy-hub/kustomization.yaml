@@ -9,6 +9,7 @@ resources:
 - ../manager-hub
 - ../webhook-hub
 - ../webhook-server
+- ../network-policy
 
 patches:
 - target:

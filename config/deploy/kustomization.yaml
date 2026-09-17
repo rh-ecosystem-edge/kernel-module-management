@@ -10,6 +10,7 @@ resources:
 - ../prometheus
 - ../webhook
 - ../webhook-server
+- ../network-policy
 
 patches:
 - target:
