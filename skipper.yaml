@@ -10,6 +10,7 @@ volumes:
     - $HOME/.docker:$HOME/.docker
     - $HOME/.kube/:$HOME/.kube
     - $HOME/.minikube/:$HOME/.minikube
+    - $HOME/.cache/goimports:$HOME/.cache/goimports
 env_file:
   - skipper.env
 env:

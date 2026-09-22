@@ -47,7 +47,7 @@ metadata:
         }
       ]
     capabilities: Seamless Upgrades
-    createdAt: "2026-07-01T07:49:10Z"
+    createdAt: "2026-09-23T07:24:04Z"
     operatorframework.io/suggested-namespace: openshift-kmm
     operators.operatorframework.io/builder: operator-sdk-v1.41.1
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
@@ -66,6 +66,9 @@ spec:
       displayName: Boot Module Config
       kind: BootModuleConfig
       name: bootmoduleconfigs.kmm.sigs.x-k8s.io
+      version: v1beta1
+    - kind: InitramfsModule
+      name: initramfsmodules.kmm.sigs.x-k8s.io
       version: v1beta1
     - kind: ModuleBuildSignConfig
       name: modulebuildsignconfigs.kmm.sigs.x-k8s.io

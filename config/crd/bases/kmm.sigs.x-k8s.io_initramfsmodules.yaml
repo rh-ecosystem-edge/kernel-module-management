@@ -1,0 +1,294 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: initramfsmodules.kmm.sigs.x-k8s.io
+spec:
+  group: kmm.sigs.x-k8s.io
+  names:
+    kind: InitramfsModule
+    listKind: InitramfsModuleList
+    plural: initramfsmodules
+    shortNames:
+    - irm
+    singular: initramfsmodule
+  scope: Namespaced
+  versions:
+  - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: InitramfsModule describes OOT kernel modules to include in initramfs.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: InitramfsModuleSpec describes out-of-tree kernel modules
+              to place into initramfs.
+            properties:
+              build:
+                description: Build triggers an in-cluster build of ContainerImage
+                  when the tagged image is missing.
+                properties:
+                  baseImageRegistryTLS:
+                    description: BaseImageRegistryTLS contains settings determining
+                      how to access registries of the base images in the build-process'
+                      Dockerfile.
+                    properties:
+                      insecure:
+                        description: If Insecure is true, the operator will be able
+                          to access a registry in an insecure (plain HTTP) protocol.
+                        type: boolean
+                      insecureSkipTLSVerify:
+                        description: If InsecureSkipTLSVerify, the operator will accept
+                          any certificate provided by the registry.
+                        type: boolean
+                    type: object
+                  buildArgs:
+                    description: BuildArgs is an array of build variables that are
+                      provided to the image building backend.
+                    items:
+                      description: BuildArg represents a build argument used when
+                        building a container image.
+                      properties:
+                        name:
+                          type: string
+                        value:
+                          type: string
+                      required:
+                      - name
+                      - value
+                      type: object
+                    type: array
+                  dockerfileConfigMap:
+                    description: ConfigMap that holds Dockerfile contents
+                    properties:
+                      name:
+                        default: ""
+                        description: |-
+                          Name of the referent.
+                          This field is effectively required, but due to backwards compatibility is
+                          allowed to be empty. Instances of this type with an empty value here are
+                          almost certainly wrong.
+                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  kanikoParams:
+                    description: KanikoParams is used to customize the building process
+                      of the image.
+                    properties:
+                      tag:
+                        description: Kaniko image tag to use when creating the build
+                          Job
+                        type: string
+                    type: object
+                  secrets:
+                    description: |-
+                      Secrets is an optional list of secrets to be made available to the build system.
+                      Those secrets should be used for private resources such as a private Github repo.
+                      For container registries auth use module.spec.imagePullSecret instead.
+                    items:
+                      description: |-
+                        LocalObjectReference contains enough information to let you locate the
+                        referenced object inside the same namespace.
+                      properties:
+                        name:
+                          default: ""
+                          description: |-
+                            Name of the referent.
+                            This field is effectively required, but due to backwards compatibility is
+                            allowed to be empty. Instances of this type with an empty value here are
+                            almost certainly wrong.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    type: array
+                  selector:
+                    additionalProperties:
+                      type: string
+                    description: Selector describes on which nodes will run the building
+                      process.
+                    type: object
+                required:
+                - dockerfileConfigMap
+                type: object
+              containerImage:
+                description: |-
+                  ContainerImage is the OOT kmod image without the kernel-version suffix:
+                  <repository>:<partialTag>. The image pulled or built for a node is
+                  <repository>:<partialTag>-<kernelVersion>.
+                minLength: 1
+                type: string
+              dirName:
+                description: |-
+                  DirName is the in-image directory that contains the module tree.
+                  The default is /opt
+                type: string
+              firmwarePath:
+                description: FirmwarePath is the firmware directory inside the image.
+                type: string
+              imageRepoSecret:
+                description: ImageRepoSecret is an optional pull secret for ContainerImage.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              moduleNames:
+                description: |-
+                  ModuleNames are the OOT kernel modules to extract and load
+                  (.ko basename without .ko).
+                items:
+                  pattern: ^[A-Za-z0-9_-]+$
+                  type: string
+                minItems: 1
+                type: array
+                x-kubernetes-list-type: set
+              modulesPath:
+                description: ModulesPath is the directory in the image that contains
+                  modules.* files.
+                type: string
+              omit:
+                description: Omit is the list of in-tree kernel module names passed
+                  to dracut omit_drivers.
+                items:
+                  pattern: ^[A-Za-z0-9_-]+$
+                  type: string
+                type: array
+                x-kubernetes-list-type: set
+              rollback:
+                description: Rollback, when true, reverts targeted nodes to the original
+                  in-tree initramfs.
+                type: boolean
+              selector:
+                additionalProperties:
+                  type: string
+                description: |-
+                  Selector limits which nodes receive the generated initramfs.
+                  Empty or omitted targets worker nodes.
+                type: object
+              sign:
+                description: Sign signs the modules using the same key/cert flow as
+                  Module.
+                properties:
+                  certSecret:
+                    description: a secret containing the public key used to sign kernel
+                      modules for secureboot
+                    properties:
+                      name:
+                        default: ""
+                        description: |-
+                          Name of the referent.
+                          This field is effectively required, but due to backwards compatibility is
+                          allowed to be empty. Instances of this type with an empty value here are
+                          almost certainly wrong.
+                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  filesToSign:
+                    description: |-
+                      Paths inside the image for the kernel modules to sign.
+                      Full path to explicit files are required or any globs supported by the Bash shell
+                    items:
+                      type: string
+                    type: array
+                  keySecret:
+                    description: a secret containing the private key used to sign
+                      kernel modules for secureboot
+                    properties:
+                      name:
+                        default: ""
+                        description: |-
+                          Name of the referent.
+                          This field is effectively required, but due to backwards compatibility is
+                          allowed to be empty. Instances of this type with an empty value here are
+                          almost certainly wrong.
+                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  unsignedImage:
+                    description: Image to sign, ignored if a Build is present, required
+                      otherwise
+                    type: string
+                  unsignedImageRegistryTLS:
+                    description: UnsignedImageRegistryTLS contains settings determining
+                      how to access registries of the unsigned image.
+                    properties:
+                      insecure:
+                        description: If Insecure is true, the operator will be able
+                          to access a registry in an insecure (plain HTTP) protocol.
+                        type: boolean
+                      insecureSkipTLSVerify:
+                        description: If InsecureSkipTLSVerify, the operator will accept
+                          any certificate provided by the registry.
+                        type: boolean
+                    type: object
+                required:
+                - certSecret
+                - keySecret
+                type: object
+            required:
+            - containerImage
+            - moduleNames
+            type: object
+          status:
+            description: InitramfsModuleStatus defines the observed state of InitramfsModule.
+            properties:
+              nodes:
+                items:
+                  description: InitramfsNodeStatus is the observed initramfs state
+                    for one node.
+                  properties:
+                    kernelVersion:
+                      type: string
+                    name:
+                      type: string
+                    reason:
+                      description: Reason is set when State is Failed, for example
+                        MissingFirmware or BuildFailed.
+                      type: string
+                    state:
+                      enum:
+                      - Pending
+                      - Created
+                      - Applied
+                      - Failed
+                      type: string
+                  required:
+                  - name
+                  - state
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
