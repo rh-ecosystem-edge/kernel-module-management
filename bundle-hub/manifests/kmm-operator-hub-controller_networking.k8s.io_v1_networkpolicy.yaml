@@ -1,0 +1,39 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/component: kmm-hub
+    app.kubernetes.io/name: kmm-hub
+    app.kubernetes.io/part-of: kmm
+  name: kmm-operator-hub-controller
+spec:
+  egress:
+  - ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+    to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: openshift-dns
+      podSelector:
+        matchLabels:
+          dns.operator.openshift.io/daemonset-dns: default
+  - ports:
+    - port: 6443
+      protocol: TCP
+    - port: 443
+      protocol: TCP
+  ingress:
+  - ports:
+    - port: 8443
+      protocol: TCP
+    - port: 8081
+      protocol: TCP
+  podSelector:
+    matchLabels:
+      control-plane: controller
+  policyTypes:
+  - Egress
+  - Ingress

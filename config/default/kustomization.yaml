@@ -6,19 +6,12 @@ resources:
 
 components:
 - ../webhook-cert
+- ../kmm-labels
 
 # Adds namespace to all resources.
 namespace: openshift-kmm
 
 namePrefix: kmm-operator-
 
-# Labels to add to all resources and selectors.
-
 configurations:
 - kustomizeconfig.yaml
-labels:
-- includeSelectors: true
-  pairs:
-    app.kubernetes.io/component: kmm
-    app.kubernetes.io/name: kmm
-    app.kubernetes.io/part-of: kmm
