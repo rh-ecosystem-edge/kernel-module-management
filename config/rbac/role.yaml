@@ -38,6 +38,11 @@ rules:
   - ""
   resources:
   - secrets
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
   - serviceaccounts
   verbs:
   - get
