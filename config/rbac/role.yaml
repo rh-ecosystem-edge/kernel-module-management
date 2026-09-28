@@ -132,6 +132,18 @@ rules:
 - apiGroups:
   - kmm.sigs.x-k8s.io
   resources:
+  - initramfsmodules
+  - modules
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kmm.sigs.x-k8s.io
+  resources:
+  - initramfsmodules/finalizers
   - modulebuildsignconfigs/finalizers
   - moduleimagesconfigs/finalizers
   - modules/finalizers
@@ -140,6 +152,7 @@ rules:
 - apiGroups:
   - kmm.sigs.x-k8s.io
   resources:
+  - initramfsmodules/status
   - modulebuildsignconfigs/status
   - moduleimagesconfigs/status
   - modules/status
@@ -160,16 +173,6 @@ rules:
   - get
   - list
   - patch
-  - watch
-- apiGroups:
-  - kmm.sigs.x-k8s.io
-  resources:
-  - modules
-  verbs:
-  - get
-  - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - kmm.sigs.x-k8s.io
