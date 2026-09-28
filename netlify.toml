@@ -2,3 +2,7 @@
 [build]
   command = "make docs"
   publish = "docs/site"
+
+[build.environment]
+  PYTHON_VERSION = "3.12"
+
