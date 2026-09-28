@@ -321,18 +321,21 @@ var _ = Describe("makeSignTemplate", func() {
 	)
 
 	var (
-		ctrl *gomock.Controller
-		clnt *client.MockClient
-		rm   *resourceManager
-		mld  api.ModuleLoaderData
+		ctrl       *gomock.Controller
+		clnt       *client.MockClient
+		secretClnt *client.MockClient
+		rm         *resourceManager
+		mld        api.ModuleLoaderData
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = client.NewMockClient(ctrl)
+		secretClnt = client.NewMockClient(ctrl)
 		rm = &resourceManager{
-			client: clnt,
-			scheme: scheme,
+			client:       clnt,
+			secretReader: secretClnt,
+			scheme:       scheme,
 		}
 		mld = api.ModuleLoaderData{
 			Name:      moduleName,
@@ -452,14 +455,14 @@ COPY --from=signimage /signroot/modules/simple-kmod.ko:/modules/simple-procfs-km
 		}
 
 		gomock.InOrder(
-			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.KeySecret.Name, Namespace: mld.Namespace}, gomock.Any()).
+			secretClnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.KeySecret.Name, Namespace: mld.Namespace}, gomock.Any()).
 				DoAndReturn(
 					func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
 						secret.Data = privateSignData
 						return nil
 					},
 				),
-			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.CertSecret.Name, Namespace: mld.Namespace}, gomock.Any()).
+			secretClnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.CertSecret.Name, Namespace: mld.Namespace}, gomock.Any()).
 				DoAndReturn(
 					func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
 						secret.Data = publicSignData
@@ -478,14 +481,14 @@ COPY --from=signimage /signroot/modules/simple-kmod.ko:/modules/simple-procfs-km
 		mld.Selector = nodeSelector
 
 		gomock.InOrder(
-			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.KeySecret.Name, Namespace: mld.Namespace}, gomock.Any()).
+			secretClnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.KeySecret.Name, Namespace: mld.Namespace}, gomock.Any()).
 				DoAndReturn(
 					func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
 						secret.Data = privateSignData
 						return nil
 					},
 				),
-			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.CertSecret.Name, Namespace: mld.Namespace}, gomock.Any()).
+			secretClnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.CertSecret.Name, Namespace: mld.Namespace}, gomock.Any()).
 				DoAndReturn(
 					func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
 						secret.Data = publicSignData
@@ -524,14 +527,14 @@ COPY --from=signimage /signroot/modules/simple-kmod.ko:/modules/simple-procfs-km
 		mld.RegistryTLS = &kmmv1beta1.TLSOptions{}
 
 		gomock.InOrder(
-			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.KeySecret.Name, Namespace: mld.Namespace}, gomock.Any()).
+			secretClnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.KeySecret.Name, Namespace: mld.Namespace}, gomock.Any()).
 				DoAndReturn(
 					func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
 						secret.Data = privateSignData
 						return nil
 					},
 				),
-			clnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.CertSecret.Name, Namespace: mld.Namespace}, gomock.Any()).
+			secretClnt.EXPECT().Get(ctx, types.NamespacedName{Name: mld.Sign.CertSecret.Name, Namespace: mld.Namespace}, gomock.Any()).
 				DoAndReturn(
 					func(_ interface{}, _ interface{}, secret *v1.Secret, _ ...ctrlclient.GetOption) error {
 						secret.Data = publicSignData

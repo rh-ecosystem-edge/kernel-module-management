@@ -140,7 +140,7 @@ func main() {
 	metricsAPI.Register()
 
 	buildArgOverriderAPI := module.NewBuildArgOverrider()
-	resourceManager := buildsignresource.NewResourceManager(client, buildArgOverriderAPI, kernelOsDtkMapping, scheme)
+	resourceManager := buildsignresource.NewResourceManager(client, mgr.GetAPIReader(), buildArgOverriderAPI, kernelOsDtkMapping, scheme)
 	nodeAPI := node.NewNode(client)
 	kernelAPI := module.NewKernelMapper(buildArgOverriderAPI)
 	micAPI := mic.New(client, scheme)
