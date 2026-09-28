@@ -96,12 +96,17 @@ spec:
           - ""
           resources:
           - nodes
-          - secrets
           - serviceaccounts
           verbs:
           - get
           - list
           - watch
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          verbs:
+          - get
         - apiGroups:
           - build.openshift.io
           resources:
