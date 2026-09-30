@@ -18,15 +18,21 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 
+	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mcfg"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mic"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -38,14 +44,16 @@ const workerNodeLabelKey = "node-role.kubernetes.io/worker"
 // +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=initramfsmodules/status,verbs=get;patch;update
 // +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=initramfsmodules/finalizers,verbs=update
 // +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=moduleimagesconfigs,verbs=create;get;list;patch;watch
+// +kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigpools,verbs=get;list;watch;create;update;patch;delete
 
 type initramfsModuleReconciler struct {
 	helper initramfsModuleReconcilerHelper
 }
 
-func NewInitramfsModuleReconciler(client client.Client, micAPI mic.MIC, nodeAPI node.Node) *initramfsModuleReconciler {
+func NewInitramfsModuleReconciler(client client.Client, micAPI mic.MIC, nodeAPI node.Node, mcfgAPI mcfg.MCFG) *initramfsModuleReconciler {
 	return &initramfsModuleReconciler{
-		helper: newInitramfsModuleReconcilerHelper(client, micAPI, nodeAPI),
+		helper: newInitramfsModuleReconcilerHelper(client, micAPI, nodeAPI, mcfgAPI),
 	}
 }
 
@@ -64,6 +72,10 @@ func (r *initramfsModuleReconciler) Reconcile(ctx context.Context, irm *kmmv1bet
 		return res, r.helper.finalize(ctx, irm)
 	}
 
+	if err := r.helper.checkUnstampedPoolAndMachineConfig(ctx, irm); err != nil {
+		return res, err
+	}
+
 	nodes, err := r.helper.listSelectedNodes(ctx, irm)
 	if err != nil {
 		return res, err
@@ -72,10 +84,14 @@ func (r *initramfsModuleReconciler) Reconcile(ctx context.Context, irm *kmmv1bet
 	if err = r.helper.handleMIC(ctx, irm, nodes); err != nil {
 		return res, err
 	}
+	parsed, err := r.helper.handleParseJob(ctx, irm)
+	if err != nil {
+		return res, err
+	}
 	if err = r.helper.handleMachineConfigPool(ctx, irm); err != nil {
 		return res, err
 	}
-	if err = r.helper.handleMachineConfig(ctx, irm); err != nil {
+	if err = r.helper.handleMachineConfig(ctx, irm, parsed); err != nil {
 		return res, err
 	}
 	return res, nil
@@ -87,21 +103,25 @@ type initramfsModuleReconcilerHelper interface {
 	listSelectedNodes(ctx context.Context, irm *kmmv1beta1.InitramfsModule) ([]v1.Node, error)
 	handleMIC(ctx context.Context, irm *kmmv1beta1.InitramfsModule, nodes []v1.Node) error
 	finalize(ctx context.Context, irm *kmmv1beta1.InitramfsModule) error
+	checkUnstampedPoolAndMachineConfig(ctx context.Context, irm *kmmv1beta1.InitramfsModule) error
+	handleParseJob(ctx context.Context, irm *kmmv1beta1.InitramfsModule) (initramfsParseParams, error)
 	handleMachineConfigPool(ctx context.Context, irm *kmmv1beta1.InitramfsModule) error
-	handleMachineConfig(ctx context.Context, irm *kmmv1beta1.InitramfsModule) error
+	handleMachineConfig(ctx context.Context, irm *kmmv1beta1.InitramfsModule, parsed initramfsParseParams) error
 }
 
 type initramfsModuleReconcilerHelperImpl struct {
 	client  client.Client
 	micAPI  mic.MIC
 	nodeAPI node.Node
+	mcfgAPI mcfg.MCFG
 }
 
-func newInitramfsModuleReconcilerHelper(client client.Client, micAPI mic.MIC, nodeAPI node.Node) initramfsModuleReconcilerHelper {
+func newInitramfsModuleReconcilerHelper(client client.Client, micAPI mic.MIC, nodeAPI node.Node, mcfgAPI mcfg.MCFG) initramfsModuleReconcilerHelper {
 	return &initramfsModuleReconcilerHelperImpl{
 		client:  client,
 		micAPI:  micAPI,
 		nodeAPI: nodeAPI,
+		mcfgAPI: mcfgAPI,
 	}
 }
 
@@ -160,10 +180,76 @@ func (h *initramfsModuleReconcilerHelperImpl) finalize(context.Context, *kmmv1be
 	return nil
 }
 
-func (h *initramfsModuleReconcilerHelperImpl) handleMachineConfigPool(context.Context, *kmmv1beta1.InitramfsModule) error {
-	return nil
+func (h *initramfsModuleReconcilerHelperImpl) handleMachineConfigPool(ctx context.Context, irm *kmmv1beta1.InitramfsModule) error {
+	pool := &mcfgv1.MachineConfigPool{ObjectMeta: metav1.ObjectMeta{Name: mcfg.InitramfsPoolName}}
+	_, err := controllerutil.CreateOrPatch(ctx, h.client, pool, func() error {
+		h.mcfgAPI.UpdateInitramfsPool(pool, irm)
+		return nil
+	})
+	return err
 }
 
-func (h *initramfsModuleReconcilerHelperImpl) handleMachineConfig(context.Context, *kmmv1beta1.InitramfsModule) error {
+func (h *initramfsModuleReconcilerHelperImpl) handleMachineConfig(ctx context.Context, irm *kmmv1beta1.InitramfsModule, parsed initramfsParseParams) error {
+	mc := &mcfgv1.MachineConfig{ObjectMeta: metav1.ObjectMeta{Name: mcfg.InitramfsMachineConfigName}}
+	_, err := controllerutil.CreateOrPatch(ctx, h.client, mc, func() error {
+		return h.mcfgAPI.UpdateInitramfsMachineConfig(mc, irm, parsed.Kernels)
+	})
+	return err
+}
+
+type initramfsParseParams struct {
+	Kernels map[string]mcfg.KernelInspectLists
+}
+
+func (h *initramfsModuleReconcilerHelperImpl) handleParseJob(context.Context, *kmmv1beta1.InitramfsModule) (initramfsParseParams, error) {
+	return initramfsParseParams{}, nil
+}
+
+func (h *initramfsModuleReconcilerHelperImpl) checkUnstampedPoolAndMachineConfig(ctx context.Context, irm *kmmv1beta1.InitramfsModule) error {
+	pool, mc, err := h.lookupPoolAndMachineConfig(ctx)
+	if err != nil {
+		return err
+	}
+	return h.refuseUnstamped(pool, mc, irm)
+}
+
+func (h *initramfsModuleReconcilerHelperImpl) lookupPoolAndMachineConfig(ctx context.Context) (*mcfgv1.MachineConfigPool, *mcfgv1.MachineConfig, error) {
+	pool := &mcfgv1.MachineConfigPool{}
+	found, err := getIfExists(ctx, h.client, mcfg.InitramfsPoolName, pool)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !found {
+		pool = nil
+	}
+	mc := &mcfgv1.MachineConfig{}
+	found, err = getIfExists(ctx, h.client, mcfg.InitramfsMachineConfigName, mc)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !found {
+		mc = nil
+	}
+	return pool, mc, nil
+}
+
+func getIfExists(ctx context.Context, c client.Client, name string, obj client.Object) (bool, error) {
+	err := c.Get(ctx, client.ObjectKey{Name: name}, obj)
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (h *initramfsModuleReconcilerHelperImpl) refuseUnstamped(pool *mcfgv1.MachineConfigPool, mc *mcfgv1.MachineConfig, irm *kmmv1beta1.InitramfsModule) error {
+	if pool != nil && !h.mcfgAPI.StampedForInitramfsModule(pool, irm) {
+		return fmt.Errorf("MachineConfigPool %s already exists and is not stamped for this CR", mcfg.InitramfsPoolName)
+	}
+	if mc != nil && !h.mcfgAPI.StampedForInitramfsModule(mc, irm) {
+		return fmt.Errorf("MachineConfig %s already exists and is not stamped for this CR", mcfg.InitramfsMachineConfigName)
+	}
 	return nil
 }

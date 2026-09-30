@@ -11,6 +11,9 @@ import (
 	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
 	apioperatorv1 "github.com/openshift/api/operator/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 var _ = Describe("UpdateDisruptionPolicies", func() {
@@ -222,6 +225,89 @@ var _ = Describe("GenerateIgnition", func() {
 		Expect(string(yamlRes)).To(Equal(string(expectedRes)))
 	})
 })
+
+var _ = Describe("initramfs pool and MachineConfig", func() {
+	var (
+		mcfgAPI MCFG
+		irm     *kmmv1beta1.InitramfsModule
+	)
+
+	BeforeEach(func() {
+		mcfgAPI = NewMCFG("")
+		irm = &kmmv1beta1.InitramfsModule{
+			ObjectMeta: metav1.ObjectMeta{Name: "nic", Namespace: "ns", UID: types.UID("cr-uid")},
+		}
+	})
+
+	It("sets the pool selector, maxUnavailable, and stamp annotations", func() {
+		pool := &mcfgv1.MachineConfigPool{
+			ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{"keep": "yes"}},
+		}
+
+		mcfgAPI.UpdateInitramfsPool(pool, irm)
+
+		Expect(pool.Annotations).To(Equal(map[string]string{
+			"keep":                             "yes",
+			InitramfsModuleNamespaceAnnotation: irm.Namespace,
+			InitramfsModuleNameAnnotation:      irm.Name,
+			InitramfsModuleUIDAnnotation:       string(irm.UID),
+		}))
+		Expect(pool.Spec.NodeSelector).To(Equal(&metav1.LabelSelector{
+			MatchLabels: map[string]string{initramfsNodeRoleLabel: ""},
+		}))
+		Expect(pool.Spec.MachineConfigSelector).To(Equal(&metav1.LabelSelector{
+			MatchExpressions: []metav1.LabelSelectorRequirement{{
+				Key:      machineConfigRoleLabel,
+				Operator: metav1.LabelSelectorOpIn,
+				Values:   []string{"worker", InitramfsPoolName},
+			}},
+		}))
+		Expect(pool.Spec.MaxUnavailable).To(Equal(ptrTo(intstr.FromInt(1))))
+	})
+
+	It("reports a stamp only when all three annotations match", func() {
+		stamped := &mcfgv1.MachineConfigPool{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{
+			InitramfsModuleNamespaceAnnotation: irm.Namespace,
+			InitramfsModuleNameAnnotation:      irm.Name,
+			InitramfsModuleUIDAnnotation:       string(irm.UID),
+		}}}
+		mismatched := stamped.DeepCopy()
+		mismatched.Annotations[InitramfsModuleUIDAnnotation] = "other-uid"
+		partial := &mcfgv1.MachineConfig{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{
+			InitramfsModuleNamespaceAnnotation: irm.Namespace,
+			InitramfsModuleNameAnnotation:      irm.Name,
+		}}}
+
+		Expect(mcfgAPI.StampedForInitramfsModule(stamped, irm)).To(BeTrue())
+		Expect(mcfgAPI.StampedForInitramfsModule(mismatched, irm)).To(BeFalse())
+		Expect(mcfgAPI.StampedForInitramfsModule(partial, irm)).To(BeFalse())
+		Expect(mcfgAPI.StampedForInitramfsModule(&mcfgv1.MachineConfig{}, irm)).To(BeFalse())
+	})
+
+	It("sets the MachineConfig role label and stamp and leaves Ignition empty", func() {
+		mc := &mcfgv1.MachineConfig{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"keep": "yes"}}}
+		kernels := map[string]KernelInspectLists{
+			"6.1.0": {InTreeModules: []string{"mod"}},
+		}
+
+		Expect(mcfgAPI.UpdateInitramfsMachineConfig(mc, irm, kernels)).To(Succeed())
+
+		Expect(mc.Labels).To(Equal(map[string]string{
+			"keep":                 "yes",
+			machineConfigRoleLabel: InitramfsPoolName,
+		}))
+		Expect(mc.Annotations).To(Equal(map[string]string{
+			InitramfsModuleNamespaceAnnotation: irm.Namespace,
+			InitramfsModuleNameAnnotation:      irm.Name,
+			InitramfsModuleUIDAnnotation:       string(irm.UID),
+		}))
+		Expect(mc.Spec.Config.Raw).To(BeNil())
+	})
+})
+
+func ptrTo[T any](v T) *T {
+	return &v
+}
 
 func isUnitPresent(mc *apioperatorv1.MachineConfiguration, unitName string /*apioperatorv1.NodeDisruptionPolicySpecUnit*/) bool {
 	expectedUnit := apioperatorv1.NodeDisruptionPolicySpecUnit{

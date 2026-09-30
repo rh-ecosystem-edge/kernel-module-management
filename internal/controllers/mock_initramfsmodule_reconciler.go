@@ -40,6 +40,20 @@ func (m *MockinitramfsModuleReconcilerHelper) EXPECT() *MockinitramfsModuleRecon
 	return m.recorder
 }
 
+// checkUnstampedPoolAndMachineConfig mocks base method.
+func (m *MockinitramfsModuleReconcilerHelper) checkUnstampedPoolAndMachineConfig(ctx context.Context, irm *v1beta1.InitramfsModule) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "checkUnstampedPoolAndMachineConfig", ctx, irm)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// checkUnstampedPoolAndMachineConfig indicates an expected call of checkUnstampedPoolAndMachineConfig.
+func (mr *MockinitramfsModuleReconcilerHelperMockRecorder) checkUnstampedPoolAndMachineConfig(ctx, irm any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "checkUnstampedPoolAndMachineConfig", reflect.TypeOf((*MockinitramfsModuleReconcilerHelper)(nil).checkUnstampedPoolAndMachineConfig), ctx, irm)
+}
+
 // finalize mocks base method.
 func (m *MockinitramfsModuleReconcilerHelper) finalize(ctx context.Context, irm *v1beta1.InitramfsModule) error {
 	m.ctrl.T.Helper()
@@ -69,17 +83,17 @@ func (mr *MockinitramfsModuleReconcilerHelperMockRecorder) handleMIC(ctx, irm, n
 }
 
 // handleMachineConfig mocks base method.
-func (m *MockinitramfsModuleReconcilerHelper) handleMachineConfig(ctx context.Context, irm *v1beta1.InitramfsModule) error {
+func (m *MockinitramfsModuleReconcilerHelper) handleMachineConfig(ctx context.Context, irm *v1beta1.InitramfsModule, parsed initramfsParseParams) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "handleMachineConfig", ctx, irm)
+	ret := m.ctrl.Call(m, "handleMachineConfig", ctx, irm, parsed)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // handleMachineConfig indicates an expected call of handleMachineConfig.
-func (mr *MockinitramfsModuleReconcilerHelperMockRecorder) handleMachineConfig(ctx, irm any) *gomock.Call {
+func (mr *MockinitramfsModuleReconcilerHelperMockRecorder) handleMachineConfig(ctx, irm, parsed any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "handleMachineConfig", reflect.TypeOf((*MockinitramfsModuleReconcilerHelper)(nil).handleMachineConfig), ctx, irm)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "handleMachineConfig", reflect.TypeOf((*MockinitramfsModuleReconcilerHelper)(nil).handleMachineConfig), ctx, irm, parsed)
 }
 
 // handleMachineConfigPool mocks base method.
@@ -94,6 +108,21 @@ func (m *MockinitramfsModuleReconcilerHelper) handleMachineConfigPool(ctx contex
 func (mr *MockinitramfsModuleReconcilerHelperMockRecorder) handleMachineConfigPool(ctx, irm any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "handleMachineConfigPool", reflect.TypeOf((*MockinitramfsModuleReconcilerHelper)(nil).handleMachineConfigPool), ctx, irm)
+}
+
+// handleParseJob mocks base method.
+func (m *MockinitramfsModuleReconcilerHelper) handleParseJob(ctx context.Context, irm *v1beta1.InitramfsModule) (initramfsParseParams, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "handleParseJob", ctx, irm)
+	ret0, _ := ret[0].(initramfsParseParams)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// handleParseJob indicates an expected call of handleParseJob.
+func (mr *MockinitramfsModuleReconcilerHelperMockRecorder) handleParseJob(ctx, irm any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "handleParseJob", reflect.TypeOf((*MockinitramfsModuleReconcilerHelper)(nil).handleParseJob), ctx, irm)
 }
 
 // listSelectedNodes mocks base method.
