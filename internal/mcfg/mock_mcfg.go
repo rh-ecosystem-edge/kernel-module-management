@@ -15,6 +15,7 @@ import (
 	v10 "github.com/openshift/api/operator/v1"
 	v1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	gomock "go.uber.org/mock/gomock"
+	v11 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // MockMCFG is a mock of MCFG interface.
@@ -68,6 +69,20 @@ func (mr *MockMCFGMockRecorder) RemoveDisruptionPolicies(mc, bmc, removeAll any)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveDisruptionPolicies", reflect.TypeOf((*MockMCFG)(nil).RemoveDisruptionPolicies), mc, bmc, removeAll)
 }
 
+// StampedForInitramfsModule mocks base method.
+func (m *MockMCFG) StampedForInitramfsModule(meta v11.Object, irm *v1beta1.InitramfsModule) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StampedForInitramfsModule", meta, irm)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// StampedForInitramfsModule indicates an expected call of StampedForInitramfsModule.
+func (mr *MockMCFGMockRecorder) StampedForInitramfsModule(meta, irm any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StampedForInitramfsModule", reflect.TypeOf((*MockMCFG)(nil).StampedForInitramfsModule), meta, irm)
+}
+
 // UpdateDisruptionPolicies mocks base method.
 func (m *MockMCFG) UpdateDisruptionPolicies(mc *v10.MachineConfiguration, bmc *v1beta1.BootModuleConfig) {
 	m.ctrl.T.Helper()
@@ -78,6 +93,32 @@ func (m *MockMCFG) UpdateDisruptionPolicies(mc *v10.MachineConfiguration, bmc *v
 func (mr *MockMCFGMockRecorder) UpdateDisruptionPolicies(mc, bmc any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDisruptionPolicies", reflect.TypeOf((*MockMCFG)(nil).UpdateDisruptionPolicies), mc, bmc)
+}
+
+// UpdateInitramfsMachineConfig mocks base method.
+func (m *MockMCFG) UpdateInitramfsMachineConfig(mc *v1.MachineConfig, irm *v1beta1.InitramfsModule, kernels map[string]KernelInspectLists) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateInitramfsMachineConfig", mc, irm, kernels)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateInitramfsMachineConfig indicates an expected call of UpdateInitramfsMachineConfig.
+func (mr *MockMCFGMockRecorder) UpdateInitramfsMachineConfig(mc, irm, kernels any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateInitramfsMachineConfig", reflect.TypeOf((*MockMCFG)(nil).UpdateInitramfsMachineConfig), mc, irm, kernels)
+}
+
+// UpdateInitramfsPool mocks base method.
+func (m *MockMCFG) UpdateInitramfsPool(pool *v1.MachineConfigPool, irm *v1beta1.InitramfsModule) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UpdateInitramfsPool", pool, irm)
+}
+
+// UpdateInitramfsPool indicates an expected call of UpdateInitramfsPool.
+func (mr *MockMCFGMockRecorder) UpdateInitramfsPool(pool, irm any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateInitramfsPool", reflect.TypeOf((*MockMCFG)(nil).UpdateInitramfsPool), pool, irm)
 }
 
 // UpdateMachineConfig mocks base method.

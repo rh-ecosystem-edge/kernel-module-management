@@ -13,14 +13,37 @@ import (
 	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
 	apioperatorv1 "github.com/openshift/api/operator/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 const (
+	InitramfsPoolName          = "kmm-initramfs"
+	InitramfsMachineConfigName = "99-kmm-initramfs"
+
+	initramfsNodeRoleLabel             = "node-role.kubernetes.io/initramfs"
+	machineConfigRoleLabel             = "machineconfiguration.openshift.io/role"
+	InitramfsModuleNamespaceAnnotation = "kmm.sigs.x-k8s.io/initramfsmodule-namespace"
+	InitramfsModuleNameAnnotation      = "kmm.sigs.x-k8s.io/initramfsmodule-name"
+	InitramfsModuleUIDAnnotation       = "kmm.sigs.x-k8s.io/initramfsmodule-uid"
+
 	kernelModuleImageFilepath = "/var/lib/image_file_day1.tar"
 	workerConfigFilepath      = "/var/lib/kmm_day1_config.yaml"
 	pullImageSystemdService   = "pull-kernel-module-image.service"
 	replaceKmodSystemdService = "replace-kernel-module.service"
 )
+
+// InspectSoftLink is one pre-udev symlink for an initramfs kernel.
+type InspectSoftLink struct {
+	Path   string `json:"path"`
+	Target string `json:"target"`
+}
+
+// KernelInspectLists is the in-tree module and symlink list for one kernel.
+type KernelInspectLists struct {
+	InTreeModules []string          `json:"inTreeModules"`
+	SoftLinks     []InspectSoftLink `json:"softLinks"`
+}
 
 var (
 	//go:embed scripts/pull-image.sh
@@ -48,6 +71,9 @@ type MCFG interface {
 	UpdateMachineConfig(mc *mcfgv1.MachineConfig, bmc *kmmv1beta1.BootModuleConfig) error
 	GenerateIgnition(kernelModuleImage, kernelModuleName, firmwareFilesPath, workerImage, servicePrefix string,
 		inTreeModulesToRemove []string) ([]byte, string, error)
+	StampedForInitramfsModule(meta metav1.Object, irm *kmmv1beta1.InitramfsModule) bool
+	UpdateInitramfsPool(pool *mcfgv1.MachineConfigPool, irm *kmmv1beta1.InitramfsModule)
+	UpdateInitramfsMachineConfig(mc *mcfgv1.MachineConfig, irm *kmmv1beta1.InitramfsModule, kernels map[string]KernelInspectLists) error
 }
 
 type mcfgImpl struct {
@@ -188,6 +214,51 @@ func removeFileFromDisruptionPolicies(mc *apioperatorv1.MachineConfiguration, fi
 			return
 		}
 	}
+}
+
+func (m *mcfgImpl) StampedForInitramfsModule(meta metav1.Object, irm *kmmv1beta1.InitramfsModule) bool {
+	ann := meta.GetAnnotations()
+	return ann[InitramfsModuleNamespaceAnnotation] == irm.Namespace &&
+		ann[InitramfsModuleNameAnnotation] == irm.Name &&
+		ann[InitramfsModuleUIDAnnotation] == string(irm.UID)
+}
+
+func (m *mcfgImpl) UpdateInitramfsPool(pool *mcfgv1.MachineConfigPool, irm *kmmv1beta1.InitramfsModule) {
+	setInitramfsStamp(pool, irm)
+	unavailable := intstr.FromInt(1)
+	pool.Spec.NodeSelector = &metav1.LabelSelector{
+		MatchLabels: map[string]string{initramfsNodeRoleLabel: ""},
+	}
+	pool.Spec.MachineConfigSelector = &metav1.LabelSelector{
+		MatchExpressions: []metav1.LabelSelectorRequirement{{
+			Key:      machineConfigRoleLabel,
+			Operator: metav1.LabelSelectorOpIn,
+			Values:   []string{"worker", InitramfsPoolName},
+		}},
+	}
+	pool.Spec.MaxUnavailable = &unavailable
+}
+
+func (m *mcfgImpl) UpdateInitramfsMachineConfig(mc *mcfgv1.MachineConfig, irm *kmmv1beta1.InitramfsModule, _ map[string]KernelInspectLists) error {
+	setInitramfsStamp(mc, irm)
+	labels := mc.GetLabels()
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	labels[machineConfigRoleLabel] = InitramfsPoolName
+	mc.SetLabels(labels)
+	return nil
+}
+
+func setInitramfsStamp(obj metav1.Object, irm *kmmv1beta1.InitramfsModule) {
+	ann := obj.GetAnnotations()
+	if ann == nil {
+		ann = map[string]string{}
+	}
+	ann[InitramfsModuleNamespaceAnnotation] = irm.Namespace
+	ann[InitramfsModuleNameAnnotation] = irm.Name
+	ann[InitramfsModuleUIDAnnotation] = string(irm.UID)
+	obj.SetAnnotations(ann)
 }
 
 func updateMachineConfigLabels(mc *mcfgv1.MachineConfig, bmc *kmmv1beta1.BootModuleConfig) {

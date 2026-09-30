@@ -183,6 +183,7 @@ rules:
 - apiGroups:
   - machineconfiguration.openshift.io
   resources:
+  - machineconfigpools
   - machineconfigs
   verbs:
   - create
