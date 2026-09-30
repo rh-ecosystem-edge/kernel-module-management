@@ -20,16 +20,18 @@ import (
 
 type resourceManager struct {
 	client             client.Client
+	secretReader       client.Reader
 	buildArgOverrider  module.BuildArgOverrider
 	kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping
 	scheme             *runtime.Scheme
 }
 
-func NewResourceManager(client client.Client, buildArgOverrider module.BuildArgOverrider, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping,
+func NewResourceManager(client client.Client, secretReader client.Reader, buildArgOverrider module.BuildArgOverrider, kernelOsDtkMapping syncronizedmap.KernelOsDtkMapping,
 	scheme *runtime.Scheme) buildsign.ResourceManager {
 
 	return &resourceManager{
 		client:             client,
+		secretReader:       secretReader,
 		buildArgOverrider:  buildArgOverrider,
 		kernelOsDtkMapping: kernelOsDtkMapping,
 		scheme:             scheme,
