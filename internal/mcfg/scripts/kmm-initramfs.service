@@ -1,0 +1,18 @@
+[Unit]
+Description=KMM initramfs kernel modules
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Restart=on-failure
+EnvironmentFile=/etc/mco/proxy.env
+Environment="ROLLBACK={{.Rollback}}"
+Environment="CONTAINER_IMAGE={{.ContainerImage}}"
+Environment="MODULES_PATH={{.ModulesPath}}"
+Environment="DIR_NAME={{.DirName}}"
+Environment="SPEC_HASH={{.SpecHash}}"
+ExecStart=/usr/local/bin/initramfs.sh
+
+[Install]
+WantedBy=multi-user.target
