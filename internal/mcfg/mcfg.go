@@ -2,8 +2,10 @@ package mcfg
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"embed"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"text/template"
@@ -55,11 +57,32 @@ var (
 	//go:embed scripts/wait-for-dispatcher.sh
 	scriptWaitForNetworkDispatcher string
 
+	//go:embed scripts/kmm-initramfs.service
+	scriptInitramfsService string
+
+	//go:embed scripts/kmm-pre-udev.sh
+	scriptPreUdev string
+
+	//go:embed scripts/initramfs.sh
+	scriptInitramfs string
+
 	//go:embed templates
 	templateFS embed.FS
 
 	ignitionTemplate = template.Must(
 		template.ParseFS(templateFS, "templates/ignition.gotmpl"),
+	)
+
+	initramfsServiceTemplate = template.Must(
+		template.New("kmm-initramfs.service").Option("missingkey=error").Parse(scriptInitramfsService),
+	)
+	initramfsPreUdevTemplate = template.Must(
+		template.New("kmm-pre-udev.sh").Option("missingkey=error").Parse(scriptPreUdev),
+	)
+	initramfsIgnitionTemplate = template.Must(
+		template.New("initramfs-ignition.gotmpl").Option("missingkey=error").ParseFS(
+			templateFS, "templates/initramfs-ignition.gotmpl",
+		),
 	)
 )
 
@@ -219,8 +242,7 @@ func removeFileFromDisruptionPolicies(mc *apioperatorv1.MachineConfiguration, fi
 func (m *mcfgImpl) StampedForInitramfsModule(meta metav1.Object, irm *kmmv1beta1.InitramfsModule) bool {
 	ann := meta.GetAnnotations()
 	return ann[InitramfsModuleNamespaceAnnotation] == irm.Namespace &&
-		ann[InitramfsModuleNameAnnotation] == irm.Name &&
-		ann[InitramfsModuleUIDAnnotation] == string(irm.UID)
+		ann[InitramfsModuleNameAnnotation] == irm.Name
 }
 
 func (m *mcfgImpl) UpdateInitramfsPool(pool *mcfgv1.MachineConfigPool, irm *kmmv1beta1.InitramfsModule) {
@@ -240,6 +262,10 @@ func (m *mcfgImpl) UpdateInitramfsPool(pool *mcfgv1.MachineConfigPool, irm *kmmv
 }
 
 func (m *mcfgImpl) UpdateInitramfsMachineConfig(mc *mcfgv1.MachineConfig, irm *kmmv1beta1.InitramfsModule, _ map[string]KernelInspectLists) error {
+	raw, err := renderInitramfsIgnition(irm)
+	if err != nil {
+		return err
+	}
 	setInitramfsStamp(mc, irm)
 	labels := mc.GetLabels()
 	if labels == nil {
@@ -247,7 +273,96 @@ func (m *mcfgImpl) UpdateInitramfsMachineConfig(mc *mcfgv1.MachineConfig, irm *k
 	}
 	labels[machineConfigRoleLabel] = InitramfsPoolName
 	mc.SetLabels(labels)
+	mc.Spec.Config.Raw = raw
 	return nil
+}
+
+type initramfsScriptData struct {
+	Rollback       bool
+	ContainerImage string
+	ModulesPath    string
+	DirName        string
+	SpecHash       string
+	ModuleName     string
+}
+
+type initramfsIgnitionParams struct {
+	UnitContents    string
+	InitramfsScript string
+	PreUdevScript   string
+}
+
+func renderInitramfsIgnition(irm *kmmv1beta1.InitramfsModule) ([]byte, error) {
+	moduleName, err := singleInitramfsModuleName(irm.Spec.ModuleNames)
+	if err != nil {
+		return nil, err
+	}
+	data := initramfsScriptData{
+		Rollback:       irm.Spec.Rollback,
+		ContainerImage: irm.Spec.ContainerImage,
+		ModulesPath:    irm.Spec.ModulesPath,
+		DirName:        irm.Spec.DirName,
+		ModuleName:     moduleName,
+	}
+	data.SpecHash, err = initramfsSpecHash(data)
+	if err != nil {
+		return nil, err
+	}
+
+	var serviceBuf, hookBuf bytes.Buffer
+	if err = initramfsServiceTemplate.Execute(&serviceBuf, data); err != nil {
+		return nil, fmt.Errorf("failed to render kmm-initramfs.service: %v", err)
+	}
+	if err = initramfsPreUdevTemplate.Execute(&hookBuf, data); err != nil {
+		return nil, fmt.Errorf("failed to render kmm-pre-udev.sh: %v", err)
+	}
+
+	var yamlIgnition bytes.Buffer
+	if err = initramfsIgnitionTemplate.Execute(&yamlIgnition, initramfsIgnitionParams{
+		UnitContents:    serviceBuf.String(),
+		InitramfsScript: base64.StdEncoding.EncodeToString([]byte(scriptInitramfs)),
+		PreUdevScript:   base64.StdEncoding.EncodeToString(hookBuf.Bytes()),
+	}); err != nil {
+		return nil, fmt.Errorf("failed to render initramfs ignition: %v", err)
+	}
+
+	var ignitionObj map[string]interface{}
+	if err = yaml.Unmarshal(yamlIgnition.Bytes(), &ignitionObj); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal initramfs ignition: %v", err)
+	}
+	raw, err := json.Marshal(ignitionObj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal initramfs ignition: %v", err)
+	}
+	return raw, nil
+}
+
+func singleInitramfsModuleName(names []string) (string, error) {
+	if len(names) != 1 {
+		return "", fmt.Errorf("initramfs MachineConfig requires exactly one moduleNames entry, got %d", len(names))
+	}
+	return names[0], nil
+}
+
+func initramfsSpecHash(data initramfsScriptData) (string, error) {
+	raw, err := json.Marshal(struct {
+		Rollback       bool   `json:"rollback"`
+		ContainerImage string `json:"containerImage"`
+		ModulesPath    string `json:"modulesPath"`
+		DirName        string `json:"dirName"`
+		ModuleName     string `json:"moduleName"`
+	}{
+		Rollback:       data.Rollback,
+		ContainerImage: data.ContainerImage,
+		ModulesPath:    data.ModulesPath,
+		DirName:        data.DirName,
+		ModuleName:     data.ModuleName,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal initramfs spec hash: %v", err)
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 func setInitramfsStamp(obj metav1.Object, irm *kmmv1beta1.InitramfsModule) {
@@ -257,7 +372,6 @@ func setInitramfsStamp(obj metav1.Object, irm *kmmv1beta1.InitramfsModule) {
 	}
 	ann[InitramfsModuleNamespaceAnnotation] = irm.Namespace
 	ann[InitramfsModuleNameAnnotation] = irm.Name
-	ann[InitramfsModuleUIDAnnotation] = string(irm.UID)
 	obj.SetAnnotations(ann)
 }
 

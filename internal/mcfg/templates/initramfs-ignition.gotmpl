@@ -1,0 +1,23 @@
+ignition:
+  version: 3.2.0
+systemd:
+  units:
+    - name: kmm-initramfs.service
+      enabled: true
+      contents: {{ printf "%q" .UnitContents }}
+storage:
+  files:
+    - path: /usr/local/bin/initramfs.sh
+      mode: 493
+      overwrite: true
+      user:
+        name: root
+      contents:
+        source: "data:text/plain;base64,{{.InitramfsScript}}"
+    - path: /usr/local/bin/kmm-pre-udev.sh
+      mode: 493
+      overwrite: true
+      user:
+        name: root
+      contents:
+        source: "data:text/plain;base64,{{.PreUdevScript}}"
