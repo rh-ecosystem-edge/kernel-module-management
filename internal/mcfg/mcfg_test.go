@@ -1,8 +1,11 @@
 package mcfg
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -250,7 +253,6 @@ var _ = Describe("initramfs pool and MachineConfig", func() {
 			"keep":                             "yes",
 			InitramfsModuleNamespaceAnnotation: irm.Namespace,
 			InitramfsModuleNameAnnotation:      irm.Name,
-			InitramfsModuleUIDAnnotation:       string(irm.UID),
 		}))
 		Expect(pool.Spec.NodeSelector).To(Equal(&metav1.LabelSelector{
 			MatchLabels: map[string]string{initramfsNodeRoleLabel: ""},
@@ -265,27 +267,43 @@ var _ = Describe("initramfs pool and MachineConfig", func() {
 		Expect(pool.Spec.MaxUnavailable).To(Equal(ptrTo(intstr.FromInt(1))))
 	})
 
-	It("reports a stamp only when all three annotations match", func() {
+	It("reports a stamp when namespace and name match", func() {
 		stamped := &mcfgv1.MachineConfigPool{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{
 			InitramfsModuleNamespaceAnnotation: irm.Namespace,
 			InitramfsModuleNameAnnotation:      irm.Name,
 			InitramfsModuleUIDAnnotation:       string(irm.UID),
 		}}}
-		mismatched := stamped.DeepCopy()
-		mismatched.Annotations[InitramfsModuleUIDAnnotation] = "other-uid"
-		partial := &mcfgv1.MachineConfig{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{
+		otherUID := stamped.DeepCopy()
+		otherUID.Annotations[InitramfsModuleUIDAnnotation] = "other-uid"
+		noUID := &mcfgv1.MachineConfig{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{
 			InitramfsModuleNamespaceAnnotation: irm.Namespace,
 			InitramfsModuleNameAnnotation:      irm.Name,
 		}}}
+		otherNamespace := noUID.DeepCopy()
+		otherNamespace.Annotations[InitramfsModuleNamespaceAnnotation] = "other-ns"
+		otherName := noUID.DeepCopy()
+		otherName.Annotations[InitramfsModuleNameAnnotation] = "other-name"
 
 		Expect(mcfgAPI.StampedForInitramfsModule(stamped, irm)).To(BeTrue())
-		Expect(mcfgAPI.StampedForInitramfsModule(mismatched, irm)).To(BeFalse())
-		Expect(mcfgAPI.StampedForInitramfsModule(partial, irm)).To(BeFalse())
+		Expect(mcfgAPI.StampedForInitramfsModule(otherUID, irm)).To(BeTrue())
+		Expect(mcfgAPI.StampedForInitramfsModule(noUID, irm)).To(BeTrue())
+		Expect(mcfgAPI.StampedForInitramfsModule(otherNamespace, irm)).To(BeFalse())
+		Expect(mcfgAPI.StampedForInitramfsModule(otherName, irm)).To(BeFalse())
 		Expect(mcfgAPI.StampedForInitramfsModule(&mcfgv1.MachineConfig{}, irm)).To(BeFalse())
 	})
 
-	It("sets the MachineConfig role label and stamp and leaves Ignition empty", func() {
-		mc := &mcfgv1.MachineConfig{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"keep": "yes"}}}
+	It("writes Ignition for one module and keeps the stamp and existing metadata", func() {
+		irm.Spec = kmmv1beta1.InitramfsModuleSpec{
+			ModuleNames:    []string{"nic"},
+			ContainerImage: "reg.example/kmods:v1",
+			ModulesPath:    "/usr/lib/modules",
+			DirName:        "/opt/modules",
+			Selector:       map[string]string{"node": "a"},
+		}
+		mc := &mcfgv1.MachineConfig{ObjectMeta: metav1.ObjectMeta{
+			Labels:      map[string]string{"keep": "yes"},
+			Annotations: map[string]string{"keep": "yes"},
+		}}
 		kernels := map[string]KernelInspectLists{
 			"6.1.0": {InTreeModules: []string{"mod"}},
 		}
@@ -297,11 +315,108 @@ var _ = Describe("initramfs pool and MachineConfig", func() {
 			machineConfigRoleLabel: InitramfsPoolName,
 		}))
 		Expect(mc.Annotations).To(Equal(map[string]string{
+			"keep":                             "yes",
 			InitramfsModuleNamespaceAnnotation: irm.Namespace,
 			InitramfsModuleNameAnnotation:      irm.Name,
-			InitramfsModuleUIDAnnotation:       string(irm.UID),
 		}))
-		Expect(mc.Spec.Config.Raw).To(BeNil())
+
+		doc := decodeInitramfsIgnition(mc.Spec.Config.Raw)
+		Expect(doc.Ignition.Version).To(Equal("3.2.0"))
+		Expect(doc.Systemd.Units).To(HaveLen(1))
+		unit := doc.Systemd.Units[0]
+		Expect(unit.Name).To(Equal("kmm-initramfs.service"))
+		Expect(unit.Enabled).To(BeTrue())
+		Expect(unit.Contents).To(ContainSubstring("ExecStart=/usr/local/bin/initramfs.sh"))
+		Expect(unit.Contents).To(ContainSubstring(`Environment="ROLLBACK=false"`))
+		Expect(unit.Contents).To(ContainSubstring(`Environment="CONTAINER_IMAGE=reg.example/kmods:v1"`))
+		Expect(unit.Contents).To(ContainSubstring(`Environment="MODULES_PATH=/usr/lib/modules"`))
+		Expect(unit.Contents).To(ContainSubstring(`Environment="DIR_NAME=/opt/modules"`))
+		hash := specHashFromUnit(unit.Contents)
+		Expect(hash).To(MatchRegexp(`^[0-9a-f]{64}$`))
+
+		script := ignitionFile(doc, "/usr/local/bin/initramfs.sh")
+		expectIgnitionFileMeta(script)
+		onDisk, err := os.ReadFile("scripts/initramfs.sh")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ignitionFileBytes(script)).To(Equal(onDisk))
+
+		hook := ignitionFile(doc, "/usr/local/bin/kmm-pre-udev.sh")
+		expectIgnitionFileMeta(hook)
+		Expect(string(ignitionFileBytes(hook))).To(ContainSubstring(`modprobe -d "/opt/modules" "nic"`))
+	})
+
+	It("uses /opt in the pre-udev hook when DirName is empty", func() {
+		irm.Spec = kmmv1beta1.InitramfsModuleSpec{
+			ModuleNames:    []string{"nic"},
+			ContainerImage: "reg.example/kmods:v1",
+		}
+		mc := &mcfgv1.MachineConfig{}
+
+		Expect(mcfgAPI.UpdateInitramfsMachineConfig(mc, irm, nil)).To(Succeed())
+
+		doc := decodeInitramfsIgnition(mc.Spec.Config.Raw)
+		Expect(doc.Systemd.Units[0].Contents).To(ContainSubstring(`Environment="DIR_NAME="`))
+		hook := string(ignitionFileBytes(ignitionFile(doc, "/usr/local/bin/kmm-pre-udev.sh")))
+		Expect(hook).To(ContainSubstring(`modprobe -d "/opt" "nic"`))
+		Expect(mc.Labels).To(HaveKeyWithValue(machineConfigRoleLabel, InitramfsPoolName))
+	})
+
+	It("renders ROLLBACK=true when rollback is set", func() {
+		irm.Spec = kmmv1beta1.InitramfsModuleSpec{
+			ModuleNames:    []string{"nic"},
+			ContainerImage: "reg.example/kmods:v1",
+			Rollback:       true,
+		}
+		mc := &mcfgv1.MachineConfig{}
+
+		Expect(mcfgAPI.UpdateInitramfsMachineConfig(mc, irm, nil)).To(Succeed())
+
+		doc := decodeInitramfsIgnition(mc.Spec.Config.Raw)
+		Expect(doc.Systemd.Units[0].Contents).To(ContainSubstring(`Environment="ROLLBACK=true"`))
+	})
+
+	It("keeps Ignition stable across calls and ignores selector and kernel lists", func() {
+		irm.Spec = kmmv1beta1.InitramfsModuleSpec{
+			ModuleNames:    []string{"nic"},
+			ContainerImage: "reg.example/kmods:v1",
+			ModulesPath:    "/usr/lib/modules",
+			DirName:        "/opt/modules",
+			Selector:       map[string]string{"node": "a"},
+		}
+		first := &mcfgv1.MachineConfig{}
+		kernels := map[string]KernelInspectLists{
+			"6.1.0": {InTreeModules: []string{"mod"}},
+		}
+		Expect(mcfgAPI.UpdateInitramfsMachineConfig(first, irm, kernels)).To(Succeed())
+		Expect(mcfgAPI.UpdateInitramfsMachineConfig(first, irm, kernels)).To(Succeed())
+
+		otherSelector := irm.DeepCopy()
+		otherSelector.Spec.Selector = map[string]string{"node": "b"}
+		second := &mcfgv1.MachineConfig{}
+		Expect(mcfgAPI.UpdateInitramfsMachineConfig(second, otherSelector, nil)).To(Succeed())
+		Expect(second.Spec.Config.Raw).To(Equal(first.Spec.Config.Raw))
+
+		changedImage := irm.DeepCopy()
+		changedImage.Spec.ContainerImage = "reg.example/kmods:v2"
+		third := &mcfgv1.MachineConfig{}
+		Expect(mcfgAPI.UpdateInitramfsMachineConfig(third, changedImage, kernels)).To(Succeed())
+		firstHash := specHashFromUnit(decodeInitramfsIgnition(first.Spec.Config.Raw).Systemd.Units[0].Contents)
+		thirdHash := specHashFromUnit(decodeInitramfsIgnition(third.Spec.Config.Raw).Systemd.Units[0].Contents)
+		Expect(thirdHash).NotTo(Equal(firstHash))
+	})
+
+	It("leaves the MachineConfig unchanged when moduleNames is not a single entry", func() {
+		for _, names := range [][]string{nil, {"nic", "other"}} {
+			irm.Spec.ModuleNames = names
+			mc := &mcfgv1.MachineConfig{ObjectMeta: metav1.ObjectMeta{
+				Labels:      map[string]string{"keep": "yes"},
+				Annotations: map[string]string{"keep": "yes"},
+			}}
+			original := mc.DeepCopy()
+
+			Expect(mcfgAPI.UpdateInitramfsMachineConfig(mc, irm, nil)).NotTo(Succeed())
+			Expect(mc).To(Equal(original))
+		}
 	})
 })
 
@@ -366,4 +481,72 @@ func addFileSpec(mc *apioperatorv1.MachineConfiguration, filePath string) {
 		},
 	}
 	mc.Spec.NodeDisruptionPolicy.Files = append(mc.Spec.NodeDisruptionPolicy.Files, fileSpec)
+}
+
+type initramfsIgnition struct {
+	Ignition struct {
+		Version string `json:"version"`
+	} `json:"ignition"`
+	Systemd struct {
+		Units []struct {
+			Contents string `json:"contents"`
+			Enabled  bool   `json:"enabled"`
+			Name     string `json:"name"`
+		} `json:"units"`
+	} `json:"systemd"`
+	Storage struct {
+		Files []initramfsIgnitionFile `json:"files"`
+	} `json:"storage"`
+}
+
+type initramfsIgnitionFile struct {
+	Contents struct {
+		Source string `json:"source"`
+	} `json:"contents"`
+	Mode      int    `json:"mode"`
+	Overwrite bool   `json:"overwrite"`
+	Path      string `json:"path"`
+	User      struct {
+		Name string `json:"name"`
+	} `json:"user"`
+}
+
+func decodeInitramfsIgnition(raw []byte) initramfsIgnition {
+	var doc initramfsIgnition
+	Expect(json.Unmarshal(raw, &doc)).To(Succeed())
+	return doc
+}
+
+func ignitionFile(doc initramfsIgnition, path string) initramfsIgnitionFile {
+	for _, file := range doc.Storage.Files {
+		if file.Path == path {
+			return file
+		}
+	}
+	Fail("missing ignition file " + path)
+	return initramfsIgnitionFile{}
+}
+
+func expectIgnitionFileMeta(file initramfsIgnitionFile) {
+	Expect(file.Mode).To(Equal(493))
+	Expect(file.Overwrite).To(BeTrue())
+	Expect(file.User.Name).To(Equal("root"))
+}
+
+func ignitionFileBytes(file initramfsIgnitionFile) []byte {
+	const prefix = "data:text/plain;base64,"
+	Expect(file.Contents.Source).To(HavePrefix(prefix))
+	decoded, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(file.Contents.Source, prefix))
+	Expect(err).NotTo(HaveOccurred())
+	return decoded
+}
+
+func specHashFromUnit(contents string) string {
+	const prefix = `Environment="SPEC_HASH=`
+	start := strings.Index(contents, prefix)
+	Expect(start).NotTo(Equal(-1))
+	rest := contents[start+len(prefix):]
+	end := strings.Index(rest, `"`)
+	Expect(end).To(Equal(64))
+	return rest[:end]
 }

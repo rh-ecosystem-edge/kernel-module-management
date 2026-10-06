@@ -17,8 +17,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -337,70 +335,70 @@ var _ = Describe("initramfsModuleReconcilerHelper", func() {
 
 var _ = Describe("initramfs MachineConfigPool and MachineConfig", func() {
 	var (
-		ctx  context.Context
-		ctrl *gomock.Controller
-		clnt *kmmclient.MockClient
-		h    initramfsModuleReconcilerHelper
+		ctx      context.Context
+		ctrl     *gomock.Controller
+		clnt     *kmmclient.MockClient
+		mockMCFG *mcfg.MockMCFG
+		h        initramfsModuleReconcilerHelper
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = kmmclient.NewMockClient(ctrl)
-		h = newInitramfsModuleReconcilerHelper(clnt, nil, nil, mcfg.NewMCFG(""))
+		mockMCFG = mcfg.NewMockMCFG(ctrl)
+		h = newInitramfsModuleReconcilerHelper(clnt, nil, nil, mockMCFG)
 	})
 
 	It("accepts a cluster with neither object", func() {
 		expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName)
 		expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName)
 
-		Expect(h.checkUnstampedPoolAndMachineConfig(ctx, stampedIRM())).To(Succeed())
+		Expect(h.checkUnstampedPoolAndMachineConfig(ctx, newIRM(nil, nil, nil))).To(Succeed())
 	})
 
-	It("creates the pool and MachineConfig with stamps and no ownerReference", func() {
-		irm := stampedIRM()
+	It("creates the pool and MachineConfig without an ownerReference", func() {
+		irm := newIRM(nil, nil, nil)
+		kernels := map[string]mcfg.KernelInspectLists{
+			"6.1.0": {InTreeModules: []string{"crc32"}},
+		}
 		var pool *mcfgv1.MachineConfigPool
 		var mc *mcfgv1.MachineConfig
 		gomock.InOrder(
 			expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName),
+			mockMCFG.EXPECT().UpdateInitramfsPool(gomock.Any(), irm),
 			expectCreate(clnt, ctx, func(obj client.Object) { pool = obj.(*mcfgv1.MachineConfigPool).DeepCopy() }),
 			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
+			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, kernels).Return(nil),
 			expectCreate(clnt, ctx, func(obj client.Object) { mc = obj.(*mcfgv1.MachineConfig).DeepCopy() }),
 		)
 
 		Expect(h.handleMachineConfigPool(ctx, irm)).To(Succeed())
-		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(Succeed())
+		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{Kernels: kernels})).To(Succeed())
 
-		expectStamps(pool, irm)
-		expectStamps(mc, irm)
+		Expect(pool.Name).To(Equal(mcfg.InitramfsPoolName))
+		Expect(mc.Name).To(Equal(mcfg.InitramfsMachineConfigName))
 		Expect(pool.OwnerReferences).To(BeEmpty())
 		Expect(mc.OwnerReferences).To(BeEmpty())
-		Expect(pool.Spec.NodeSelector).To(Equal(&metav1.LabelSelector{
-			MatchLabels: map[string]string{"node-role.kubernetes.io/initramfs": ""},
-		}))
-		Expect(pool.Spec.MachineConfigSelector).To(Equal(&metav1.LabelSelector{
-			MatchExpressions: []metav1.LabelSelectorRequirement{{
-				Key:      "machineconfiguration.openshift.io/role",
-				Operator: metav1.LabelSelectorOpIn,
-				Values:   []string{"worker", mcfg.InitramfsPoolName},
-			}},
-		}))
-		Expect(pool.Spec.MaxUnavailable).To(Equal(ptrTo(intstr.FromInt(1))))
-		Expect(mc.Labels).To(HaveKeyWithValue("machineconfiguration.openshift.io/role", mcfg.InitramfsPoolName))
 	})
 
-	It("patches a stamped pool instead of creating it again", func() {
-		irm := stampedIRM()
+	It("patches an existing pool instead of creating it again", func() {
+		irm := newIRM(nil, nil, nil)
 		existing := &mcfgv1.MachineConfigPool{ObjectMeta: metav1.ObjectMeta{
-			Name:        mcfg.InitramfsPoolName,
-			UID:         "pool-uid",
-			Annotations: stampAnnotations(irm),
+			Name: mcfg.InitramfsPoolName,
+			UID:  "pool-uid",
 		}}
 		var patched *mcfgv1.MachineConfigPool
 		gomock.InOrder(
 			expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName),
+			mockMCFG.EXPECT().UpdateInitramfsPool(gomock.Any(), irm),
 			expectCreate(clnt, ctx, func(client.Object) {}),
 			expectGetObject(clnt, ctx, existing),
+			mockMCFG.EXPECT().UpdateInitramfsPool(gomock.Any(), irm).Do(
+				func(pool *mcfgv1.MachineConfigPool, _ *kmmv1beta1.InitramfsModule) {
+					pool.Annotations = map[string]string{"updated": "yes"}
+				},
+			),
 			expectPatch(clnt, ctx, func(obj client.Object) { patched = obj.(*mcfgv1.MachineConfigPool).DeepCopy() }),
 		)
 
@@ -408,92 +406,72 @@ var _ = Describe("initramfs MachineConfigPool and MachineConfig", func() {
 		Expect(h.handleMachineConfigPool(ctx, irm)).To(Succeed())
 
 		Expect(patched.UID).To(Equal(existing.UID))
-		Expect(patched.Spec.MaxUnavailable).To(Equal(ptrTo(intstr.FromInt(1))))
+		Expect(patched.Annotations).To(HaveKeyWithValue("updated", "yes"))
 	})
 
-	It("refuses a pool that has no stamp and does not create the MachineConfig", func() {
-		irm := stampedIRM()
+	It("refuses a pool that is not stamped for this CR and does not create the MachineConfig", func() {
+		irm := newIRM(nil, nil, nil)
 		existing := &mcfgv1.MachineConfigPool{
 			ObjectMeta: metav1.ObjectMeta{Name: mcfg.InitramfsPoolName},
 			Spec:       mcfgv1.MachineConfigPoolSpec{Paused: true},
 		}
-		expectGetObject(clnt, ctx, existing)
-		expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName)
+		gomock.InOrder(
+			expectGetObject(clnt, ctx, existing),
+			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
+			mockMCFG.EXPECT().StampedForInitramfsModule(gomock.Any(), irm).Return(false),
+		)
 
 		err := h.checkUnstampedPoolAndMachineConfig(ctx, irm)
 
 		Expect(err).To(MatchError(ContainSubstring("MachineConfigPool kmm-initramfs already exists and is not stamped for this CR")))
 		Expect(existing.Spec.Paused).To(BeTrue())
-		Expect(existing.Annotations).To(BeEmpty())
 		Expect(existing.Spec.NodeSelector).To(BeNil())
 		Expect(existing.Spec.MachineConfigSelector).To(BeNil())
 	})
 
-	It("refuses a pool whose UID stamp does not match", func() {
-		irm := stampedIRM()
-		existing := &mcfgv1.MachineConfigPool{ObjectMeta: metav1.ObjectMeta{
-			Name: mcfg.InitramfsPoolName,
-			Annotations: map[string]string{
-				mcfg.InitramfsModuleNamespaceAnnotation: irm.Namespace,
-				mcfg.InitramfsModuleNameAnnotation:      irm.Name,
-				mcfg.InitramfsModuleUIDAnnotation:       "other-uid",
-			},
-		}}
-		expectGetObject(clnt, ctx, existing)
-		expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName)
+	It("accepts a pool and MachineConfig that are stamped for this CR", func() {
+		irm := newIRM(nil, nil, nil)
+		pool := &mcfgv1.MachineConfigPool{ObjectMeta: metav1.ObjectMeta{Name: mcfg.InitramfsPoolName}}
+		pool.Spec.NodeSelector = &metav1.LabelSelector{MatchLabels: map[string]string{"touched": "yes"}}
+		mc := &mcfgv1.MachineConfig{
+			ObjectMeta: metav1.ObjectMeta{Name: mcfg.InitramfsMachineConfigName},
+			Spec:       mcfgv1.MachineConfigSpec{OSImageURL: "keep"},
+		}
+		gomock.InOrder(
+			expectGetObject(clnt, ctx, pool),
+			expectGetObject(clnt, ctx, mc),
+			mockMCFG.EXPECT().StampedForInitramfsModule(gomock.Any(), irm).Return(true),
+			mockMCFG.EXPECT().StampedForInitramfsModule(gomock.Any(), irm).Return(true),
+		)
 
-		err := h.checkUnstampedPoolAndMachineConfig(ctx, irm)
-
-		Expect(err).To(MatchError(ContainSubstring("MachineConfigPool kmm-initramfs already exists and is not stamped for this CR")))
-		Expect(existing.Annotations[mcfg.InitramfsModuleUIDAnnotation]).To(Equal("other-uid"))
+		Expect(h.checkUnstampedPoolAndMachineConfig(ctx, irm)).To(Succeed())
+		Expect(pool.Spec.NodeSelector.MatchLabels).To(HaveKeyWithValue("touched", "yes"))
+		Expect(mc.Spec.OSImageURL).To(Equal("keep"))
 	})
 
-	It("refuses a MachineConfig that has no stamp and does not create the pool", func() {
-		irm := stampedIRM()
+	It("refuses a MachineConfig that is not stamped for this CR and does not create the pool", func() {
+		irm := newIRM(nil, nil, nil)
 		existing := &mcfgv1.MachineConfig{
 			ObjectMeta: metav1.ObjectMeta{Name: mcfg.InitramfsMachineConfigName},
 			Spec:       mcfgv1.MachineConfigSpec{OSImageURL: "keep"},
 		}
-		expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName)
-		expectGetObject(clnt, ctx, existing)
+		gomock.InOrder(
+			expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName),
+			expectGetObject(clnt, ctx, existing),
+			mockMCFG.EXPECT().StampedForInitramfsModule(gomock.Any(), irm).Return(false),
+		)
 
 		err := h.checkUnstampedPoolAndMachineConfig(ctx, irm)
 
 		Expect(err).To(MatchError(ContainSubstring("MachineConfig 99-kmm-initramfs already exists and is not stamped for this CR")))
 		Expect(existing.Spec.OSImageURL).To(Equal("keep"))
-		Expect(existing.Annotations).To(BeEmpty())
 		Expect(existing.Labels).To(BeEmpty())
-	})
-
-	It("refuses a MachineConfig whose UID stamp does not match and does not patch a stamped pool", func() {
-		irm := stampedIRM()
-		pool := &mcfgv1.MachineConfigPool{ObjectMeta: metav1.ObjectMeta{
-			Name:        mcfg.InitramfsPoolName,
-			Annotations: stampAnnotations(irm),
-		}}
-		pool.Spec.NodeSelector = &metav1.LabelSelector{MatchLabels: map[string]string{"touched": "yes"}}
-		foreign := &mcfgv1.MachineConfig{ObjectMeta: metav1.ObjectMeta{
-			Name: mcfg.InitramfsMachineConfigName,
-			Annotations: map[string]string{
-				mcfg.InitramfsModuleNamespaceAnnotation: irm.Namespace,
-				mcfg.InitramfsModuleNameAnnotation:      irm.Name,
-				mcfg.InitramfsModuleUIDAnnotation:       "other-uid",
-			},
-		}}
-		expectGetObject(clnt, ctx, pool)
-		expectGetObject(clnt, ctx, foreign)
-
-		err := h.checkUnstampedPoolAndMachineConfig(ctx, irm)
-
-		Expect(err).To(MatchError(ContainSubstring("MachineConfig 99-kmm-initramfs already exists and is not stamped for this CR")))
-		Expect(pool.Spec.NodeSelector.MatchLabels).To(HaveKeyWithValue("touched", "yes"))
-		Expect(foreign.Annotations[mcfg.InitramfsModuleUIDAnnotation]).To(Equal("other-uid"))
 	})
 
 	It("creates both objects from Reconcile when the parse job returns no lists", func() {
 		mockNode := node.NewMockNode(ctrl)
-		irm := stampedIRM()
-		r := NewInitramfsModuleReconciler(clnt, nil, mockNode, mcfg.NewMCFG(""))
+		irm := newIRM(nil, nil, nil)
+		r := NewInitramfsModuleReconciler(clnt, nil, mockNode, mockMCFG)
 		var pool *mcfgv1.MachineConfigPool
 		var mc *mcfgv1.MachineConfig
 		gomock.InOrder(
@@ -501,8 +479,10 @@ var _ = Describe("initramfs MachineConfigPool and MachineConfig", func() {
 			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
 			mockNode.EXPECT().GetAllNodesBySelector(ctx, workerSelector).Return([]v1.Node{}, nil),
 			expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName),
+			mockMCFG.EXPECT().UpdateInitramfsPool(gomock.Any(), irm),
 			expectCreate(clnt, ctx, func(obj client.Object) { pool = obj.(*mcfgv1.MachineConfigPool).DeepCopy() }),
 			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
+			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, gomock.Nil()).Return(nil),
 			expectCreate(clnt, ctx, func(obj client.Object) { mc = obj.(*mcfgv1.MachineConfig).DeepCopy() }),
 		)
 
@@ -510,26 +490,12 @@ var _ = Describe("initramfs MachineConfigPool and MachineConfig", func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(Equal(reconcile.Result{}))
-		expectStamps(pool, irm)
-		expectStamps(mc, irm)
+		Expect(pool.Name).To(Equal(mcfg.InitramfsPoolName))
+		Expect(mc.Name).To(Equal(mcfg.InitramfsMachineConfigName))
 		Expect(pool.OwnerReferences).To(BeEmpty())
 		Expect(mc.OwnerReferences).To(BeEmpty())
 	})
 })
-
-func stampedIRM() *kmmv1beta1.InitramfsModule {
-	irm := newIRM(nil, nil, nil)
-	irm.UID = types.UID("cr-uid")
-	return irm
-}
-
-func stampAnnotations(irm *kmmv1beta1.InitramfsModule) map[string]string {
-	return map[string]string{
-		mcfg.InitramfsModuleNamespaceAnnotation: irm.Namespace,
-		mcfg.InitramfsModuleNameAnnotation:      irm.Name,
-		mcfg.InitramfsModuleUIDAnnotation:       string(irm.UID),
-	}
-}
 
 func notFound() error {
 	return apierrors.NewNotFound(schema.GroupResource{}, "missing")
@@ -569,14 +535,4 @@ func expectPatch(clnt *kmmclient.MockClient, ctx context.Context, capture func(c
 			return nil
 		},
 	)
-}
-
-func expectStamps(obj metav1.Object, irm *kmmv1beta1.InitramfsModule) {
-	Expect(obj.GetAnnotations()).To(HaveKeyWithValue(mcfg.InitramfsModuleNamespaceAnnotation, irm.Namespace))
-	Expect(obj.GetAnnotations()).To(HaveKeyWithValue(mcfg.InitramfsModuleNameAnnotation, irm.Name))
-	Expect(obj.GetAnnotations()).To(HaveKeyWithValue(mcfg.InitramfsModuleUIDAnnotation, string(irm.UID)))
-}
-
-func ptrTo[T any](v T) *T {
-	return &v
 }
