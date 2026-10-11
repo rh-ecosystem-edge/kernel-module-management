@@ -23,7 +23,7 @@ const (
 	InitramfsPoolName          = "kmm-initramfs"
 	InitramfsMachineConfigName = "99-kmm-initramfs"
 
-	initramfsNodeRoleLabel             = "node-role.kubernetes.io/initramfs"
+	InitramfsNodeRoleLabel             = "node-role.kubernetes.io/initramfs"
 	machineConfigRoleLabel             = "machineconfiguration.openshift.io/role"
 	InitramfsModuleNamespaceAnnotation = "kmm.sigs.x-k8s.io/initramfsmodule-namespace"
 	InitramfsModuleNameAnnotation      = "kmm.sigs.x-k8s.io/initramfsmodule-name"
@@ -249,7 +249,7 @@ func (m *mcfgImpl) UpdateInitramfsPool(pool *mcfgv1.MachineConfigPool, irm *kmmv
 	setInitramfsStamp(pool, irm)
 	unavailable := intstr.FromInt(1)
 	pool.Spec.NodeSelector = &metav1.LabelSelector{
-		MatchLabels: map[string]string{initramfsNodeRoleLabel: ""},
+		MatchLabels: initramfsPoolNodeSelector(irm),
 	}
 	pool.Spec.MachineConfigSelector = &metav1.LabelSelector{
 		MatchExpressions: []metav1.LabelSelectorRequirement{{
@@ -259,6 +259,13 @@ func (m *mcfgImpl) UpdateInitramfsPool(pool *mcfgv1.MachineConfigPool, irm *kmmv
 		}},
 	}
 	pool.Spec.MaxUnavailable = &unavailable
+}
+
+func initramfsPoolNodeSelector(irm *kmmv1beta1.InitramfsModule) map[string]string {
+	if len(irm.Spec.Selector) == 0 {
+		return map[string]string{InitramfsNodeRoleLabel: ""}
+	}
+	return irm.Spec.Selector
 }
 
 func (m *mcfgImpl) UpdateInitramfsMachineConfig(mc *mcfgv1.MachineConfig, irm *kmmv1beta1.InitramfsModule, _ map[string]KernelInspectLists) error {

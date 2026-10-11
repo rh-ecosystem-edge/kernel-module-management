@@ -27,7 +27,10 @@ const (
 	imageRepo = "registry.example.com/kmods/nic:v1"
 )
 
-var workerSelector = map[string]string{"node-role.kubernetes.io/worker": ""}
+var (
+	workerSelector     = map[string]string{"node-role.kubernetes.io/worker": ""}
+	initramfsRoleLabel = map[string]string{mcfg.InitramfsNodeRoleLabel: ""}
+)
 
 func nodeWithKernel(name, kernel string) v1.Node {
 	return v1.Node{
@@ -121,6 +124,19 @@ var _ = Describe("InitramfsModuleReconciler_Reconcile", func() {
 		Expect(err.Error()).To(ContainSubstring("list failed"))
 	})
 
+	It("returns the node label error and does not build images", func() {
+		irm := newIRM(nil, nil, nil)
+		nodes := []v1.Node{nodeWithKernel("n1", "6.1.0")}
+		mockHelper.EXPECT().checkUnstampedPoolAndMachineConfig(ctx, irm).Return(nil)
+		mockHelper.EXPECT().listSelectedNodes(ctx, irm).Return(nodes, nil)
+		mockHelper.EXPECT().handleNodeLabels(ctx, irm, nodes).Return(errors.New("label failed"))
+
+		_, err := r.Reconcile(ctx, irm)
+
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("label failed"))
+	})
+
 	It("calls the parse job, then the pool, then the MachineConfig", func() {
 		irm := newIRM(nil, nil, nil)
 		nodes := []v1.Node{nodeWithKernel("n1", "6.1.0")}
@@ -132,6 +148,7 @@ var _ = Describe("InitramfsModuleReconciler_Reconcile", func() {
 		gomock.InOrder(
 			mockHelper.EXPECT().checkUnstampedPoolAndMachineConfig(ctx, irm).Return(nil),
 			mockHelper.EXPECT().listSelectedNodes(ctx, irm).Return(nodes, nil),
+			mockHelper.EXPECT().handleNodeLabels(ctx, irm, nodes).Return(nil),
 			mockHelper.EXPECT().handleMIC(ctx, irm, nodes).Return(nil),
 			mockHelper.EXPECT().handleParseJob(ctx, irm).Return(parsed, nil),
 			mockHelper.EXPECT().handleMachineConfigPool(ctx, irm).Return(nil),
@@ -149,6 +166,7 @@ var _ = Describe("InitramfsModuleReconciler_Reconcile", func() {
 		nodes := []v1.Node{nodeWithKernel("n1", "6.1.0")}
 		mockHelper.EXPECT().checkUnstampedPoolAndMachineConfig(ctx, irm).Return(nil)
 		mockHelper.EXPECT().listSelectedNodes(ctx, irm).Return(nodes, nil)
+		mockHelper.EXPECT().handleNodeLabels(ctx, irm, nodes).Return(nil)
 		mockHelper.EXPECT().handleMIC(ctx, irm, nodes).Return(errors.New("apply failed"))
 
 		_, err := r.Reconcile(ctx, irm)
@@ -163,6 +181,7 @@ var _ = Describe("InitramfsModuleReconciler_Reconcile", func() {
 		gomock.InOrder(
 			mockHelper.EXPECT().checkUnstampedPoolAndMachineConfig(ctx, irm).Return(nil),
 			mockHelper.EXPECT().listSelectedNodes(ctx, irm).Return(nodes, nil),
+			mockHelper.EXPECT().handleNodeLabels(ctx, irm, nodes).Return(nil),
 			mockHelper.EXPECT().handleMIC(ctx, irm, nodes).Return(nil),
 			mockHelper.EXPECT().handleParseJob(ctx, irm).Return(initramfsParseParams{}, errors.New("parse failed")),
 		)
@@ -179,6 +198,7 @@ var _ = Describe("InitramfsModuleReconciler_Reconcile", func() {
 		parsed := initramfsParseParams{}
 		mockHelper.EXPECT().checkUnstampedPoolAndMachineConfig(ctx, irm).Return(nil)
 		mockHelper.EXPECT().listSelectedNodes(ctx, irm).Return(nodes, nil)
+		mockHelper.EXPECT().handleNodeLabels(ctx, irm, nodes).Return(nil)
 		mockHelper.EXPECT().handleMIC(ctx, irm, nodes).Return(nil)
 		mockHelper.EXPECT().handleParseJob(ctx, irm).Return(parsed, nil)
 		mockHelper.EXPECT().handleMachineConfigPool(ctx, irm).Return(errors.New("mcp failed"))
@@ -195,6 +215,7 @@ var _ = Describe("InitramfsModuleReconciler_Reconcile", func() {
 		parsed := initramfsParseParams{}
 		mockHelper.EXPECT().checkUnstampedPoolAndMachineConfig(ctx, irm).Return(nil)
 		mockHelper.EXPECT().listSelectedNodes(ctx, irm).Return(nodes, nil)
+		mockHelper.EXPECT().handleNodeLabels(ctx, irm, nodes).Return(nil)
 		mockHelper.EXPECT().handleMIC(ctx, irm, nodes).Return(nil)
 		mockHelper.EXPECT().handleParseJob(ctx, irm).Return(parsed, nil)
 		mockHelper.EXPECT().handleMachineConfigPool(ctx, irm).Return(nil)
@@ -330,6 +351,68 @@ var _ = Describe("initramfsModuleReconcilerHelper", func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(parsed).To(Equal(initramfsParseParams{}))
+	})
+})
+
+var _ = Describe("handleNodeLabels", func() {
+	var (
+		ctrl     *gomock.Controller
+		mockNode *node.MockNode
+		h        initramfsModuleReconcilerHelper
+		ctx      context.Context
+	)
+
+	BeforeEach(func() {
+		ctrl = gomock.NewController(GinkgoT())
+		mockNode = node.NewMockNode(ctrl)
+		h = newInitramfsModuleReconcilerHelper(nil, nil, mockNode, nil)
+		ctx = context.Background()
+	})
+
+	It("adds the initramfs role label to worker nodes when the selector is empty", func() {
+		irm := newIRM(nil, nil, nil)
+		nodes := []v1.Node{
+			nodeWithKernel("w1", "6.1.0"),
+			nodeWithKernel("w2", "5.14.0"),
+		}
+		gomock.InOrder(
+			mockNode.EXPECT().UpdateLabels(ctx, &nodes[0], initramfsRoleLabel, nil).Return(nil),
+			mockNode.EXPECT().UpdateLabels(ctx, &nodes[1], initramfsRoleLabel, nil).Return(nil),
+		)
+
+		Expect(h.handleNodeLabels(ctx, irm, nodes)).To(Succeed())
+	})
+
+	It("adds the initramfs role label when the selector map is empty", func() {
+		irm := newIRM(map[string]string{}, nil, nil)
+		nodes := []v1.Node{nodeWithKernel("w1", "6.1.0")}
+		mockNode.EXPECT().UpdateLabels(ctx, &nodes[0], initramfsRoleLabel, nil).Return(nil)
+
+		Expect(h.handleNodeLabels(ctx, irm, nodes)).To(Succeed())
+	})
+
+	It("does not label nodes when the user set a selector", func() {
+		irm := newIRM(map[string]string{"kmm-test": "initramfs"}, nil, nil)
+		nodes := []v1.Node{nodeWithKernel("w1", "6.1.0")}
+
+		Expect(h.handleNodeLabels(ctx, irm, nodes)).To(Succeed())
+	})
+
+	It("keeps labeling the remaining workers when one update fails", func() {
+		irm := newIRM(nil, nil, nil)
+		nodes := []v1.Node{
+			nodeWithKernel("w1", "6.1.0"),
+			nodeWithKernel("w2", "6.1.0"),
+		}
+		gomock.InOrder(
+			mockNode.EXPECT().UpdateLabels(ctx, &nodes[0], initramfsRoleLabel, nil).Return(errors.New("conflict")),
+			mockNode.EXPECT().UpdateLabels(ctx, &nodes[1], initramfsRoleLabel, nil).Return(nil),
+		)
+
+		err := h.handleNodeLabels(ctx, irm, nodes)
+
+		Expect(err).To(MatchError(ContainSubstring("w1")))
+		Expect(err.Error()).NotTo(ContainSubstring("w2"))
 	})
 })
 
