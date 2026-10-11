@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -46,6 +47,7 @@ const workerNodeLabelKey = "node-role.kubernetes.io/worker"
 // +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=moduleimagesconfigs,verbs=create;get;list;patch;watch
 // +kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigpools,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;patch;watch
 
 type initramfsModuleReconciler struct {
 	helper initramfsModuleReconcilerHelper
@@ -81,6 +83,10 @@ func (r *initramfsModuleReconciler) Reconcile(ctx context.Context, irm *kmmv1bet
 		return res, err
 	}
 
+	if err = r.helper.handleNodeLabels(ctx, irm, nodes); err != nil {
+		return res, err
+	}
+
 	if err = r.helper.handleMIC(ctx, irm, nodes); err != nil {
 		return res, err
 	}
@@ -101,6 +107,7 @@ func (r *initramfsModuleReconciler) Reconcile(ctx context.Context, irm *kmmv1bet
 
 type initramfsModuleReconcilerHelper interface {
 	listSelectedNodes(ctx context.Context, irm *kmmv1beta1.InitramfsModule) ([]v1.Node, error)
+	handleNodeLabels(ctx context.Context, irm *kmmv1beta1.InitramfsModule, nodes []v1.Node) error
 	handleMIC(ctx context.Context, irm *kmmv1beta1.InitramfsModule, nodes []v1.Node) error
 	finalize(ctx context.Context, irm *kmmv1beta1.InitramfsModule) error
 	checkUnstampedPoolAndMachineConfig(ctx context.Context, irm *kmmv1beta1.InitramfsModule) error
@@ -131,6 +138,22 @@ func (h *initramfsModuleReconcilerHelperImpl) listSelectedNodes(ctx context.Cont
 		selector = map[string]string{workerNodeLabelKey: ""}
 	}
 	return h.nodeAPI.GetAllNodesBySelector(ctx, selector)
+}
+
+// handleNodeLabels adds node-role.kubernetes.io/initramfs to worker nodes when spec.selector is empty.
+func (h *initramfsModuleReconcilerHelperImpl) handleNodeLabels(ctx context.Context, irm *kmmv1beta1.InitramfsModule, nodes []v1.Node) error {
+	if len(irm.Spec.Selector) > 0 {
+		return nil
+	}
+	roleLabel := map[string]string{mcfg.InitramfsNodeRoleLabel: ""}
+	var errs []error
+	for i := range nodes {
+		n := &nodes[i]
+		if err := h.nodeAPI.UpdateLabels(ctx, n, roleLabel, nil); err != nil {
+			errs = append(errs, fmt.Errorf("could not add initramfs role label to node %s: %v", n.Name, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func (h *initramfsModuleReconcilerHelperImpl) handleMIC(ctx context.Context, irm *kmmv1beta1.InitramfsModule, nodes []v1.Node) error {

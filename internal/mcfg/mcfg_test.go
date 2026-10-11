@@ -255,7 +255,7 @@ var _ = Describe("initramfs pool and MachineConfig", func() {
 			InitramfsModuleNameAnnotation:      irm.Name,
 		}))
 		Expect(pool.Spec.NodeSelector).To(Equal(&metav1.LabelSelector{
-			MatchLabels: map[string]string{initramfsNodeRoleLabel: ""},
+			MatchLabels: map[string]string{InitramfsNodeRoleLabel: ""},
 		}))
 		Expect(pool.Spec.MachineConfigSelector).To(Equal(&metav1.LabelSelector{
 			MatchExpressions: []metav1.LabelSelectorRequirement{{
@@ -265,6 +265,24 @@ var _ = Describe("initramfs pool and MachineConfig", func() {
 			}},
 		}))
 		Expect(pool.Spec.MaxUnavailable).To(Equal(ptrTo(intstr.FromInt(1))))
+	})
+
+	It("targets the initramfs role label when the selector map is empty", func() {
+		irm.Spec.Selector = map[string]string{}
+		pool := &mcfgv1.MachineConfigPool{}
+
+		mcfgAPI.UpdateInitramfsPool(pool, irm)
+
+		Expect(pool.Spec.NodeSelector.MatchLabels).To(Equal(map[string]string{InitramfsNodeRoleLabel: ""}))
+	})
+
+	It("uses the InitramfsModule selector as the pool node selector", func() {
+		irm.Spec.Selector = map[string]string{"kmm-test": "initramfs", "zone": "a"}
+		pool := &mcfgv1.MachineConfigPool{}
+
+		mcfgAPI.UpdateInitramfsPool(pool, irm)
+
+		Expect(pool.Spec.NodeSelector.MatchLabels).To(Equal(irm.Spec.Selector))
 	})
 
 	It("reports a stamp when namespace and name match", func() {
