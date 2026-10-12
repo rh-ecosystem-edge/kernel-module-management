@@ -208,6 +208,34 @@ func DevicePluginReconcilerNodePredicate() predicate.Predicate {
 	)
 }
 
+const workerNodeLabelKey = "node-role.kubernetes.io/worker"
+
+func isWorkerNode(obj client.Object) bool {
+	node, ok := obj.(*v1.Node)
+	if !ok {
+		return false
+	}
+	value, exists := node.Labels[workerNodeLabelKey]
+	return exists && value == ""
+}
+
+// InitramfsModuleReconcilerNodePredicate admits a node when it is created as a worker, or when
+// it gains the worker role. Other node events do not reconcile InitramfsModules.
+func InitramfsModuleReconcilerNodePredicate() predicate.Predicate {
+	return predicate.And(
+		predicate.NewPredicateFuncs(isWorkerNode),
+		skipDeletions,
+		predicate.Funcs{
+			// NewPredicateFuncs applies isWorkerNode to the new object. Also require that the
+			// previous object was not a worker, so label changes on an existing worker are ignored.
+			UpdateFunc: func(e event.UpdateEvent) bool {
+				return !isWorkerNode(e.ObjectOld)
+			},
+			GenericFunc: func(event.GenericEvent) bool { return false },
+		},
+	)
+}
+
 func ModuleReconcileBuildPredicate() predicate.Predicate {
 	return predicate.And(
 		skipDeletions,
@@ -272,6 +300,31 @@ func NodeUpdateKernelChangedPredicate() predicate.Predicate {
 			return oldNode.Status.NodeInfo.KernelVersion != newNode.Status.NodeInfo.KernelVersion
 		},
 	}
+}
+
+// FindInitramfsModulesForNode enqueues the cluster's single InitramfsModule for a worker node.
+// Reconciliation then labels the node when spec.selector is empty. Non-workers are ignored.
+func (f *Filter) FindInitramfsModulesForNode(ctx context.Context, obj client.Object) []reconcile.Request {
+	if !isWorkerNode(obj) {
+		return nil
+	}
+
+	logger := ctrl.LoggerFrom(ctx).WithValues("node", obj.GetName())
+	logger.Info("Listing the InitramfsModule for worker node")
+
+	irms := kmmv1beta1.InitramfsModuleList{}
+	if err := f.client.List(ctx, &irms); err != nil {
+		logger.Error(err, "could not list InitramfsModules")
+		return nil
+	}
+	if len(irms.Items) == 0 {
+		return nil
+	}
+
+	irm := irms.Items[0]
+	return []reconcile.Request{{
+		NamespacedName: types.NamespacedName{Name: irm.Name, Namespace: irm.Namespace},
+	}}
 }
 
 func (f *Filter) FindModulesForNode(ctx context.Context, node client.Object) []reconcile.Request {

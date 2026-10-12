@@ -554,7 +554,7 @@ var _ = Describe("initramfs MachineConfigPool and MachineConfig", func() {
 	It("creates both objects from Reconcile when the parse job returns no lists", func() {
 		mockNode := node.NewMockNode(ctrl)
 		irm := newIRM(nil, nil, nil)
-		r := NewInitramfsModuleReconciler(clnt, nil, mockNode, mockMCFG)
+		r := NewInitramfsModuleReconciler(clnt, nil, mockNode, mockMCFG, nil)
 		var pool *mcfgv1.MachineConfigPool
 		var mc *mcfgv1.MachineConfig
 		gomock.InOrder(
