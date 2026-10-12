@@ -2,6 +2,7 @@ package filter
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -355,6 +356,126 @@ var _ = Describe("ModuleReconcilerNodePredicate", func() {
 		).To(
 			BeFalse(),
 		)
+	})
+})
+
+var _ = Describe("InitramfsModuleReconcilerNodePredicate", func() {
+	var p predicate.Predicate
+
+	BeforeEach(func() {
+		p = InitramfsModuleReconcilerNodePredicate()
+	})
+
+	worker := func(name string) *v1.Node {
+		return &v1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   name,
+				Labels: map[string]string{workerNodeLabelKey: ""},
+			},
+		}
+	}
+
+	It("accepts a worker node create", func() {
+		Expect(p.Create(event.CreateEvent{Object: worker("w1")})).To(BeTrue())
+	})
+
+	It("rejects a non-worker node create", func() {
+		node := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "master-0"}}
+
+		Expect(p.Create(event.CreateEvent{Object: node})).To(BeFalse())
+	})
+
+	It("accepts an update that adds the worker role", func() {
+		ev := event.UpdateEvent{
+			ObjectOld: &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "w1"}},
+			ObjectNew: worker("w1"),
+		}
+
+		Expect(p.Update(ev)).To(BeTrue())
+	})
+
+	It("rejects an update of a node that is already a worker", func() {
+		ev := event.UpdateEvent{
+			ObjectOld: worker("w1"),
+			ObjectNew: worker("w1"),
+		}
+
+		Expect(p.Update(ev)).To(BeFalse())
+	})
+
+	It("rejects deletion and generic events", func() {
+		Expect(p.Delete(event.DeleteEvent{Object: worker("w1")})).To(BeFalse())
+		Expect(p.Generic(event.GenericEvent{Object: worker("w1")})).To(BeFalse())
+	})
+})
+
+var _ = Describe("FindInitramfsModulesForNode", func() {
+	var ctx context.Context
+
+	BeforeEach(func() {
+		mockCtrl = gomock.NewController(GinkgoT())
+		clnt = mockClient.NewMockClient(mockCtrl)
+		f = New(clnt, nil)
+		ctx = context.Background()
+	})
+
+	It("does not list InitramfsModules for a non-worker node", func() {
+		node := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "master-0", Labels: map[string]string{
+			"node-role.kubernetes.io/master": "",
+		}}}
+
+		Expect(f.FindInitramfsModulesForNode(ctx, node)).To(BeEmpty())
+	})
+
+	It("does not list InitramfsModules when the worker label value is not empty", func() {
+		node := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "w1", Labels: map[string]string{
+			workerNodeLabelKey: "true",
+		}}}
+
+		Expect(f.FindInitramfsModulesForNode(ctx, node)).To(BeEmpty())
+	})
+
+	It("returns no requests when listing InitramfsModules fails", func() {
+		clnt.EXPECT().List(ctx, gomock.Any()).Return(errors.New("list failed"))
+
+		node := &v1.Node{ObjectMeta: metav1.ObjectMeta{
+			Name:   "w1",
+			Labels: map[string]string{workerNodeLabelKey: ""},
+		}}
+
+		Expect(f.FindInitramfsModulesForNode(ctx, node)).To(BeEmpty())
+	})
+
+	It("returns no requests when the cluster has no InitramfsModule", func() {
+		clnt.EXPECT().List(ctx, gomock.Any()).Return(nil)
+
+		node := &v1.Node{ObjectMeta: metav1.ObjectMeta{
+			Name:   "w1",
+			Labels: map[string]string{workerNodeLabelKey: ""},
+		}}
+
+		Expect(f.FindInitramfsModulesForNode(ctx, node)).To(BeEmpty())
+	})
+
+	It("enqueues the single InitramfsModule for a worker node", func() {
+		irm := kmmv1beta1.InitramfsModule{
+			ObjectMeta: metav1.ObjectMeta{Name: "nic", Namespace: "ns"},
+		}
+		clnt.EXPECT().List(ctx, gomock.Any()).DoAndReturn(
+			func(_ interface{}, list *kmmv1beta1.InitramfsModuleList, _ ...interface{}) error {
+				list.Items = []kmmv1beta1.InitramfsModule{irm}
+				return nil
+			},
+		)
+
+		node := &v1.Node{ObjectMeta: metav1.ObjectMeta{
+			Name:   "w1",
+			Labels: map[string]string{workerNodeLabelKey: ""},
+		}}
+
+		Expect(f.FindInitramfsModulesForNode(ctx, node)).To(Equal([]reconcile.Request{{
+			NamespacedName: types.NamespacedName{Name: "nic", Namespace: "ns"},
+		}}))
 	})
 })
 

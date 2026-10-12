@@ -25,6 +25,7 @@ import (
 
 	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mcfg"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mic"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
@@ -32,8 +33,10 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -51,11 +54,19 @@ const workerNodeLabelKey = "node-role.kubernetes.io/worker"
 
 type initramfsModuleReconciler struct {
 	helper initramfsModuleReconcilerHelper
+	filter *filter.Filter
 }
 
-func NewInitramfsModuleReconciler(client client.Client, micAPI mic.MIC, nodeAPI node.Node, mcfgAPI mcfg.MCFG) *initramfsModuleReconciler {
+func NewInitramfsModuleReconciler(
+	client client.Client,
+	micAPI mic.MIC,
+	nodeAPI node.Node,
+	mcfgAPI mcfg.MCFG,
+	filter *filter.Filter,
+) *initramfsModuleReconciler {
 	return &initramfsModuleReconciler{
 		helper: newInitramfsModuleReconcilerHelper(client, micAPI, nodeAPI, mcfgAPI),
+		filter: filter,
 	}
 }
 
@@ -64,6 +75,13 @@ func (r *initramfsModuleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&kmmv1beta1.InitramfsModule{}).
 		Owns(&kmmv1beta1.ModuleImagesConfig{}).
+		// A node often receives the worker role after it is created. Reconcile then so an
+		// InitramfsModule with an empty selector can label it into the pool.
+		Watches(
+			&v1.Node{},
+			handler.EnqueueRequestsFromMapFunc(r.filter.FindInitramfsModulesForNode),
+			builder.WithPredicates(filter.InitramfsModuleReconcilerNodePredicate()),
+		).
 		Named(InitramfsModuleReconcilerName).
 		Complete(reconcile.AsReconciler[*kmmv1beta1.InitramfsModule](mgr.GetClient(), r))
 }
