@@ -210,27 +210,13 @@ func DevicePluginReconcilerNodePredicate() predicate.Predicate {
 
 const workerNodeLabelKey = "node-role.kubernetes.io/worker"
 
-func isWorkerNode(obj client.Object) bool {
-	node, ok := obj.(*v1.Node)
-	if !ok {
-		return false
-	}
-	value, exists := node.Labels[workerNodeLabelKey]
-	return exists && value == ""
-}
-
-// InitramfsModuleReconcilerNodePredicate admits a node when it is created as a worker, or when
-// it gains the worker role. Other node events do not reconcile InitramfsModules.
+// InitramfsModuleReconcilerNodePredicate admits a node create, and an update whose
+// labels or taints changed. Status-only updates, deletions, and generic events do not.
 func InitramfsModuleReconcilerNodePredicate() predicate.Predicate {
 	return predicate.And(
-		predicate.NewPredicateFuncs(isWorkerNode),
 		skipDeletions,
+		predicate.Or(nodeTaintsChanged, predicate.LabelChangedPredicate{}),
 		predicate.Funcs{
-			// NewPredicateFuncs applies isWorkerNode to the new object. Also require that the
-			// previous object was not a worker, so label changes on an existing worker are ignored.
-			UpdateFunc: func(e event.UpdateEvent) bool {
-				return !isWorkerNode(e.ObjectOld)
-			},
 			GenericFunc: func(event.GenericEvent) bool { return false },
 		},
 	)
@@ -284,6 +270,28 @@ func ModuleReconcileMICPredicate() predicate.Predicate {
 	)
 }
 
+// InitramfsModuleReconcilerMICPredicate reconciles an InitramfsModule when its
+// ModuleImagesConfig status changes, so the reconciler can check image existence
+// without waiting inside handleMIC. Creates, deletes, and spec-only updates do not.
+func InitramfsModuleReconcilerMICPredicate() predicate.Predicate {
+	return predicate.Funcs{
+		CreateFunc:  func(event.CreateEvent) bool { return false },
+		DeleteFunc:  func(event.DeleteEvent) bool { return false },
+		GenericFunc: func(event.GenericEvent) bool { return false },
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			oldMIC, ok := e.ObjectOld.(*kmmv1beta1.ModuleImagesConfig)
+			if !ok {
+				return false
+			}
+			newMIC, ok := e.ObjectNew.(*kmmv1beta1.ModuleImagesConfig)
+			if !ok {
+				return false
+			}
+			return !reflect.DeepEqual(oldMIC.Status, newMIC.Status)
+		},
+	}
+}
+
 func NodeUpdateKernelChangedPredicate() predicate.Predicate {
 	return predicate.Funcs{
 		UpdateFunc: func(updateEvent event.UpdateEvent) bool {
@@ -302,15 +310,11 @@ func NodeUpdateKernelChangedPredicate() predicate.Predicate {
 	}
 }
 
-// FindInitramfsModulesForNode enqueues the cluster's single InitramfsModule for a worker node.
-// Reconciliation then labels the node when spec.selector is empty. Non-workers are ignored.
+// FindInitramfsModulesForNode enqueues the cluster's single InitramfsModule for a node
+// whose labels changed. Reconciliation then selects nodes with spec.selector.
 func (f *Filter) FindInitramfsModulesForNode(ctx context.Context, obj client.Object) []reconcile.Request {
-	if !isWorkerNode(obj) {
-		return nil
-	}
-
 	logger := ctrl.LoggerFrom(ctx).WithValues("node", obj.GetName())
-	logger.Info("Listing the InitramfsModule for worker node")
+	logger.Info("Listing the InitramfsModule for node")
 
 	irms := kmmv1beta1.InitramfsModuleList{}
 	if err := f.client.List(ctx, &irms); err != nil {

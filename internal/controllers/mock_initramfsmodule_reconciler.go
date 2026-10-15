@@ -40,6 +40,21 @@ func (m *MockinitramfsModuleReconcilerHelper) EXPECT() *MockinitramfsModuleRecon
 	return m.recorder
 }
 
+// areImagesReady mocks base method.
+func (m *MockinitramfsModuleReconcilerHelper) areImagesReady(ctx context.Context, irm *v1beta1.InitramfsModule) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "areImagesReady", ctx, irm)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// areImagesReady indicates an expected call of areImagesReady.
+func (mr *MockinitramfsModuleReconcilerHelperMockRecorder) areImagesReady(ctx, irm any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "areImagesReady", reflect.TypeOf((*MockinitramfsModuleReconcilerHelper)(nil).areImagesReady), ctx, irm)
+}
+
 // checkUnstampedPoolAndMachineConfig mocks base method.
 func (m *MockinitramfsModuleReconcilerHelper) checkUnstampedPoolAndMachineConfig(ctx context.Context, irm *v1beta1.InitramfsModule) error {
 	m.ctrl.T.Helper()

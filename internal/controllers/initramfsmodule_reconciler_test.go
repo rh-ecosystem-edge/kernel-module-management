@@ -150,6 +150,7 @@ var _ = Describe("InitramfsModuleReconciler_Reconcile", func() {
 			mockHelper.EXPECT().listSelectedNodes(ctx, irm).Return(nodes, nil),
 			mockHelper.EXPECT().handleNodeLabels(ctx, irm, nodes).Return(nil),
 			mockHelper.EXPECT().handleMIC(ctx, irm, nodes).Return(nil),
+			mockHelper.EXPECT().areImagesReady(ctx, irm).Return(true, nil),
 			mockHelper.EXPECT().handleParseJob(ctx, irm).Return(parsed, nil),
 			mockHelper.EXPECT().handleMachineConfigPool(ctx, irm).Return(nil),
 			mockHelper.EXPECT().handleMachineConfig(ctx, irm, parsed).Return(nil),
@@ -175,6 +176,40 @@ var _ = Describe("InitramfsModuleReconciler_Reconcile", func() {
 		Expect(err.Error()).To(ContainSubstring("apply failed"))
 	})
 
+	It("does not create the pool or MachineConfig when the image does not exist yet", func() {
+		irm := newIRM(nil, nil, nil)
+		nodes := []v1.Node{nodeWithKernel("n1", "6.1.0")}
+		gomock.InOrder(
+			mockHelper.EXPECT().checkUnstampedPoolAndMachineConfig(ctx, irm).Return(nil),
+			mockHelper.EXPECT().listSelectedNodes(ctx, irm).Return(nodes, nil),
+			mockHelper.EXPECT().handleNodeLabels(ctx, irm, nodes).Return(nil),
+			mockHelper.EXPECT().handleMIC(ctx, irm, nodes).Return(nil),
+			mockHelper.EXPECT().areImagesReady(ctx, irm).Return(false, nil),
+		)
+
+		res, err := r.Reconcile(ctx, irm)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res).To(Equal(reconcile.Result{}))
+	})
+
+	It("returns the image status error and does not create the pool", func() {
+		irm := newIRM(nil, nil, nil)
+		nodes := []v1.Node{nodeWithKernel("n1", "6.1.0")}
+		gomock.InOrder(
+			mockHelper.EXPECT().checkUnstampedPoolAndMachineConfig(ctx, irm).Return(nil),
+			mockHelper.EXPECT().listSelectedNodes(ctx, irm).Return(nodes, nil),
+			mockHelper.EXPECT().handleNodeLabels(ctx, irm, nodes).Return(nil),
+			mockHelper.EXPECT().handleMIC(ctx, irm, nodes).Return(nil),
+			mockHelper.EXPECT().areImagesReady(ctx, irm).Return(false, errors.New("get failed")),
+		)
+
+		_, err := r.Reconcile(ctx, irm)
+
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("get failed"))
+	})
+
 	It("returns the parse job error and does not create the pool", func() {
 		irm := newIRM(nil, nil, nil)
 		nodes := []v1.Node{nodeWithKernel("n1", "6.1.0")}
@@ -183,6 +218,7 @@ var _ = Describe("InitramfsModuleReconciler_Reconcile", func() {
 			mockHelper.EXPECT().listSelectedNodes(ctx, irm).Return(nodes, nil),
 			mockHelper.EXPECT().handleNodeLabels(ctx, irm, nodes).Return(nil),
 			mockHelper.EXPECT().handleMIC(ctx, irm, nodes).Return(nil),
+			mockHelper.EXPECT().areImagesReady(ctx, irm).Return(true, nil),
 			mockHelper.EXPECT().handleParseJob(ctx, irm).Return(initramfsParseParams{}, errors.New("parse failed")),
 		)
 
@@ -200,6 +236,7 @@ var _ = Describe("InitramfsModuleReconciler_Reconcile", func() {
 		mockHelper.EXPECT().listSelectedNodes(ctx, irm).Return(nodes, nil)
 		mockHelper.EXPECT().handleNodeLabels(ctx, irm, nodes).Return(nil)
 		mockHelper.EXPECT().handleMIC(ctx, irm, nodes).Return(nil)
+		mockHelper.EXPECT().areImagesReady(ctx, irm).Return(true, nil)
 		mockHelper.EXPECT().handleParseJob(ctx, irm).Return(parsed, nil)
 		mockHelper.EXPECT().handleMachineConfigPool(ctx, irm).Return(errors.New("mcp failed"))
 
@@ -217,6 +254,7 @@ var _ = Describe("InitramfsModuleReconciler_Reconcile", func() {
 		mockHelper.EXPECT().listSelectedNodes(ctx, irm).Return(nodes, nil)
 		mockHelper.EXPECT().handleNodeLabels(ctx, irm, nodes).Return(nil)
 		mockHelper.EXPECT().handleMIC(ctx, irm, nodes).Return(nil)
+		mockHelper.EXPECT().areImagesReady(ctx, irm).Return(true, nil)
 		mockHelper.EXPECT().handleParseJob(ctx, irm).Return(parsed, nil)
 		mockHelper.EXPECT().handleMachineConfigPool(ctx, irm).Return(nil)
 		mockHelper.EXPECT().handleMachineConfig(ctx, irm, parsed).Return(errors.New("mc failed"))
@@ -351,6 +389,70 @@ var _ = Describe("initramfsModuleReconcilerHelper", func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(parsed).To(Equal(initramfsParseParams{}))
+	})
+})
+
+var _ = Describe("areImagesReady", func() {
+	var (
+		ctrl    *gomock.Controller
+		clnt    *kmmclient.MockClient
+		mockMIC *mic.MockMIC
+		h       initramfsModuleReconcilerHelper
+		ctx     context.Context
+		irm     *kmmv1beta1.InitramfsModule
+	)
+
+	BeforeEach(func() {
+		ctrl = gomock.NewController(GinkgoT())
+		clnt = kmmclient.NewMockClient(ctrl)
+		mockMIC = mic.NewMockMIC(ctrl)
+		h = newInitramfsModuleReconcilerHelper(clnt, mockMIC, nil, nil)
+		ctx = context.Background()
+		irm = newIRM(nil, nil, nil)
+	})
+
+	It("is not ready when the ModuleImagesConfig does not exist", func() {
+		clnt.EXPECT().Get(ctx, client.ObjectKey{Name: "irm-" + irmName, Namespace: irmNS}, gomock.Any()).Return(notFound())
+
+		ready, err := h.areImagesReady(ctx, irm)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ready).To(BeFalse())
+	})
+
+	It("returns the Get error", func() {
+		clnt.EXPECT().Get(ctx, client.ObjectKey{Name: "irm-" + irmName, Namespace: irmNS}, gomock.Any()).Return(errors.New("get failed"))
+
+		ready, err := h.areImagesReady(ctx, irm)
+
+		Expect(err).To(MatchError(ContainSubstring("get failed")))
+		Expect(ready).To(BeFalse())
+	})
+
+	It("is not ready when an image does not exist", func() {
+		micObj := existingInitramfsMIC()
+		expectGetMIC(clnt, ctx, micObj)
+		mockMIC.EXPECT().DoAllImagesExist(gomock.Any()).Return(false)
+
+		ready, err := h.areImagesReady(ctx, irm)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ready).To(BeFalse())
+	})
+
+	It("is ready when every image exists", func() {
+		micObj := existingInitramfsMIC()
+		expectGetMIC(clnt, ctx, micObj)
+		mockMIC.EXPECT().DoAllImagesExist(gomock.Any()).DoAndReturn(func(got *kmmv1beta1.ModuleImagesConfig) bool {
+			Expect(got.Name).To(Equal(micObj.Name))
+			Expect(got.Status.ImagesStates).To(Equal(micObj.Status.ImagesStates))
+			return true
+		})
+
+		ready, err := h.areImagesReady(ctx, irm)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ready).To(BeTrue())
 	})
 })
 
@@ -551,16 +653,52 @@ var _ = Describe("initramfs MachineConfigPool and MachineConfig", func() {
 		Expect(existing.Labels).To(BeEmpty())
 	})
 
-	It("creates both objects from Reconcile when the parse job returns no lists", func() {
+	It("does not create the pool or MachineConfig from Reconcile when the image does not exist", func() {
 		mockNode := node.NewMockNode(ctrl)
-		irm := newIRM(nil, nil, nil)
-		r := NewInitramfsModuleReconciler(clnt, nil, mockNode, mockMCFG, nil)
+		mockMIC := mic.NewMockMIC(ctrl)
+		selector := map[string]string{"kmm-test": "initramfs"}
+		irm := newIRM(selector, nil, nil)
+		nodes := []v1.Node{nodeWithKernel("n1", "6.1.0")}
+		r := NewInitramfsModuleReconciler(clnt, mockMIC, mockNode, mockMCFG, nil)
+		gomock.InOrder(
+			expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName),
+			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
+			mockNode.EXPECT().GetAllNodesBySelector(ctx, selector).Return(nodes, nil),
+			mockMIC.EXPECT().CreateOrPatch(
+				ctx, "irm-"+irmName, irmNS,
+				[]kmmv1beta1.ModuleImageSpec{imageSpec("6.1.0", nil, nil, irm)},
+				irm.Spec.ImageRepoSecret, v1.PullPolicy(""), true, nil, nil, irm,
+			).Return(nil),
+			expectGetMIC(clnt, ctx, existingInitramfsMIC()),
+			mockMIC.EXPECT().DoAllImagesExist(gomock.Any()).Return(false),
+		)
+
+		res, err := r.Reconcile(ctx, irm)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res).To(Equal(reconcile.Result{}))
+	})
+
+	It("creates both objects from Reconcile when the image exists and the parse job returns no lists", func() {
+		mockNode := node.NewMockNode(ctrl)
+		mockMIC := mic.NewMockMIC(ctrl)
+		selector := map[string]string{"kmm-test": "initramfs"}
+		irm := newIRM(selector, nil, nil)
+		nodes := []v1.Node{nodeWithKernel("n1", "6.1.0")}
+		r := NewInitramfsModuleReconciler(clnt, mockMIC, mockNode, mockMCFG, nil)
 		var pool *mcfgv1.MachineConfigPool
 		var mc *mcfgv1.MachineConfig
 		gomock.InOrder(
 			expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName),
 			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
-			mockNode.EXPECT().GetAllNodesBySelector(ctx, workerSelector).Return([]v1.Node{}, nil),
+			mockNode.EXPECT().GetAllNodesBySelector(ctx, selector).Return(nodes, nil),
+			mockMIC.EXPECT().CreateOrPatch(
+				ctx, "irm-"+irmName, irmNS,
+				[]kmmv1beta1.ModuleImageSpec{imageSpec("6.1.0", nil, nil, irm)},
+				irm.Spec.ImageRepoSecret, v1.PullPolicy(""), true, nil, nil, irm,
+			).Return(nil),
+			expectGetMIC(clnt, ctx, existingInitramfsMIC()),
+			mockMIC.EXPECT().DoAllImagesExist(gomock.Any()).Return(true),
 			expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName),
 			mockMCFG.EXPECT().UpdateInitramfsPool(gomock.Any(), irm),
 			expectCreate(clnt, ctx, func(obj client.Object) { pool = obj.(*mcfgv1.MachineConfigPool).DeepCopy() }),
@@ -580,12 +718,33 @@ var _ = Describe("initramfs MachineConfigPool and MachineConfig", func() {
 	})
 })
 
+func existingInitramfsMIC() *kmmv1beta1.ModuleImagesConfig {
+	return &kmmv1beta1.ModuleImagesConfig{
+		ObjectMeta: metav1.ObjectMeta{Name: "irm-" + irmName, Namespace: irmNS},
+		Status: kmmv1beta1.ModuleImagesConfigStatus{
+			ImagesStates: []kmmv1beta1.ModuleImageState{{
+				Image:  imageRepo + "-6.1.0",
+				Status: kmmv1beta1.ImageExists,
+			}},
+		},
+	}
+}
+
 func notFound() error {
 	return apierrors.NewNotFound(schema.GroupResource{}, "missing")
 }
 
 func expectGetNotFound(clnt *kmmclient.MockClient, ctx context.Context, name string) *gomock.Call {
 	return clnt.EXPECT().Get(ctx, client.ObjectKey{Name: name}, gomock.Any()).Return(notFound())
+}
+
+func expectGetMIC(clnt *kmmclient.MockClient, ctx context.Context, src *kmmv1beta1.ModuleImagesConfig) *gomock.Call {
+	return clnt.EXPECT().Get(ctx, client.ObjectKey{Name: src.GetName(), Namespace: src.GetNamespace()}, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) error {
+			src.DeepCopyInto(obj.(*kmmv1beta1.ModuleImagesConfig))
+			return nil
+		},
+	)
 }
 
 func expectGetObject(clnt *kmmclient.MockClient, ctx context.Context, src client.Object) *gomock.Call {
