@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -74,9 +75,7 @@ func NewInitramfsModuleReconciler(
 func (r *initramfsModuleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&kmmv1beta1.InitramfsModule{}).
-		Owns(&kmmv1beta1.ModuleImagesConfig{}).
-		// A node often receives the worker role after it is created. Reconcile then so an
-		// InitramfsModule with an empty selector can label it into the pool.
+		Owns(&kmmv1beta1.ModuleImagesConfig{}, builder.WithPredicates(filter.InitramfsModuleReconcilerMICPredicate())).
 		Watches(
 			&v1.Node{},
 			handler.EnqueueRequestsFromMapFunc(r.filter.FindInitramfsModulesForNode),
@@ -108,6 +107,14 @@ func (r *initramfsModuleReconciler) Reconcile(ctx context.Context, irm *kmmv1bet
 	if err = r.helper.handleMIC(ctx, irm, nodes); err != nil {
 		return res, err
 	}
+	ready, err := r.helper.areImagesReady(ctx, irm)
+	if err != nil {
+		return res, err
+	}
+	if !ready {
+		log.FromContext(ctx).Info("container image is not present yet; skipping MachineConfigPool and MachineConfig")
+		return res, nil
+	}
 	parsed, err := r.helper.handleParseJob(ctx, irm)
 	if err != nil {
 		return res, err
@@ -127,6 +134,7 @@ type initramfsModuleReconcilerHelper interface {
 	listSelectedNodes(ctx context.Context, irm *kmmv1beta1.InitramfsModule) ([]v1.Node, error)
 	handleNodeLabels(ctx context.Context, irm *kmmv1beta1.InitramfsModule, nodes []v1.Node) error
 	handleMIC(ctx context.Context, irm *kmmv1beta1.InitramfsModule, nodes []v1.Node) error
+	areImagesReady(ctx context.Context, irm *kmmv1beta1.InitramfsModule) (bool, error)
 	finalize(ctx context.Context, irm *kmmv1beta1.InitramfsModule) error
 	checkUnstampedPoolAndMachineConfig(ctx context.Context, irm *kmmv1beta1.InitramfsModule) error
 	handleParseJob(ctx context.Context, irm *kmmv1beta1.InitramfsModule) (initramfsParseParams, error)
@@ -205,7 +213,7 @@ func (h *initramfsModuleReconcilerHelperImpl) handleMIC(ctx context.Context, irm
 	}
 	return h.micAPI.CreateOrPatch(
 		ctx,
-		"irm-"+irm.Name,
+		initramfsMICName(irm),
 		irm.Namespace,
 		images,
 		irm.Spec.ImageRepoSecret,
@@ -215,6 +223,23 @@ func (h *initramfsModuleReconcilerHelperImpl) handleMIC(ctx context.Context, irm
 		nil,
 		irm,
 	)
+}
+
+func (h *initramfsModuleReconcilerHelperImpl) areImagesReady(ctx context.Context, irm *kmmv1beta1.InitramfsModule) (bool, error) {
+	micObj := &kmmv1beta1.ModuleImagesConfig{}
+	key := client.ObjectKey{Name: initramfsMICName(irm), Namespace: irm.Namespace}
+	err := h.client.Get(ctx, key, micObj)
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to get ModuleImagesConfig %s/%s: %v", irm.Namespace, key.Name, err)
+	}
+	return h.micAPI.DoAllImagesExist(micObj), nil
+}
+
+func initramfsMICName(irm *kmmv1beta1.InitramfsModule) string {
+	return "irm-" + irm.Name
 }
 
 func (h *initramfsModuleReconcilerHelperImpl) finalize(context.Context, *kmmv1beta1.InitramfsModule) error {

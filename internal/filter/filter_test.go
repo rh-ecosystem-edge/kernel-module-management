@@ -375,37 +375,117 @@ var _ = Describe("InitramfsModuleReconcilerNodePredicate", func() {
 		}
 	}
 
-	It("accepts a worker node create", func() {
-		Expect(p.Create(event.CreateEvent{Object: worker("w1")})).To(BeTrue())
+	It("accepts a node create", func() {
+		node := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "n1"}}
+
+		Expect(p.Create(event.CreateEvent{Object: node})).To(BeTrue())
 	})
 
-	It("rejects a non-worker node create", func() {
-		node := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "master-0"}}
+	It("accepts an update that changes taints", func() {
+		oldNode := worker("w1")
+		newNode := oldNode.DeepCopy()
+		newNode.Spec.Taints = []v1.Taint{{
+			Key:    "node.kubernetes.io/not-ready",
+			Effect: v1.TaintEffectNoSchedule,
+		}}
 
-		Expect(p.Create(event.CreateEvent{Object: node})).To(BeFalse())
+		Expect(p.Update(event.UpdateEvent{ObjectOld: oldNode, ObjectNew: newNode})).To(BeTrue())
 	})
 
-	It("accepts an update that adds the worker role", func() {
+	It("rejects an update that changes only the Ready condition", func() {
+		oldNode := worker("w1")
+		newNode := oldNode.DeepCopy()
+		newNode.Status.Conditions = []v1.NodeCondition{{
+			Type:   v1.NodeReady,
+			Status: v1.ConditionTrue,
+		}}
+
+		Expect(p.Update(event.UpdateEvent{ObjectOld: oldNode, ObjectNew: newNode})).To(BeFalse())
+	})
+
+	It("accepts an update that changes any label", func() {
 		ev := event.UpdateEvent{
-			ObjectOld: &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "w1"}},
-			ObjectNew: worker("w1"),
+			ObjectOld: &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "n1"}},
+			ObjectNew: &v1.Node{ObjectMeta: metav1.ObjectMeta{
+				Name:   "n1",
+				Labels: map[string]string{"kmm-test": "initramfs"},
+			}},
 		}
 
 		Expect(p.Update(ev)).To(BeTrue())
 	})
 
-	It("rejects an update of a node that is already a worker", func() {
-		ev := event.UpdateEvent{
-			ObjectOld: worker("w1"),
-			ObjectNew: worker("w1"),
-		}
+	It("accepts an update that changes a label on an existing worker", func() {
+		oldNode := worker("w1")
+		newNode := oldNode.DeepCopy()
+		newNode.Labels["kmm-test"] = "initramfs"
 
-		Expect(p.Update(ev)).To(BeFalse())
+		Expect(p.Update(event.UpdateEvent{ObjectOld: oldNode, ObjectNew: newNode})).To(BeTrue())
+	})
+
+	It("rejects an update that does not change labels", func() {
+		oldNode := worker("w1")
+		newNode := oldNode.DeepCopy()
+		newNode.Status.NodeInfo.KernelVersion = "6.1.0"
+
+		Expect(p.Update(event.UpdateEvent{ObjectOld: oldNode, ObjectNew: newNode})).To(BeFalse())
 	})
 
 	It("rejects deletion and generic events", func() {
 		Expect(p.Delete(event.DeleteEvent{Object: worker("w1")})).To(BeFalse())
 		Expect(p.Generic(event.GenericEvent{Object: worker("w1")})).To(BeFalse())
+	})
+})
+
+var _ = Describe("InitramfsModuleReconcilerMICPredicate", func() {
+	var p predicate.Predicate
+
+	BeforeEach(func() {
+		p = InitramfsModuleReconcilerMICPredicate()
+	})
+
+	micWithStatus := func(status kmmv1beta1.ImageState) *kmmv1beta1.ModuleImagesConfig {
+		return &kmmv1beta1.ModuleImagesConfig{
+			ObjectMeta: metav1.ObjectMeta{Name: "irm-nic", Namespace: "ns"},
+			Spec: kmmv1beta1.ModuleImagesConfigSpec{
+				Images: []kmmv1beta1.ModuleImageSpec{{Image: "registry.example.com/kmods/nic:v1-6.1.0"}},
+			},
+			Status: kmmv1beta1.ModuleImagesConfigStatus{
+				ImagesStates: []kmmv1beta1.ModuleImageState{{
+					Image:  "registry.example.com/kmods/nic:v1-6.1.0",
+					Status: status,
+				}},
+			},
+		}
+	}
+
+	It("rejects create, delete, and generic events", func() {
+		micObj := micWithStatus(kmmv1beta1.ImageExists)
+
+		Expect(p.Create(event.CreateEvent{Object: micObj})).To(BeFalse())
+		Expect(p.Delete(event.DeleteEvent{Object: micObj})).To(BeFalse())
+		Expect(p.Generic(event.GenericEvent{Object: micObj})).To(BeFalse())
+	})
+
+	It("rejects an update that does not change status", func() {
+		oldMIC := micWithStatus(kmmv1beta1.ImageDoesNotExist)
+		newMIC := oldMIC.DeepCopy()
+		newMIC.Spec.Images[0].KernelVersion = "6.1.0"
+
+		Expect(p.Update(event.UpdateEvent{ObjectOld: oldMIC, ObjectNew: newMIC})).To(BeFalse())
+	})
+
+	It("accepts an update that changes image status", func() {
+		oldMIC := micWithStatus(kmmv1beta1.ImageDoesNotExist)
+		newMIC := micWithStatus(kmmv1beta1.ImageExists)
+
+		Expect(p.Update(event.UpdateEvent{ObjectOld: oldMIC, ObjectNew: newMIC})).To(BeTrue())
+	})
+
+	It("rejects an update of a different type", func() {
+		node := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "w1"}}
+
+		Expect(p.Update(event.UpdateEvent{ObjectOld: node, ObjectNew: node})).To(BeFalse())
 	})
 })
 
@@ -417,22 +497,6 @@ var _ = Describe("FindInitramfsModulesForNode", func() {
 		clnt = mockClient.NewMockClient(mockCtrl)
 		f = New(clnt, nil)
 		ctx = context.Background()
-	})
-
-	It("does not list InitramfsModules for a non-worker node", func() {
-		node := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "master-0", Labels: map[string]string{
-			"node-role.kubernetes.io/master": "",
-		}}}
-
-		Expect(f.FindInitramfsModulesForNode(ctx, node)).To(BeEmpty())
-	})
-
-	It("does not list InitramfsModules when the worker label value is not empty", func() {
-		node := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "w1", Labels: map[string]string{
-			workerNodeLabelKey: "true",
-		}}}
-
-		Expect(f.FindInitramfsModulesForNode(ctx, node)).To(BeEmpty())
 	})
 
 	It("returns no requests when listing InitramfsModules fails", func() {
@@ -455,6 +519,27 @@ var _ = Describe("FindInitramfsModulesForNode", func() {
 		}}
 
 		Expect(f.FindInitramfsModulesForNode(ctx, node)).To(BeEmpty())
+	})
+
+	It("enqueues the single InitramfsModule for a node that is not a worker", func() {
+		irm := kmmv1beta1.InitramfsModule{
+			ObjectMeta: metav1.ObjectMeta{Name: "nic", Namespace: "ns"},
+		}
+		clnt.EXPECT().List(ctx, gomock.Any()).DoAndReturn(
+			func(_ interface{}, list *kmmv1beta1.InitramfsModuleList, _ ...interface{}) error {
+				list.Items = []kmmv1beta1.InitramfsModule{irm}
+				return nil
+			},
+		)
+
+		node := &v1.Node{ObjectMeta: metav1.ObjectMeta{
+			Name:   "n1",
+			Labels: map[string]string{"kmm-test": "initramfs"},
+		}}
+
+		Expect(f.FindInitramfsModulesForNode(ctx, node)).To(Equal([]reconcile.Request{{
+			NamespacedName: types.NamespacedName{Name: "nic", Namespace: "ns"},
+		}}))
 	})
 
 	It("enqueues the single InitramfsModule for a worker node", func() {

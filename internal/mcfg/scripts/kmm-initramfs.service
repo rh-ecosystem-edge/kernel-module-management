@@ -2,10 +2,14 @@
 Description=KMM initramfs kernel modules
 After=network-online.target
 Wants=network-online.target
+# The first start plus 20 retries. infinity keeps the count across the 1min gaps.
+StartLimitIntervalSec=infinity
+StartLimitBurst=21
 
 [Service]
 Type=simple
 Restart=on-failure
+RestartSec=1min
 EnvironmentFile=/etc/mco/proxy.env
 Environment="ROLLBACK={{.Rollback}}"
 Environment="CONTAINER_IMAGE={{.ContainerImage}}"
