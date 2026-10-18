@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -25,6 +26,7 @@ import (
 
 	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mcfg"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mic"
@@ -45,6 +47,8 @@ const InitramfsModuleReconcilerName = "InitramfsModuleReconciler"
 
 const workerNodeLabelKey = "node-role.kubernetes.io/worker"
 
+const builderDockercfgPrefix = "builder-dockercfg"
+
 // +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=initramfsmodules,verbs=get;list;patch;update;watch
 // +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=initramfsmodules/status,verbs=get;patch;update
 // +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=initramfsmodules/finalizers,verbs=update
@@ -52,6 +56,8 @@ const workerNodeLabelKey = "node-role.kubernetes.io/worker"
 // +kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigpools,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;patch;watch
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get
+// +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get
 
 type initramfsModuleReconciler struct {
 	helper initramfsModuleReconcilerHelper
@@ -60,13 +66,14 @@ type initramfsModuleReconciler struct {
 
 func NewInitramfsModuleReconciler(
 	client client.Client,
+	secretReader client.Reader,
 	micAPI mic.MIC,
 	nodeAPI node.Node,
 	mcfgAPI mcfg.MCFG,
 	filter *filter.Filter,
 ) *initramfsModuleReconciler {
 	return &initramfsModuleReconciler{
-		helper: newInitramfsModuleReconcilerHelper(client, micAPI, nodeAPI, mcfgAPI),
+		helper: newInitramfsModuleReconcilerHelper(client, secretReader, micAPI, nodeAPI, mcfgAPI),
 		filter: filter,
 	}
 }
@@ -143,18 +150,21 @@ type initramfsModuleReconcilerHelper interface {
 }
 
 type initramfsModuleReconcilerHelperImpl struct {
-	client  client.Client
-	micAPI  mic.MIC
-	nodeAPI node.Node
-	mcfgAPI mcfg.MCFG
+	client client.Client
+	// secretReader reads Secrets from the API. The cached client would list and watch every Secret.
+	secretReader client.Reader
+	micAPI       mic.MIC
+	nodeAPI      node.Node
+	mcfgAPI      mcfg.MCFG
 }
 
-func newInitramfsModuleReconcilerHelper(client client.Client, micAPI mic.MIC, nodeAPI node.Node, mcfgAPI mcfg.MCFG) initramfsModuleReconcilerHelper {
+func newInitramfsModuleReconcilerHelper(cl client.Client, secretReader client.Reader, micAPI mic.MIC, nodeAPI node.Node, mcfgAPI mcfg.MCFG) initramfsModuleReconcilerHelper {
 	return &initramfsModuleReconcilerHelperImpl{
-		client:  client,
-		micAPI:  micAPI,
-		nodeAPI: nodeAPI,
-		mcfgAPI: mcfgAPI,
+		client:       cl,
+		secretReader: secretReader,
+		micAPI:       micAPI,
+		nodeAPI:      nodeAPI,
+		mcfgAPI:      mcfgAPI,
 	}
 }
 
@@ -256,11 +266,65 @@ func (h *initramfsModuleReconcilerHelperImpl) handleMachineConfigPool(ctx contex
 }
 
 func (h *initramfsModuleReconcilerHelperImpl) handleMachineConfig(ctx context.Context, irm *kmmv1beta1.InitramfsModule, parsed initramfsParseParams) error {
+	auth, err := h.builderPullAuth(ctx, irm)
+	if err != nil {
+		return err
+	}
 	mc := &mcfgv1.MachineConfig{ObjectMeta: metav1.ObjectMeta{Name: mcfg.InitramfsMachineConfigName}}
-	_, err := controllerutil.CreateOrPatch(ctx, h.client, mc, func() error {
-		return h.mcfgAPI.UpdateInitramfsMachineConfig(mc, irm, parsed.Kernels)
+	_, err = controllerutil.CreateOrPatch(ctx, h.client, mc, func() error {
+		return h.mcfgAPI.UpdateInitramfsMachineConfig(mc, irm, parsed.Kernels, auth)
 	})
 	return err
+}
+
+func (h *initramfsModuleReconcilerHelperImpl) builderPullAuth(ctx context.Context, irm *kmmv1beta1.InitramfsModule) ([]byte, error) {
+	account := &v1.ServiceAccount{}
+	accountName := client.ObjectKey{Namespace: irm.Namespace, Name: constants.OCPBuilderServiceAccountName}
+	if err := h.secretReader.Get(ctx, accountName, account); err != nil {
+		return nil, fmt.Errorf("failed to get builder service account %s/%s: %v", irm.Namespace, constants.OCPBuilderServiceAccountName, err)
+	}
+	if len(account.ImagePullSecrets) == 0 {
+		return nil, fmt.Errorf("builder service account %s/%s has no image pull secrets", irm.Namespace, constants.OCPBuilderServiceAccountName)
+	}
+	for _, ref := range account.ImagePullSecrets {
+		if !strings.HasPrefix(ref.Name, builderDockercfgPrefix) {
+			continue
+		}
+		secret := &v1.Secret{}
+		secretName := client.ObjectKey{Namespace: irm.Namespace, Name: ref.Name}
+		if err := h.secretReader.Get(ctx, secretName, secret); err != nil {
+			return nil, fmt.Errorf("failed to get builder pull secret %s/%s: %v", irm.Namespace, ref.Name, err)
+		}
+		auth, err := dockerConfigAuth(secret)
+		if err != nil {
+			return nil, err
+		}
+		return auth, nil
+	}
+	return nil, fmt.Errorf("builder service account %s/%s has no usable %s image pull secret", irm.Namespace, constants.OCPBuilderServiceAccountName, builderDockercfgPrefix)
+}
+
+func dockerConfigAuth(secret *v1.Secret) ([]byte, error) {
+	if auth := secret.Data[v1.DockerConfigJsonKey]; len(auth) > 0 {
+		if !json.Valid(auth) {
+			return nil, fmt.Errorf("builder pull secret %s/%s has invalid %s data", secret.Namespace, secret.Name, v1.DockerConfigJsonKey)
+		}
+		return auth, nil
+	}
+	dockercfg := secret.Data[v1.DockerConfigKey]
+	if len(dockercfg) == 0 {
+		return nil, fmt.Errorf("builder pull secret %s/%s has no %s or %s data", secret.Namespace, secret.Name, v1.DockerConfigJsonKey, v1.DockerConfigKey)
+	}
+	if !json.Valid(dockercfg) {
+		return nil, fmt.Errorf("builder pull secret %s/%s has invalid %s data", secret.Namespace, secret.Name, v1.DockerConfigKey)
+	}
+	wrapped, err := json.Marshal(struct {
+		Auths json.RawMessage `json:"auths"`
+	}{Auths: dockercfg})
+	if err != nil {
+		return nil, fmt.Errorf("builder pull secret %s/%s has invalid %s data: %v", secret.Namespace, secret.Name, v1.DockerConfigKey, err)
+	}
+	return wrapped, nil
 }
 
 type initramfsParseParams struct {

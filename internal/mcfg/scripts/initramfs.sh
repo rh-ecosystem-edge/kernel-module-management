@@ -39,6 +39,14 @@ if [ "$ROLLBACK" = "true" ]; then
     exit 0
 fi
 
+registry=${image%%/*}
+registry_host=${registry%%:*}
+case "$registry_host" in
+    image-registry.openshift-image-registry.svc|image-registry.openshift-image-registry.svc.cluster.local)
+        authfile=/var/opt/kmods/builder-config.json
+        ;;
+esac
+
 if ! podman pull --authfile "$authfile" "$image"; then
     exit 1
 fi

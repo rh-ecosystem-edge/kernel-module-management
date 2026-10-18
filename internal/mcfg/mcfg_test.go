@@ -326,7 +326,7 @@ var _ = Describe("initramfs pool and MachineConfig", func() {
 			"6.1.0": {InTreeModules: []string{"mod"}},
 		}
 
-		Expect(mcfgAPI.UpdateInitramfsMachineConfig(mc, irm, kernels)).To(Succeed())
+		Expect(mcfgAPI.UpdateInitramfsMachineConfig(mc, irm, kernels, nil)).To(Succeed())
 
 		Expect(mc.Labels).To(Equal(map[string]string{
 			"keep":                 "yes",
@@ -370,7 +370,7 @@ var _ = Describe("initramfs pool and MachineConfig", func() {
 		}
 		mc := &mcfgv1.MachineConfig{}
 
-		Expect(mcfgAPI.UpdateInitramfsMachineConfig(mc, irm, nil)).To(Succeed())
+		Expect(mcfgAPI.UpdateInitramfsMachineConfig(mc, irm, nil, nil)).To(Succeed())
 
 		doc := decodeInitramfsIgnition(mc.Spec.Config.Raw)
 		Expect(doc.Systemd.Units[0].Contents).To(ContainSubstring(`Environment="DIR_NAME="`))
@@ -387,7 +387,7 @@ var _ = Describe("initramfs pool and MachineConfig", func() {
 		}
 		mc := &mcfgv1.MachineConfig{}
 
-		Expect(mcfgAPI.UpdateInitramfsMachineConfig(mc, irm, nil)).To(Succeed())
+		Expect(mcfgAPI.UpdateInitramfsMachineConfig(mc, irm, nil, nil)).To(Succeed())
 
 		doc := decodeInitramfsIgnition(mc.Spec.Config.Raw)
 		Expect(doc.Systemd.Units[0].Contents).To(ContainSubstring(`Environment="ROLLBACK=true"`))
@@ -405,19 +405,19 @@ var _ = Describe("initramfs pool and MachineConfig", func() {
 		kernels := map[string]KernelInspectLists{
 			"6.1.0": {InTreeModules: []string{"mod"}},
 		}
-		Expect(mcfgAPI.UpdateInitramfsMachineConfig(first, irm, kernels)).To(Succeed())
-		Expect(mcfgAPI.UpdateInitramfsMachineConfig(first, irm, kernels)).To(Succeed())
+		Expect(mcfgAPI.UpdateInitramfsMachineConfig(first, irm, kernels, nil)).To(Succeed())
+		Expect(mcfgAPI.UpdateInitramfsMachineConfig(first, irm, kernels, nil)).To(Succeed())
 
 		otherSelector := irm.DeepCopy()
 		otherSelector.Spec.Selector = map[string]string{"node": "b"}
 		second := &mcfgv1.MachineConfig{}
-		Expect(mcfgAPI.UpdateInitramfsMachineConfig(second, otherSelector, nil)).To(Succeed())
+		Expect(mcfgAPI.UpdateInitramfsMachineConfig(second, otherSelector, nil, nil)).To(Succeed())
 		Expect(second.Spec.Config.Raw).To(Equal(first.Spec.Config.Raw))
 
 		changedImage := irm.DeepCopy()
 		changedImage.Spec.ContainerImage = "reg.example/kmods:v2"
 		third := &mcfgv1.MachineConfig{}
-		Expect(mcfgAPI.UpdateInitramfsMachineConfig(third, changedImage, kernels)).To(Succeed())
+		Expect(mcfgAPI.UpdateInitramfsMachineConfig(third, changedImage, kernels, nil)).To(Succeed())
 		firstHash := specHashFromUnit(decodeInitramfsIgnition(first.Spec.Config.Raw).Systemd.Units[0].Contents)
 		thirdHash := specHashFromUnit(decodeInitramfsIgnition(third.Spec.Config.Raw).Systemd.Units[0].Contents)
 		Expect(thirdHash).NotTo(Equal(firstHash))
@@ -432,14 +432,99 @@ var _ = Describe("initramfs pool and MachineConfig", func() {
 			}}
 			original := mc.DeepCopy()
 
-			Expect(mcfgAPI.UpdateInitramfsMachineConfig(mc, irm, nil)).NotTo(Succeed())
+			Expect(mcfgAPI.UpdateInitramfsMachineConfig(mc, irm, nil, nil)).NotTo(Succeed())
 			Expect(mc).To(Equal(original))
 		}
+	})
+
+	It("writes builder auth bytes outside the kubelet pull-secret path", func() {
+		irm.Spec = kmmv1beta1.InitramfsModuleSpec{
+			ModuleNames:    []string{"nic"},
+			ContainerImage: "reg.example/kmods:v1",
+			ModulesPath:    "/usr/lib/modules",
+			DirName:        "/opt/modules",
+		}
+		auth := []byte(`{"auths":{"image-registry.openshift-image-registry.svc:5000":{"auth":"dG9rZW4="}}}`)
+		otherAuth := []byte(`{"auths":{"registry.example.com":{"auth":"b3RoZXI="}}}`)
+		first := &mcfgv1.MachineConfig{}
+		second := &mcfgv1.MachineConfig{}
+
+		Expect(mcfgAPI.UpdateInitramfsMachineConfig(first, irm, nil, auth)).To(Succeed())
+		Expect(mcfgAPI.UpdateInitramfsMachineConfig(second, irm, nil, otherAuth)).To(Succeed())
+
+		doc := decodeInitramfsIgnition(first.Spec.Config.Raw)
+		file := ignitionFile(doc, BuilderAuthFilePath)
+		Expect(file.Mode).To(Equal(384))
+		Expect(file.Overwrite).To(BeTrue())
+		Expect(file.User.Name).To(Equal("root"))
+		Expect(ignitionFileBytes(file)).To(Equal(auth))
+		Expect(ignitionFileBytes(ignitionFile(decodeInitramfsIgnition(second.Spec.Config.Raw), BuilderAuthFilePath))).To(Equal(otherAuth))
+
+		var paths []string
+		for _, stored := range doc.Storage.Files {
+			paths = append(paths, stored.Path)
+		}
+		Expect(paths).To(ContainElements("/usr/local/bin/initramfs.sh", "/usr/local/bin/kmm-pre-udev.sh", BuilderAuthFilePath))
+		Expect(paths).NotTo(ContainElement("/var/lib/kubelet/config.json"))
+
+		firstHash := specHashFromUnit(doc.Systemd.Units[0].Contents)
+		secondHash := specHashFromUnit(decodeInitramfsIgnition(second.Spec.Config.Raw).Systemd.Units[0].Contents)
+		Expect(secondHash).To(Equal(firstHash))
+	})
+})
+
+var _ = Describe("imageUsesInternalRegistry", func() {
+	DescribeTable("classifies the image host",
+		func(containerImage string, internal bool) {
+			Expect(imageUsesInternalRegistry(containerImage)).To(Equal(internal))
+		},
+		Entry("service host with port", "image-registry.openshift-image-registry.svc:5000/ns/nic:v1", true),
+		Entry("service host without port", "image-registry.openshift-image-registry.svc/ns/nic:v1", true),
+		Entry("cluster-local host with port", "image-registry.openshift-image-registry.svc.cluster.local:5000/ns/nic:v1-5.14.0", true),
+		Entry("cluster-local host without port", "image-registry.openshift-image-registry.svc.cluster.local/ns/nic:v1", true),
+		Entry("external registry", "registry.example.com/kmods/nic:v1", false),
+		Entry("quay", "quay.io/org/nic:tag", false),
+		Entry("internal host only in the path", "registry.example.com/image-registry.openshift-image-registry.svc/nic:v1", false),
+		Entry("no registry slash", "nic:v1", false),
+		Entry("empty", "", false),
+	)
+})
+
+var _ = Describe("initramfs.sh pull auth", func() {
+	It("uses the kubelet pull secret unless the image host is the internal registry", func() {
+		script, err := os.ReadFile("scripts/initramfs.sh")
+		Expect(err).NotTo(HaveOccurred())
+		text := string(script)
+
+		kubelet := "authfile=/var/lib/kubelet/config.json"
+		builder := "authfile=" + BuilderAuthFilePath
+		registryCase := `case "$registry_host" in`
+		Expect(text).To(ContainSubstring(kubelet))
+		Expect(text).To(ContainSubstring("image-registry.openshift-image-registry.svc|image-registry.openshift-image-registry.svc.cluster.local)"))
+		Expect(strings.Index(text, kubelet)).To(BeNumerically("<", strings.Index(text, registryCase)))
+		Expect(strings.Index(text, registryCase)).To(BeNumerically("<", strings.Index(text, builder)))
 	})
 })
 
 func ptrTo[T any](v T) *T {
 	return &v
+}
+
+const (
+	internalRegistryHost        = "image-registry.openshift-image-registry.svc"
+	internalRegistryHostCluster = "image-registry.openshift-image-registry.svc.cluster.local"
+)
+
+func imageUsesInternalRegistry(containerImage string) bool {
+	slash := strings.Index(containerImage, "/")
+	if slash <= 0 {
+		return false
+	}
+	host := containerImage[:slash]
+	if name, _, ok := strings.Cut(host, ":"); ok {
+		host = name
+	}
+	return host == internalRegistryHost || host == internalRegistryHostCluster
 }
 
 func isUnitPresent(mc *apioperatorv1.MachineConfiguration, unitName string /*apioperatorv1.NodeDisruptionPolicySpecUnit*/) bool {

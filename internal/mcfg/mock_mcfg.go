@@ -96,17 +96,17 @@ func (mr *MockMCFGMockRecorder) UpdateDisruptionPolicies(mc, bmc any) *gomock.Ca
 }
 
 // UpdateInitramfsMachineConfig mocks base method.
-func (m *MockMCFG) UpdateInitramfsMachineConfig(mc *v1.MachineConfig, irm *v1beta1.InitramfsModule, kernels map[string]KernelInspectLists) error {
+func (m *MockMCFG) UpdateInitramfsMachineConfig(mc *v1.MachineConfig, irm *v1beta1.InitramfsModule, kernels map[string]KernelInspectLists, builderAuth []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateInitramfsMachineConfig", mc, irm, kernels)
+	ret := m.ctrl.Call(m, "UpdateInitramfsMachineConfig", mc, irm, kernels, builderAuth)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UpdateInitramfsMachineConfig indicates an expected call of UpdateInitramfsMachineConfig.
-func (mr *MockMCFGMockRecorder) UpdateInitramfsMachineConfig(mc, irm, kernels any) *gomock.Call {
+func (mr *MockMCFGMockRecorder) UpdateInitramfsMachineConfig(mc, irm, kernels, builderAuth any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateInitramfsMachineConfig", reflect.TypeOf((*MockMCFG)(nil).UpdateInitramfsMachineConfig), mc, irm, kernels)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateInitramfsMachineConfig", reflect.TypeOf((*MockMCFG)(nil).UpdateInitramfsMachineConfig), mc, irm, kernels, builderAuth)
 }
 
 // UpdateInitramfsPool mocks base method.

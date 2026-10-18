@@ -33,6 +33,8 @@ const (
 	workerConfigFilepath      = "/var/lib/kmm_day1_config.yaml"
 	pullImageSystemdService   = "pull-kernel-module-image.service"
 	replaceKmodSystemdService = "replace-kernel-module.service"
+
+	BuilderAuthFilePath = "/var/opt/kmods/builder-config.json"
 )
 
 // InspectSoftLink is one pre-udev symlink for an initramfs kernel.
@@ -96,7 +98,7 @@ type MCFG interface {
 		inTreeModulesToRemove []string) ([]byte, string, error)
 	StampedForInitramfsModule(meta metav1.Object, irm *kmmv1beta1.InitramfsModule) bool
 	UpdateInitramfsPool(pool *mcfgv1.MachineConfigPool, irm *kmmv1beta1.InitramfsModule)
-	UpdateInitramfsMachineConfig(mc *mcfgv1.MachineConfig, irm *kmmv1beta1.InitramfsModule, kernels map[string]KernelInspectLists) error
+	UpdateInitramfsMachineConfig(mc *mcfgv1.MachineConfig, irm *kmmv1beta1.InitramfsModule, kernels map[string]KernelInspectLists, builderAuth []byte) error
 }
 
 type mcfgImpl struct {
@@ -268,8 +270,8 @@ func initramfsPoolNodeSelector(irm *kmmv1beta1.InitramfsModule) map[string]strin
 	return irm.Spec.Selector
 }
 
-func (m *mcfgImpl) UpdateInitramfsMachineConfig(mc *mcfgv1.MachineConfig, irm *kmmv1beta1.InitramfsModule, _ map[string]KernelInspectLists) error {
-	raw, err := renderInitramfsIgnition(irm)
+func (m *mcfgImpl) UpdateInitramfsMachineConfig(mc *mcfgv1.MachineConfig, irm *kmmv1beta1.InitramfsModule, _ map[string]KernelInspectLists, builderAuth []byte) error {
+	raw, err := renderInitramfsIgnition(irm, builderAuth)
 	if err != nil {
 		return err
 	}
@@ -297,9 +299,11 @@ type initramfsIgnitionParams struct {
 	UnitContents    string
 	InitramfsScript string
 	PreUdevScript   string
+	BuilderAuth     string
+	BuilderAuthPath string
 }
 
-func renderInitramfsIgnition(irm *kmmv1beta1.InitramfsModule) ([]byte, error) {
+func renderInitramfsIgnition(irm *kmmv1beta1.InitramfsModule, builderAuth []byte) ([]byte, error) {
 	moduleName, err := singleInitramfsModuleName(irm.Spec.ModuleNames)
 	if err != nil {
 		return nil, err
@@ -324,12 +328,16 @@ func renderInitramfsIgnition(irm *kmmv1beta1.InitramfsModule) ([]byte, error) {
 		return nil, fmt.Errorf("failed to render kmm-pre-udev.sh: %v", err)
 	}
 
-	var yamlIgnition bytes.Buffer
-	if err = initramfsIgnitionTemplate.Execute(&yamlIgnition, initramfsIgnitionParams{
+	params := initramfsIgnitionParams{
 		UnitContents:    serviceBuf.String(),
 		InitramfsScript: base64.StdEncoding.EncodeToString([]byte(scriptInitramfs)),
 		PreUdevScript:   base64.StdEncoding.EncodeToString(hookBuf.Bytes()),
-	}); err != nil {
+		BuilderAuth:     base64.StdEncoding.EncodeToString(builderAuth),
+		BuilderAuthPath: BuilderAuthFilePath,
+	}
+
+	var yamlIgnition bytes.Buffer
+	if err = initramfsIgnitionTemplate.Execute(&yamlIgnition, params); err != nil {
 		return nil, fmt.Errorf("failed to render initramfs ignition: %v", err)
 	}
 
