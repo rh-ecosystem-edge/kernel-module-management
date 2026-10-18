@@ -9,6 +9,7 @@ import (
 	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	kmmclient "github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mcfg"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mic"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
@@ -279,7 +280,7 @@ var _ = Describe("initramfsModuleReconcilerHelper", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		mockNode = node.NewMockNode(ctrl)
 		mockMIC = mic.NewMockMIC(ctrl)
-		h = newInitramfsModuleReconcilerHelper(nil, mockMIC, mockNode, nil)
+		h = newInitramfsModuleReconcilerHelper(nil, nil, mockMIC, mockNode, nil)
 		ctx = context.Background()
 	})
 
@@ -406,7 +407,7 @@ var _ = Describe("areImagesReady", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = kmmclient.NewMockClient(ctrl)
 		mockMIC = mic.NewMockMIC(ctrl)
-		h = newInitramfsModuleReconcilerHelper(clnt, mockMIC, nil, nil)
+		h = newInitramfsModuleReconcilerHelper(clnt, nil, mockMIC, nil, nil)
 		ctx = context.Background()
 		irm = newIRM(nil, nil, nil)
 	})
@@ -467,7 +468,7 @@ var _ = Describe("handleNodeLabels", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		mockNode = node.NewMockNode(ctrl)
-		h = newInitramfsModuleReconcilerHelper(nil, nil, mockNode, nil)
+		h = newInitramfsModuleReconcilerHelper(nil, nil, nil, mockNode, nil)
 		ctx = context.Background()
 	})
 
@@ -532,7 +533,7 @@ var _ = Describe("initramfs MachineConfigPool and MachineConfig", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = kmmclient.NewMockClient(ctrl)
 		mockMCFG = mcfg.NewMockMCFG(ctrl)
-		h = newInitramfsModuleReconcilerHelper(clnt, nil, nil, mockMCFG)
+		h = newInitramfsModuleReconcilerHelper(clnt, clnt, nil, nil, mockMCFG)
 	})
 
 	It("accepts a cluster with neither object", func() {
@@ -549,12 +550,16 @@ var _ = Describe("initramfs MachineConfigPool and MachineConfig", func() {
 		}
 		var pool *mcfgv1.MachineConfigPool
 		var mc *mcfgv1.MachineConfig
+		auth := []byte(`{"auths":{"registry.example.com":{"auth":"dG9rZW4="}}}`)
+		secret := dockerConfigSecret(builderDockercfgSecret, map[string][]byte{v1.DockerConfigJsonKey: auth})
 		gomock.InOrder(
 			expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName),
 			mockMCFG.EXPECT().UpdateInitramfsPool(gomock.Any(), irm),
 			expectCreate(clnt, ctx, func(obj client.Object) { pool = obj.(*mcfgv1.MachineConfigPool).DeepCopy() }),
+			expectServiceAccount(clnt, ctx, builderServiceAccount(builderDockercfgSecret), nil),
+			expectNamedSecret(clnt, ctx, secret, nil),
 			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
-			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, kernels).Return(nil),
+			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, kernels, auth).Return(nil),
 			expectCreate(clnt, ctx, func(obj client.Object) { mc = obj.(*mcfgv1.MachineConfig).DeepCopy() }),
 		)
 
@@ -659,7 +664,7 @@ var _ = Describe("initramfs MachineConfigPool and MachineConfig", func() {
 		selector := map[string]string{"kmm-test": "initramfs"}
 		irm := newIRM(selector, nil, nil)
 		nodes := []v1.Node{nodeWithKernel("n1", "6.1.0")}
-		r := NewInitramfsModuleReconciler(clnt, mockMIC, mockNode, mockMCFG, nil)
+		r := NewInitramfsModuleReconciler(clnt, clnt, mockMIC, mockNode, mockMCFG, nil)
 		gomock.InOrder(
 			expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName),
 			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
@@ -685,9 +690,11 @@ var _ = Describe("initramfs MachineConfigPool and MachineConfig", func() {
 		selector := map[string]string{"kmm-test": "initramfs"}
 		irm := newIRM(selector, nil, nil)
 		nodes := []v1.Node{nodeWithKernel("n1", "6.1.0")}
-		r := NewInitramfsModuleReconciler(clnt, mockMIC, mockNode, mockMCFG, nil)
+		r := NewInitramfsModuleReconciler(clnt, clnt, mockMIC, mockNode, mockMCFG, nil)
 		var pool *mcfgv1.MachineConfigPool
 		var mc *mcfgv1.MachineConfig
+		auth := []byte(`{"auths":{"registry.example.com":{"auth":"dG9rZW4="}}}`)
+		secret := dockerConfigSecret(builderDockercfgSecret, map[string][]byte{v1.DockerConfigJsonKey: auth})
 		gomock.InOrder(
 			expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName),
 			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
@@ -702,8 +709,10 @@ var _ = Describe("initramfs MachineConfigPool and MachineConfig", func() {
 			expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName),
 			mockMCFG.EXPECT().UpdateInitramfsPool(gomock.Any(), irm),
 			expectCreate(clnt, ctx, func(obj client.Object) { pool = obj.(*mcfgv1.MachineConfigPool).DeepCopy() }),
+			expectServiceAccount(clnt, ctx, builderServiceAccount(builderDockercfgSecret), nil),
+			expectNamedSecret(clnt, ctx, secret, nil),
 			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
-			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, gomock.Nil()).Return(nil),
+			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, gomock.Nil(), auth).Return(nil),
 			expectCreate(clnt, ctx, func(obj client.Object) { mc = obj.(*mcfgv1.MachineConfig).DeepCopy() }),
 		)
 
@@ -715,6 +724,192 @@ var _ = Describe("initramfs MachineConfigPool and MachineConfig", func() {
 		Expect(mc.Name).To(Equal(mcfg.InitramfsMachineConfigName))
 		Expect(pool.OwnerReferences).To(BeEmpty())
 		Expect(mc.OwnerReferences).To(BeEmpty())
+	})
+
+	It("passes builder docker config into the MachineConfig for an internal image", func() {
+		irm := newIRM(nil, nil, nil)
+		irm.Spec.ContainerImage = "image-registry.openshift-image-registry.svc:5000/ns/nic:v1"
+		auth := []byte(`{"auths":{"image-registry.openshift-image-registry.svc:5000":{"auth":"dG9rZW4="}}}`)
+		secret := dockerConfigSecret(builderDockercfgSecret, map[string][]byte{v1.DockerConfigJsonKey: auth})
+		gomock.InOrder(
+			expectServiceAccount(clnt, ctx, builderServiceAccount(builderDockercfgSecret), nil),
+			expectNamedSecret(clnt, ctx, secret, nil),
+			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
+			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, gomock.Nil(), auth).Return(nil),
+			expectCreate(clnt, ctx, func(client.Object) {}),
+		)
+
+		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(Succeed())
+	})
+
+	It("passes builder docker config into the MachineConfig for an external image", func() {
+		irm := newIRM(nil, nil, nil)
+		auth := []byte(`{"auths":{"registry.example.com":{"auth":"dG9rZW4="}}}`)
+		secret := dockerConfigSecret(builderDockercfgSecret, map[string][]byte{v1.DockerConfigJsonKey: auth})
+		gomock.InOrder(
+			expectServiceAccount(clnt, ctx, builderServiceAccount(builderDockercfgSecret), nil),
+			expectNamedSecret(clnt, ctx, secret, nil),
+			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
+			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, gomock.Nil(), auth).Return(nil),
+			expectCreate(clnt, ctx, func(client.Object) {}),
+		)
+
+		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(Succeed())
+	})
+
+	It("wraps a dockercfg secret as docker config JSON", func() {
+		irm := newIRM(nil, nil, nil)
+		dockercfg := []byte(`{"reg:5000":{"username":"sa","password":"tok"}}`)
+		secret := dockerConfigSecret(builderDockercfgSecret, map[string][]byte{v1.DockerConfigKey: dockercfg})
+		wrapped := []byte(`{"auths":{"reg:5000":{"username":"sa","password":"tok"}}}`)
+		gomock.InOrder(
+			expectServiceAccount(clnt, ctx, builderServiceAccount(builderDockercfgSecret), nil),
+			expectNamedSecret(clnt, ctx, secret, nil),
+			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
+			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, gomock.Nil(), wrapped).Return(nil),
+			expectCreate(clnt, ctx, func(client.Object) {}),
+		)
+
+		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(Succeed())
+	})
+
+	It("prefers docker config JSON when the pull secret has both keys", func() {
+		irm := newIRM(nil, nil, nil)
+		auth := []byte(`{"auths":{"reg:5000":{"auth":"dG9rZW4="}}}`)
+		secret := dockerConfigSecret(builderDockercfgSecret, map[string][]byte{
+			v1.DockerConfigJsonKey: auth,
+			v1.DockerConfigKey:     []byte(`{"reg:5000":{"username":"sa","password":"tok"}}`),
+		})
+		gomock.InOrder(
+			expectServiceAccount(clnt, ctx, builderServiceAccount(builderDockercfgSecret), nil),
+			expectNamedSecret(clnt, ctx, secret, nil),
+			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
+			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, gomock.Nil(), auth).Return(nil),
+			expectCreate(clnt, ctx, func(client.Object) {}),
+		)
+
+		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(Succeed())
+	})
+
+	It("ignores an earlier image pull secret that is not a builder dockercfg secret", func() {
+		irm := newIRM(nil, nil, nil)
+		auth := []byte(`{"auths":{"reg:5000":{"auth":"dG9rZW4="}}}`)
+		secret := dockerConfigSecret(builderDockercfgSecret, map[string][]byte{v1.DockerConfigJsonKey: auth})
+		gomock.InOrder(
+			expectServiceAccount(clnt, ctx, builderServiceAccount("other-pull", builderDockercfgSecret), nil),
+			expectNamedSecret(clnt, ctx, secret, nil),
+			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
+			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, gomock.Nil(), auth).Return(nil),
+			expectCreate(clnt, ctx, func(client.Object) {}),
+		)
+
+		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(Succeed())
+	})
+
+	It("accepts valid JSON that is not an object", func() {
+		irm := newIRM(nil, nil, nil)
+		auth := []byte(`[]`)
+		secret := dockerConfigSecret(builderDockercfgSecret, map[string][]byte{v1.DockerConfigJsonKey: auth})
+		gomock.InOrder(
+			expectServiceAccount(clnt, ctx, builderServiceAccount(builderDockercfgSecret), nil),
+			expectNamedSecret(clnt, ctx, secret, nil),
+			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
+			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, gomock.Nil(), auth).Return(nil),
+			expectCreate(clnt, ctx, func(client.Object) {}),
+		)
+		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(Succeed())
+
+		dockercfg := []byte(`[]`)
+		wrapped := []byte(`{"auths":[]}`)
+		secret = dockerConfigSecret(builderDockercfgSecret, map[string][]byte{v1.DockerConfigKey: dockercfg})
+		gomock.InOrder(
+			expectServiceAccount(clnt, ctx, builderServiceAccount(builderDockercfgSecret), nil),
+			expectNamedSecret(clnt, ctx, secret, nil),
+			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
+			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, gomock.Nil(), wrapped).Return(nil),
+			expectCreate(clnt, ctx, func(client.Object) {}),
+		)
+		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(Succeed())
+	})
+
+	It("returns an error when a builder dockercfg secret is not valid docker config", func() {
+		irm := newIRM(nil, nil, nil)
+		for _, tc := range []struct {
+			data map[string][]byte
+			msg  string
+		}{
+			{map[string][]byte{}, "has no .dockerconfigjson or .dockercfg data"},
+			{map[string][]byte{v1.DockerConfigKey: []byte(`not-json`)}, "has invalid .dockercfg data"},
+			{map[string][]byte{v1.DockerConfigJsonKey: []byte(`not-json`)}, "has invalid .dockerconfigjson data"},
+		} {
+			expectServiceAccount(clnt, ctx, builderServiceAccount("builder-dockercfg-bad", builderDockercfgSecret), nil)
+			expectNamedSecret(clnt, ctx, dockerConfigSecret("builder-dockercfg-bad", tc.data), nil)
+
+			Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(MatchError(ContainSubstring(tc.msg)))
+		}
+	})
+
+	It("returns an error when no image pull secret name starts with builder-dockercfg", func() {
+		irm := newIRM(nil, nil, nil)
+		expectServiceAccount(clnt, ctx, builderServiceAccount("other-pull"), nil)
+
+		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(HaveOccurred())
+	})
+
+	It("returns an error and does not update the MachineConfig when builder pull auth cannot be read", func() {
+		irm := newIRM(nil, nil, nil)
+		expectServiceAccount(clnt, ctx, nil, notFound())
+		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(HaveOccurred())
+
+		expectServiceAccount(clnt, ctx, builderServiceAccount(), nil)
+		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(HaveOccurred())
+
+		expectServiceAccount(clnt, ctx, builderServiceAccount(builderDockercfgSecret), nil)
+		expectNamedSecret(clnt, ctx, dockerConfigSecret(builderDockercfgSecret, nil), notFound())
+		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(HaveOccurred())
+	})
+
+	It("returns an error when image pull secrets have no docker config", func() {
+		irm := newIRM(nil, nil, nil)
+		for _, data := range []map[string][]byte{
+			nil,
+			{v1.DockerConfigJsonKey: nil},
+			{v1.DockerConfigJsonKey: {}},
+			{v1.DockerConfigJsonKey: []byte(`not-json`)},
+			{v1.DockerConfigKey: nil},
+			{v1.DockerConfigKey: {}},
+			{v1.DockerConfigKey: []byte(`not-json`)},
+		} {
+			expectServiceAccount(clnt, ctx, builderServiceAccount(builderDockercfgSecret), nil)
+			expectNamedSecret(clnt, ctx, dockerConfigSecret(builderDockercfgSecret, data), nil)
+
+			Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(HaveOccurred())
+		}
+	})
+
+	It("passes builder docker config into the MachineConfig when rolling back", func() {
+		irm := newIRM(nil, nil, nil)
+		irm.Spec.ContainerImage = "image-registry.openshift-image-registry.svc:5000/ns/nic:v1"
+		irm.Spec.Rollback = true
+		auth := []byte(`{"auths":{"image-registry.openshift-image-registry.svc:5000":{"auth":"dG9rZW4="}}}`)
+		secret := dockerConfigSecret(builderDockercfgSecret, map[string][]byte{v1.DockerConfigJsonKey: auth})
+		gomock.InOrder(
+			expectServiceAccount(clnt, ctx, builderServiceAccount(builderDockercfgSecret), nil),
+			expectNamedSecret(clnt, ctx, secret, nil),
+			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
+			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, gomock.Nil(), auth).Return(nil),
+			expectCreate(clnt, ctx, func(client.Object) {}),
+		)
+
+		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(Succeed())
+	})
+
+	It("returns an error and does not update the MachineConfig when rolling back without pull auth", func() {
+		irm := newIRM(nil, nil, nil)
+		irm.Spec.Rollback = true
+		expectServiceAccount(clnt, ctx, nil, notFound())
+
+		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(HaveOccurred())
 	})
 })
 
@@ -728,6 +923,50 @@ func existingInitramfsMIC() *kmmv1beta1.ModuleImagesConfig {
 			}},
 		},
 	}
+}
+
+const builderDockercfgSecret = "builder-dockercfg-abcde"
+
+func builderServiceAccount(pullSecrets ...string) *v1.ServiceAccount {
+	refs := make([]v1.LocalObjectReference, 0, len(pullSecrets))
+	for _, name := range pullSecrets {
+		refs = append(refs, v1.LocalObjectReference{Name: name})
+	}
+	return &v1.ServiceAccount{
+		ObjectMeta:       metav1.ObjectMeta{Namespace: irmNS, Name: constants.OCPBuilderServiceAccountName},
+		ImagePullSecrets: refs,
+	}
+}
+
+func dockerConfigSecret(name string, data map[string][]byte) *v1.Secret {
+	return &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Namespace: irmNS, Name: name},
+		Data:       data,
+	}
+}
+
+func expectServiceAccount(clnt *kmmclient.MockClient, ctx context.Context, sa *v1.ServiceAccount, ret error) *gomock.Call {
+	return clnt.EXPECT().Get(ctx, client.ObjectKey{Namespace: irmNS, Name: constants.OCPBuilderServiceAccountName}, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) error {
+			if ret != nil {
+				return ret
+			}
+			sa.DeepCopyInto(obj.(*v1.ServiceAccount))
+			return nil
+		},
+	)
+}
+
+func expectNamedSecret(clnt *kmmclient.MockClient, ctx context.Context, secret *v1.Secret, ret error) *gomock.Call {
+	return clnt.EXPECT().Get(ctx, client.ObjectKey{Namespace: irmNS, Name: secret.Name}, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) error {
+			if ret != nil {
+				return ret
+			}
+			secret.DeepCopyInto(obj.(*v1.Secret))
+			return nil
+		},
+	)
 }
 
 func notFound() error {
