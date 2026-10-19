@@ -13,6 +13,7 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/networkpolicy"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
@@ -1000,7 +1001,7 @@ var _ = Describe("DevicePluginReconciler_setDevicePluginAsDesired", func() {
 								},
 								dpVol,
 							},
-							Tolerations:                  []v1.Toleration{testToleration},
+							Tolerations:                  append([]v1.Toleration{testToleration}, module.InternalTolerations...),
 							AutomountServiceAccountToken: ptr.To(false),
 						},
 					},
