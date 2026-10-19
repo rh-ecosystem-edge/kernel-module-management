@@ -21,6 +21,9 @@ const (
 	JobEventFinalizer = "kmm.node.kubernetes.io/job-event-finalizer"
 	BMCFinalizer      = "kmm.node.kubernetes.io/bmc-finalizer"
 
+	// Device-plugin cleanup must finish independently of the Module's NMC usage.
+	DevicePluginFinalizer = "kmm.node.kubernetes.io/device-plugin-finalizer"
+
 	ManagedClusterModuleNameLabel  = "kmm.node.kubernetes.io/managedclustermodule.name"
 	KernelVersionsClusterClaimName = "kernel-versions.kmm.node.kubernetes.io"
 	DockerfileCMKey                = "dockerfile"
