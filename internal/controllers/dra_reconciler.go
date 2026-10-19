@@ -20,10 +20,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/networkpolicy"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
@@ -771,7 +773,7 @@ func (dsci *draDaemonSetCreatorImpl) setDRAAsDesired(
 				NodeSelector:                 nodeSelector,
 				ServiceAccountName:           serviceAccountName,
 				Volumes:                      append([]v1.Volume{pluginsVolume, registryVolume, cdiVolume}, mod.Spec.DRA.Volumes...),
-				Tolerations:                  mod.Spec.Tolerations,
+				Tolerations:                  slices.Concat(mod.Spec.Tolerations, module.InternalTolerations),
 				AutomountServiceAccountToken: mod.Spec.DRA.AutomountServiceAccountToken,
 			},
 		},
