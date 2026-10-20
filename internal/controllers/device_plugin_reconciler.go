@@ -20,12 +20,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/metrics"
+	"github.com/rh-ecosystem-edge/kernel-module-management/internal/module"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/utils"
 	appsv1 "k8s.io/api/apps/v1"
@@ -451,7 +453,7 @@ func (dsci *daemonSetCreatorImpl) setDevicePluginAsDesired(
 				NodeSelector:       nodeSelector,
 				ServiceAccountName: serviceAccountName,
 				Volumes:            append([]v1.Volume{devicePluginVolume}, mod.Spec.DevicePlugin.Volumes...),
-				Tolerations:        mod.Spec.Tolerations,
+				Tolerations:        slices.Concat(mod.Spec.Tolerations, module.InternalTolerations),
 			},
 		},
 	}
