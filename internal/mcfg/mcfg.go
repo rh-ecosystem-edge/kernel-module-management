@@ -8,6 +8,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
+	"strings"
 	"text/template"
 
 	"gopkg.in/yaml.v3"
@@ -293,6 +296,7 @@ type initramfsScriptData struct {
 	DirName        string
 	SpecHash       string
 	ModuleName     string
+	OmitDrivers    string
 }
 
 type initramfsIgnitionParams struct {
@@ -308,12 +312,14 @@ func renderInitramfsIgnition(irm *kmmv1beta1.InitramfsModule, builderAuth []byte
 	if err != nil {
 		return nil, err
 	}
+	omitDrivers := strings.Join(canonicalInitramfsOmit(irm.Spec.Omit), " ")
 	data := initramfsScriptData{
 		Rollback:       irm.Spec.Rollback,
 		ContainerImage: irm.Spec.ContainerImage,
 		ModulesPath:    irm.Spec.ModulesPath,
 		DirName:        irm.Spec.DirName,
 		ModuleName:     moduleName,
+		OmitDrivers:    omitDrivers,
 	}
 	data.SpecHash, err = initramfsSpecHash(data)
 	if err != nil {
@@ -352,6 +358,17 @@ func renderInitramfsIgnition(irm *kmmv1beta1.InitramfsModule, builderAuth []byte
 	return raw, nil
 }
 
+func canonicalInitramfsOmit(names []string) []string {
+	uniqueNames := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		uniqueNames[name] = struct{}{}
+	}
+
+	canonical := slices.Collect(maps.Keys(uniqueNames))
+	slices.Sort(canonical)
+	return canonical
+}
+
 func singleInitramfsModuleName(names []string) (string, error) {
 	if len(names) != 1 {
 		return "", fmt.Errorf("initramfs MachineConfig requires exactly one moduleNames entry, got %d", len(names))
@@ -366,12 +383,14 @@ func initramfsSpecHash(data initramfsScriptData) (string, error) {
 		ModulesPath    string `json:"modulesPath"`
 		DirName        string `json:"dirName"`
 		ModuleName     string `json:"moduleName"`
+		OmitDrivers    string `json:"omitDrivers"`
 	}{
 		Rollback:       data.Rollback,
 		ContainerImage: data.ContainerImage,
 		ModulesPath:    data.ModulesPath,
 		DirName:        data.DirName,
 		ModuleName:     data.ModuleName,
+		OmitDrivers:    data.OmitDrivers,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal initramfs spec hash: %v", err)
