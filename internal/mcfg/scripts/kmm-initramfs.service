@@ -15,6 +15,7 @@ Environment="ROLLBACK={{.Rollback}}"
 Environment="CONTAINER_IMAGE={{.ContainerImage}}"
 Environment="MODULES_PATH={{.ModulesPath}}"
 Environment="DIR_NAME={{.DirName}}"
+Environment="OMIT_DRIVERS={{.OmitDrivers}}"
 Environment="SPEC_HASH={{.SpecHash}}"
 ExecStart=/usr/local/bin/initramfs.sh
 

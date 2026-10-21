@@ -6,6 +6,15 @@ stamp_path=/var/opt/kmods/kmm-initramfs.stamp
 stage=/etc/kmods/tree
 hook_src=/usr/local/bin/kmm-pre-udev.sh
 authfile=/var/lib/kubelet/config.json
+dracut_conf=/etc/dracut.conf.d/99-kmm-initramfs.conf
+
+remove_dracut_config() {
+    rm -f "$dracut_conf"
+}
+
+# The configuration is generated only for the duration of the build. Remove
+# leftovers from an interrupted or older run before checking idempotency.
+remove_dracut_config
 
 kernel=$(uname -r)
 kernel_tag=$(printf '%s' "$kernel" | tr '+' '-')
@@ -55,7 +64,7 @@ cid=$(podman create "$image")
 remove_container() {
     podman rm "$cid" >/dev/null 2>&1 || true
 }
-trap remove_container EXIT
+trap 'remove_container; remove_dracut_config' EXIT
 
 rm -rf "$stage"
 mkdir -p "$stage"
@@ -80,6 +89,15 @@ fi
 mkdir -p "${stage}/usr/lib/dracut/hooks/pre-udev"
 cp "$hook_src" "${stage}/usr/lib/dracut/hooks/pre-udev/50-kmm-initramfs.sh"
 chmod 755 "${stage}/usr/lib/dracut/hooks/pre-udev/50-kmm-initramfs.sh"
+
+remove_dracut_config
+if [ -n "${OMIT_DRIVERS:-}" ]; then
+    mkdir -p "$(dirname "$dracut_conf")"
+    read -r -a omit_drivers <<< "$OMIT_DRIVERS"
+    for module in "${omit_drivers[@]}"; do
+        printf 'omit_drivers+=" %s "\n' "$module" >> "$dracut_conf"
+    done
+fi
 
 rpm-ostree initramfs --enable --arg=--include --arg="$stage" --arg=/
 write_stamp

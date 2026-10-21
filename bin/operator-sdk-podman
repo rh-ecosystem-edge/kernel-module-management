@@ -1,0 +1,18 @@
+#!/bin/sh
+
+set -eu
+
+work_dir="$(pwd -P)"
+
+case "$(uname -m)" in
+    arm64|aarch64) platform=linux/arm64 ;;
+    x86_64) platform=linux/amd64 ;;
+    *) echo "unsupported host architecture: $(uname -m)" >&2; exit 1 ;;
+esac
+
+exec podman run --rm -i \
+    --platform "$platform" \
+    -v "$work_dir:/workspace:rw,Z" \
+    -w /workspace \
+    quay.io/operator-framework/operator-sdk:v1.41.1 \
+    "$@"

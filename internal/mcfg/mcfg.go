@@ -8,6 +8,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 	"text/template"
 
 	"gopkg.in/yaml.v3"
@@ -293,6 +295,8 @@ type initramfsScriptData struct {
 	DirName        string
 	SpecHash       string
 	ModuleName     string
+	Omit           []string
+	OmitDrivers    string
 }
 
 type initramfsIgnitionParams struct {
@@ -308,12 +312,15 @@ func renderInitramfsIgnition(irm *kmmv1beta1.InitramfsModule, builderAuth []byte
 	if err != nil {
 		return nil, err
 	}
+	omit := canonicalInitramfsOmit(irm.Spec.Omit)
 	data := initramfsScriptData{
 		Rollback:       irm.Spec.Rollback,
 		ContainerImage: irm.Spec.ContainerImage,
 		ModulesPath:    irm.Spec.ModulesPath,
 		DirName:        irm.Spec.DirName,
 		ModuleName:     moduleName,
+		Omit:           omit,
+		OmitDrivers:    strings.Join(omit, " "),
 	}
 	data.SpecHash, err = initramfsSpecHash(data)
 	if err != nil {
@@ -352,6 +359,20 @@ func renderInitramfsIgnition(irm *kmmv1beta1.InitramfsModule, builderAuth []byte
 	return raw, nil
 }
 
+func canonicalInitramfsOmit(names []string) []string {
+	canonical := append([]string{}, names...)
+	sort.Strings(canonical)
+
+	unique := canonical[:0]
+	for _, name := range canonical {
+		if len(unique) == 0 || unique[len(unique)-1] != name {
+			unique = append(unique, name)
+		}
+	}
+
+	return unique
+}
+
 func singleInitramfsModuleName(names []string) (string, error) {
 	if len(names) != 1 {
 		return "", fmt.Errorf("initramfs MachineConfig requires exactly one moduleNames entry, got %d", len(names))
@@ -361,17 +382,19 @@ func singleInitramfsModuleName(names []string) (string, error) {
 
 func initramfsSpecHash(data initramfsScriptData) (string, error) {
 	raw, err := json.Marshal(struct {
-		Rollback       bool   `json:"rollback"`
-		ContainerImage string `json:"containerImage"`
-		ModulesPath    string `json:"modulesPath"`
-		DirName        string `json:"dirName"`
-		ModuleName     string `json:"moduleName"`
+		Rollback       bool     `json:"rollback"`
+		ContainerImage string   `json:"containerImage"`
+		ModulesPath    string   `json:"modulesPath"`
+		DirName        string   `json:"dirName"`
+		ModuleName     string   `json:"moduleName"`
+		Omit           []string `json:"omit"`
 	}{
 		Rollback:       data.Rollback,
 		ContainerImage: data.ContainerImage,
 		ModulesPath:    data.ModulesPath,
 		DirName:        data.DirName,
 		ModuleName:     data.ModuleName,
+		Omit:           data.Omit,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal initramfs spec hash: %v", err)
