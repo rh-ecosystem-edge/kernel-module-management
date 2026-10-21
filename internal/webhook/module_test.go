@@ -548,7 +548,21 @@ var _ = Describe("ValidateUpdate", func() {
 			},
 		}
 
-		_, err := moduleWebhook.ValidateUpdate(ctx, &kmmv1beta1.Module{}, mod)
+		old := &kmmv1beta1.Module{
+			Spec: kmmv1beta1.ModuleSpec{
+				ModuleLoader: &kmmv1beta1.ModuleLoaderSpec{
+					Container: kmmv1beta1.ModuleLoaderContainerSpec{
+						Modprobe:       kmmv1beta1.ModprobeSpec{ModuleName: "module-name"},
+						ContainerImage: "image-url:mytag",
+						KernelMappings: []kmmv1beta1.KernelMapping{
+							{Regexp: "valid-regexp"},
+						},
+					},
+				},
+			},
+		}
+
+		_, err := moduleWebhook.ValidateUpdate(ctx, old, mod)
 		Expect(err).
 			To(
 				MatchError(
@@ -583,6 +597,39 @@ var _ = Describe("ValidateUpdate", func() {
 		Entry(nil, "", "v2", true),
 		Entry(nil, "", "", false),
 		Entry(nil, "v1", "v2", false),
+	)
+
+	DescribeTable(
+		"moduleLoader presence updates",
+		func(oldHasLoader, newHasLoader, hasDevicePlugin, errorExpected bool) {
+			old := validModule
+			new := validModule
+			if hasDevicePlugin {
+				old.Spec.DevicePlugin = &kmmv1beta1.DevicePluginSpec{}
+				new.Spec.DevicePlugin = &kmmv1beta1.DevicePluginSpec{}
+			}
+			if !oldHasLoader {
+				old.Spec.ModuleLoader = nil
+			}
+			if !newHasLoader {
+				new.Spec.ModuleLoader = nil
+			}
+
+			_, err := moduleWebhook.ValidateUpdate(ctx, &old, &new)
+
+			if errorExpected {
+				Expect(err).To(MatchError(ContainSubstring("cannot add or remove spec.moduleLoader")))
+			} else {
+				Expect(err).NotTo(HaveOccurred())
+			}
+		},
+		Entry("remove loader from a device-plugin Module", true, false, true, true),
+		Entry("add loader to a device-plugin Module", false, true, true, true),
+		Entry("keep loader on a device-plugin Module", true, true, true, false),
+		Entry("keep omitted loader on a device-plugin Module", false, false, true, false),
+		Entry("remove loader when device plugin is not set", true, false, false, true),
+		Entry("add loader when device plugin is not set", false, true, false, true),
+		Entry("keep loader when device plugin is not set", true, true, false, false),
 	)
 })
 
