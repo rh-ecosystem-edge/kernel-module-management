@@ -316,6 +316,7 @@ var _ = Describe("initramfs pool and MachineConfig", func() {
 			ContainerImage: "reg.example/kmods:v1",
 			ModulesPath:    "/usr/lib/modules",
 			DirName:        "/opt/modules",
+			Omit:           []string{"module_b", "module_a", "module_a"},
 			Selector:       map[string]string{"node": "a"},
 		}
 		mc := &mcfgv1.MachineConfig{ObjectMeta: metav1.ObjectMeta{
@@ -349,6 +350,7 @@ var _ = Describe("initramfs pool and MachineConfig", func() {
 		Expect(unit.Contents).To(ContainSubstring(`Environment="CONTAINER_IMAGE=reg.example/kmods:v1"`))
 		Expect(unit.Contents).To(ContainSubstring(`Environment="MODULES_PATH=/usr/lib/modules"`))
 		Expect(unit.Contents).To(ContainSubstring(`Environment="DIR_NAME=/opt/modules"`))
+		Expect(unit.Contents).To(ContainSubstring(`Environment="OMIT_DRIVERS=module_a module_b"`))
 		hash := specHashFromUnit(unit.Contents)
 		Expect(hash).To(MatchRegexp(`^[0-9a-f]{64}$`))
 
@@ -361,6 +363,32 @@ var _ = Describe("initramfs pool and MachineConfig", func() {
 		hook := ignitionFile(doc, "/usr/local/bin/kmm-pre-udev.sh")
 		expectIgnitionFileMeta(hook)
 		Expect(string(ignitionFileBytes(hook))).To(ContainSubstring(`modprobe -d "/opt/modules" "nic"`))
+	})
+
+	It("changes the specification hash when omit changes and ignores ordering", func() {
+		irm.Spec = kmmv1beta1.InitramfsModuleSpec{
+			ModuleNames:    []string{"nic"},
+			ContainerImage: "reg.example/kmods:v1",
+			Omit:           []string{"module_b", "module_a"},
+		}
+		first := &mcfgv1.MachineConfig{}
+		Expect(mcfgAPI.UpdateInitramfsMachineConfig(first, irm, nil, nil)).To(Succeed())
+
+		reordered := irm.DeepCopy()
+		reordered.Spec.Omit = []string{"module_a", "module_b", "module_a"}
+		second := &mcfgv1.MachineConfig{}
+		Expect(mcfgAPI.UpdateInitramfsMachineConfig(second, reordered, nil, nil)).To(Succeed())
+
+		firstHash := specHashFromUnit(decodeInitramfsIgnition(first.Spec.Config.Raw).Systemd.Units[0].Contents)
+		secondHash := specHashFromUnit(decodeInitramfsIgnition(second.Spec.Config.Raw).Systemd.Units[0].Contents)
+		Expect(secondHash).To(Equal(firstHash))
+
+		changed := reordered.DeepCopy()
+		changed.Spec.Omit = []string{"module_c"}
+		third := &mcfgv1.MachineConfig{}
+		Expect(mcfgAPI.UpdateInitramfsMachineConfig(third, changed, nil, nil)).To(Succeed())
+		thirdHash := specHashFromUnit(decodeInitramfsIgnition(third.Spec.Config.Raw).Systemd.Units[0].Contents)
+		Expect(thirdHash).NotTo(Equal(firstHash))
 	})
 
 	It("uses /opt in the pre-udev hook when DirName is empty", func() {
@@ -503,6 +531,21 @@ var _ = Describe("initramfs.sh pull auth", func() {
 		Expect(text).To(ContainSubstring("image-registry.openshift-image-registry.svc|image-registry.openshift-image-registry.svc.cluster.local)"))
 		Expect(strings.Index(text, kubelet)).To(BeNumerically("<", strings.Index(text, registryCase)))
 		Expect(strings.Index(text, registryCase)).To(BeNumerically("<", strings.Index(text, builder)))
+	})
+})
+
+var _ = Describe("initramfs.sh omit configuration", func() {
+	It("keeps the dracut configuration for future initramfs generations", func() {
+		script, err := os.ReadFile("scripts/initramfs.sh")
+		Expect(err).NotTo(HaveOccurred())
+		text := string(script)
+
+		Expect(text).To(ContainSubstring("dracut_conf=/etc/dracut.conf.d/99-kmm-initramfs.conf"))
+		Expect(text).To(ContainSubstring(": > \"$dracut_conf\""))
+		Expect(text).To(ContainSubstring("read -r -a omit_drivers <<< \"$OMIT_DRIVERS\""))
+		Expect(text).To(ContainSubstring(`printf 'omit_drivers+=" %s "\n' "$module"`))
+		Expect(text).To(ContainSubstring("trap 'remove_container' EXIT"))
+		Expect(text).NotTo(ContainSubstring("remove_dracut_config"))
 	})
 })
 
