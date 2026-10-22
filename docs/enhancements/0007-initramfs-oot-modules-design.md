@@ -11,7 +11,7 @@
 
 This design implements [MGMT-25378](https://issues.redhat.com/browse/MGMT-25378): a new namespaced CRD, `InitramfsModule`, that stands alone (no `Module`) and puts out-of-tree (OOT) kernel modules — and their firmware — into the RHCOS initramfs on selected worker nodes. [Locked: D4] [Locked: D16]
 
-On-node work follows the verified PoC: a MachineConfig-installed systemd unit pulls the kmod image, stages files under `/etc/kmods`, runs `rpm-ostree initramfs --enable` with dracut `--include`, and reboots after apply or spec change. In-cluster image build and Secure Boot signing reuse `ModuleImagesConfig` / `ModuleBuildSignConfig` with `InitramfsModule` as owner. This design allows a single `InitramfsModule` in the cluster. A validating webhook rejects a second CREATE; MCP/MC annotation stamps are the backstop if two creates race. One CR can load several OOT modules from one image and omit several in-tree names. After the kmod image exists, an inspect Job copies `modules.dep` from that image; the Job's main container writes JSON `inTreeModules` and `softLinks` to `/dev/termination-log`. The reconciler reads that from Pod status and embeds the lists in the MachineConfig. The CR does not list them. `spec.containerImage` is `<repository>:<partialTag>`; the node script appends `-<kernelVersion>` when pulling. There is no `kernelMappings` field. [User] [Locked: D15] [Codebase: internal/mic/mic.go]
+On-node work follows the verified PoC: a MachineConfig-installed systemd unit pulls the kmod image, stages files under `/etc/kmods`, runs `rpm-ostree initramfs --enable` with dracut `--include`, and reboots after apply or spec change. In-cluster image build and Secure Boot signing reuse `ModuleImagesConfig` / `ModuleBuildSignConfig` with `InitramfsModule` as owner. This design allows a single `InitramfsModule` in the cluster. A validating webhook rejects a second CREATE; MCP/MC annotation stamps are the backstop if two creates race. One CR can load several OOT modules from one image and omit several in-tree names. The kmod image is built with a `host` symlink and `depmod -b /opt`, so `modules.dep` records in-tree hard dependencies under `host/` and `modules.softdep` records soft dependencies by module name. After the image exists, an inspect Job copies that modules tree; the Job's main container writes JSON `inTreeModules` to `/dev/termination-log`. Those names are the in-tree modules dracut must install with `add_drivers`. The reconciler reads that from Pod status and embeds the list in the MachineConfig. The CR does not list them. The image `host` symlink is only for `depmod`. `initramfs.sh` does not copy it into the initramfs. The pre-udev hook creates `host` → `/lib/modules/<kernel>` before `modprobe`. `spec.containerImage` is `<repository>:<partialTag>`; the node script appends `-<kernelVersion>` when pulling. There is no `kernelMappings` field. [User] [Locked: D15] [Codebase: internal/mic/mic.go]
 
 # 2. Goals and Non-Goals
 
@@ -30,7 +30,7 @@ On-node work follows the verified PoC: a MachineConfig-installed systemd unit pu
 - Loading these OOT modules again via `NodeModulesConfig` after boot. [Locked: D16]
 - More than one `InitramfsModule` in the cluster. A validating webhook rejects a second CREATE. The MCP/MC annotation stamp remains the backstop (concurrent creates, webhook not yet shipped). [User]
 - Per-kernel image selection via `kernelMappings`. The node script appends `-<kernelVersion>` to `spec.containerImage` when pulling. [User]
-- User-specified `inTreeModules` or `softLinks` on the CR. The inspect Job computes both from `modules.dep` in the kmod image. [User] [Locked: D15]
+- User-specified `inTreeModules` on the CR. The inspect Job computes them from `modules.dep` and `modules.softdep` in the kmod image. [User] [Locked: D15]
 
 # 3. Motivation / Background
 
@@ -71,7 +71,7 @@ flowchart TD
   unit --> ostree
 ```
 
-The diagram is the control plane to the host unit. Image build is the existing MIC→MBSC→Build path with `InitramfsModule` as owner instead of `Module`. After MIC reports the image exists, the reconciler creates an inspect Job. That Job copies `modules.dep` from the kmod image, parses it, and leaves a JSON answer in Pod status. The reconciler reads that status and writes `inTreeModules` and `softLinks` into the MachineConfig. MCO delivers the systemd unit, `initramfs.sh`, and the pre-udev hook. The unit runs `initramfs.sh`; that script is the only process that runs `podman`, `rpm-ostree`, and `systemctl reboot`. It does not parse `modules.dep`.
+The diagram is the control plane to the host unit. Image build is the existing MIC→MBSC→Build path with `InitramfsModule` as owner instead of `Module`. The kmod image contains `ln -s /lib/modules/${KERNEL_FULL_VERSION} /opt/lib/modules/${KERNEL_FULL_VERSION}/host` and `depmod -b /opt ${KERNEL_FULL_VERSION}`. After MIC reports the image exists, the reconciler creates an inspect Job. That Job copies the modules tree from the kmod image, reads `modules.dep` and `modules.softdep`, and leaves JSON `inTreeModules` in Pod status. The reconciler reads that status and writes `inTreeModules` into the MachineConfig. MCO delivers the systemd unit, `initramfs.sh`, and the pre-udev hook. The unit runs `initramfs.sh`; that script is the only process that runs `podman`, `rpm-ostree`, and `systemctl reboot`. It does not parse `modules.dep`.
 
 **Custom MCP (PoC / infra pattern):** workers already belong to the `worker` pool. Labeling a node `node-role.kubernetes.io/initramfs=""` and creating pool `kmm-initramfs` with `nodeSelector` on that label **moves MCO management** of that node into the custom pool. The node keeps the `worker` role label. `machineConfigSelector` is `{worker, kmm-initramfs}` so the node still receives every worker MachineConfig plus the initramfs unit. Unset CR selector means all nodes with `node-role.kubernetes.io/worker=""`. [Locked: D17] [User]
 
@@ -87,7 +87,7 @@ Before creating or patching either object, the reconciler GETs both. If either e
 
 **Image tag:** `spec.containerImage` is `<repository>:<partialTag>` and does not include the kernel version. The image in the registry is `<repository>:<partialTag>-<kernelVersion>`. Example: field `registry.example.com/kmods/nic:v1` → pull `registry.example.com/kmods/nic:v1-5.14.0-427.el9.x86_64`. The host script appends `-<kernelVersion>`, where `<kernelVersion>` is `uname -r` with every `+` replaced by `-`. The reconciler uses the same rule when ensuring MIC images for selected nodes' kernels. There is no `kernelMappings` field. [User]
 
-**Dependency resolution (inspect Job):** the CR does not carry `inTreeModules` or `softLinks`. After MIC reports `ImageExists` for a selected kernel, the reconciler creates one inspect Job in the CR namespace for that kernel. The Job produces the answer; the reconciler is the only writer of `99-kmm-initramfs`. Rollback skips inspect. [Locked: D15] [User]
+**Dependency resolution (inspect Job):** the CR does not carry `inTreeModules`. After MIC reports `ImageExists` for a selected kernel, the reconciler creates one inspect Job in the CR namespace for that kernel. The Job produces the `add_drivers` list; the reconciler is the only writer of `99-kmm-initramfs`. Rollback skips inspect. [Locked: D15] [User]
 
 **Inspect Job**
 
@@ -105,28 +105,33 @@ The Pod has two containers. [User]
 | Container | Kind | Image | Command |
 |-----------|------|--------|---------|
 | `extract` | init container | kmod image: `spec.containerImage` + `-` + normalized kernel | copy the modules tree into the shared `emptyDir` |
-| `parse` | main container | KMM worker image (same image as NMC worker pods) | parse `modules.dep` on the `emptyDir` and write the JSON answer to `/dev/termination-log` |
+| `parse` | main container | KMM worker image (same image as NMC worker pods) | read `modules.dep` and `modules.softdep` on the `emptyDir` and write `inTreeModules` JSON to `/dev/termination-log` |
 
 The init container uses the same pull-secret pattern as MIC image-pull pods (`internal/pod/imagepuller.go`). The kmod image must contain `/bin/sh` and `cp` (MIC pull pods already require `/bin/sh`). [Codebase: internal/pod/imagepuller.go] [Codebase: internal/pod/workerpodmanager.go] [User]
 
-`extract` copies `{dirName}/lib/modules/{kernelVersion}/` (`dirName` defaults to `/opt`; `modulesPath` overrides that directory when set) onto the `emptyDir` with `cp -a` so DTK `host` / `kernel` symlinks stay symlinks. If `modules.dep` is missing, it writes `{"error":"missing_modules.dep"}` to `/dev/termination-log` and exits 1; the main container never starts. [User]
+`extract` copies `{dirName}/lib/modules/{kernelVersion}/` (`dirName` defaults to `/opt`; `modulesPath` overrides that directory when set) onto the `emptyDir` with `cp -a` so the `host` symlink stays a symlink. If `modules.dep` is missing, it writes `{"error":"missing_modules.dep"}` to `/dev/termination-log` and exits 1; the main container never starts. A missing `modules.softdep` means there are no soft dependencies. [User]
 
-`parse` receives `moduleNames`, `omit`, `dirName`, and the kernel version as env/args. It walks `modules.dep` from each `spec.moduleNames` entry (basename match, ignoring `.ko` / `.ko.xz` / `.ko.gz`) and classifies each dependency against the copied tree:
+The kmod image must contain both of these build steps, with `dirName` defaulting to `/opt`:
 
-1. **In-tree modules for dracut.** Collect transitive dependencies. A dependency is OOT if its path is a regular file in the copy. A dependency is in-tree if the path is reached through a symlink (`host` / `kernel`) or is otherwise not a regular file in the copy. In-tree names go to `inTreeModules` (dracut `add_drivers`). Names that appear in `spec.moduleNames` or `spec.omit` are not added, so a same-name replace does not pull the omitted in-tree copy back in. [Locked: D15] [User]
-2. **Symlinks for the pre-udev hook.** For each in-tree dependency path, take the first path component that is a symlink (for example `host` or `kernel`). Emit one link: `path` = `{dirName}/lib/modules/{kernelVersion}/{prefix}`; `target` = `/lib/modules/{kernelVersion}` when the image symlink points at the whole kernel tree (`host` in `kmod_image.md`), or `/lib/modules/{kernelVersion}/kernel` when the prefix is `kernel` (PoC `ln -sfn`). Duplicate prefixes collapse to one link. If there are no in-tree deps, both lists are empty. [User]
+```dockerfile
+RUN ln -s /lib/modules/${KERNEL_FULL_VERSION} /opt/lib/modules/${KERNEL_FULL_VERSION}/host
+RUN depmod -b /opt ${KERNEL_FULL_VERSION}
+```
+
+`depmod` follows `host` and records every in-tree module it finds with that prefix. A hard dependency on the node's `crc32` module is `host/kernel/crypto/crc32.ko.xz`, not a bare name. Each out-of-tree line in `modules.dep` already lists that module's full hard-dependency closure. `modules.softdep` is different: `depmod` copies the `.modinfo` `softdep` string, so the line is `softdep mymod pre: crc32c` and names modules, not paths. [User]
+
+`parse` receives `moduleNames`, `omit`, `dirName`, and the kernel version as env/args. It does not follow `host` while listing `.ko` files. A module name is the basename with `.ko.xz`, `.ko.gz`, or `.ko` removed. [Locked: D15] [User]
+
+1. **Hard dependencies.** For every out-of-tree `modules.dep` entry (a path that does not start with `host/`), each `host/` dependency is in-tree. Add that module name to `inTreeModules` (`add_drivers`). An out-of-tree dependency is a regular file in the copied tree and is not added; `modprobe -d <dirName>` loads it from that tree. [Locked: D15] [User]
+2. **Soft dependencies.** For every `modules.softdep` line of those out-of-tree modules, add each named module to `inTreeModules` when it is not itself an out-of-tree module in the image. Out-of-tree soft dependencies are loaded by `modprobe -d <dirName>` from the copied tree. [User]
+3. **Names left out of `inTreeModules`.** `spec.moduleNames` and `spec.omit` are not added. On the dracut this feature runs, `add_drivers` cancels `omit_drivers` for the same name, so a replaced in-tree module must not also be installed by `add_drivers`. [User]
 
 **Answer format (Pod status, not logs):** `parse` writes JSON to `/dev/termination-log` (`terminationMessagePolicy: File`, default) on both success and failure, then exits. Kubernetes copies that file into `status.containerStatuses[].state.terminated.message` (init failures use `initContainerStatuses`). The reconciler reads the Pod object; it does not call `pods/log`. JSON is the wire format (not YAML): it is a single status string with no significant whitespace and unmarshals with Go `encoding/json`. [User]
 
 Success (exit 0):
 
 ```json
-{
-  "inTreeModules": ["crc32"],
-  "softLinks": [
-    {"path": "/opt/lib/modules/5.14.0-427.el9.x86_64/host", "target": "/lib/modules/5.14.0-427.el9.x86_64"}
-  ]
-}
+{"inTreeModules":["crc32","crc32c"]}
 ```
 
 Failure (non-zero exit), including init `extract`:
@@ -141,11 +146,11 @@ Kubelet truncates each termination message at 4096 bytes. A typical OOT graph is
 
 The Job does **not** patch the MachineConfig. Cluster-scoped MC updates stay in the reconciler so per-kernel Jobs cannot clobber each other or the unit/script payload. [User]
 
-On `Job.Status.Succeeded == 1`, the reconciler reads `parse`'s `terminated.message`, unmarshals the JSON, and patches **only** `99-kmm-initramfs` with those `inTreeModules` and `softLinks` for that kernel. `initramfs.sh` reads the MachineConfig entry for normalized `uname -r`. The MachineConfig is the durable copy of the lists. There is no result ConfigMap and the reconciler does not persist the raw `modules.dep`. Operators can `oc get job`, `oc get pod -o yaml` (terminated message), and `oc get mc 99-kmm-initramfs`. [User]
+On `Job.Status.Succeeded == 1`, the reconciler reads `parse`'s `terminated.message`, unmarshals the JSON, and patches **only** `99-kmm-initramfs` with those `inTreeModules` for that kernel. `initramfs.sh` reads the MachineConfig entry for normalized `uname -r` and writes them to `add_drivers`. The MachineConfig is the durable copy of the list. There is no result ConfigMap and the reconciler does not persist the raw `modules.dep` or `modules.softdep`. Operators can `oc get job`, `oc get pod -o yaml` (terminated message), and `oc get mc 99-kmm-initramfs`. [User]
 
-If a Job for the same `inputHash` already succeeded, the reconciler does not create another; it re-reads that Pod's status if the MachineConfig does not yet have the lists. If `moduleNames` or `omit` change, `inputHash` changes and the reconciler creates a new Job. If MIC/MBSC records a new successful build or sign for that image, the reconciler deletes the old Job and creates a new one. The Job has no `ttlSecondsAfterFinished` so the Pod remains until the owner CR (or a replacement Job) deletes it. [User]
+If a Job for the same `inputHash` already succeeded, the reconciler does not create another; it re-reads that Pod's status if the MachineConfig does not yet have `inTreeModules`. If `moduleNames` or `omit` change, `inputHash` changes and the reconciler creates a new Job. If MIC/MBSC records a new successful build or sign for that image, the reconciler deletes the old Job and creates a new one. The Job has no `ttlSecondsAfterFinished` so the Pod remains until the owner CR (or a replacement Job) deletes it. [User]
 
-If the Job fails (`error` in the JSON, pull failure, or unreadable status), the reconciler does not write dependency lists into the MachineConfig. Targeted nodes stay on the current initramfs. [Locked: D15] [Locked: D19]
+If the Job fails (`error` in the JSON, pull failure, or unreadable status), the reconciler does not write `inTreeModules` into the MachineConfig. Targeted nodes stay on the current initramfs. [Locked: D15] [Locked: D19]
 
 The reconciler does not patch an apply payload into the MachineConfig until every targeted kernel that already has an image has a successful inspect JSON answer. [User]
 
@@ -156,28 +161,25 @@ flowchart TD
   init["Init extract: kmod image copies modules tree to emptyDir"]
   present{modules.dep present?}
   initErr["Write error JSON to /dev/termination-log, exit 1"]
-  parse["Main parse: worker image walks modules.dep"]
-  kind{Dependency path is a regular file in the copy?}
-  oot[Skip: OOT module]
-  add["Add basename to inTreeModules"]
-  link["Record symlink prefix as a softLink"]
-  write["Write JSON answer to /dev/termination-log"]
+  parse["Main parse: read modules.dep and modules.softdep"]
+  hard["host/ hard deps become inTreeModules"]
+  soft["In-tree softdep names become inTreeModules"]
+  skip["Skip OOT deps, moduleNames, and omit"]
+  write["Write inTreeModules JSON to /dev/termination-log"]
   status[Reconciler reads Pod terminated.message]
   ok{Valid JSON with no error?}
   embed[Reconciler patches 99-kmm-initramfs]
   wait[Leave MachineConfig unchanged]
   exists --> job --> init --> present
   present -->|no| initErr --> status
-  present -->|yes| parse --> kind
-  kind -->|yes| oot --> write
-  kind -->|no| add --> link --> write
+  present -->|yes| parse --> hard --> soft --> skip --> write
   write --> status
   status --> ok
   ok -->|yes| embed
   ok -->|no| wait
 ```
 
-The diagram is the operator-only path. Copy happens in the init container (kmod image). Parse and JSON answer happen in the main container. The reconciler only reads Pod status and writes the MachineConfig. The host unit never sees `modules.dep`. [User]
+The diagram is the operator-only path. Copy happens in the init container (kmod image). Parse and the JSON answer happen in the main container. The reconciler only reads Pod status and writes the MachineConfig. The host unit never sees `modules.dep`. [User]
 
 **Host unit (`kmm-initramfs.service`):**
 
@@ -189,7 +191,7 @@ The diagram is the operator-only path. Copy happens in the init container (kmod 
 
 If the stamp already matches the current kernel and `specHash`, the script exits 0 (no rebuild, no reboot).
 
-It receives these parameters from the MachineConfig: `rollback`, `containerImage`, `moduleNames`, `firmwarePath`, `modulesPath`, `omit`, `dirName`, `specHash`, and the inspect-Job-computed `inTreeModules` and `softLinks` for the node's kernel. Those last two are not copied from the CR. [User]
+It receives these parameters from the MachineConfig: `rollback`, `containerImage`, `moduleNames`, `firmwarePath`, `modulesPath`, `omit`, `dirName`, `specHash`, and the inspect-Job-computed `inTreeModules` for the node's kernel. `inTreeModules` is not copied from the CR. [User]
 
 If `rollback` is true:
 
@@ -200,12 +202,22 @@ It does not pull the image or run `--enable` on the rollback path.
 
 If `rollback` is false or unset:
 
-1. It pulls the container image (`spec.containerImage` + `-` + normalized `uname -r`) and extracts the `.ko` files, `modules.*` files, and firmware into `/etc/kmods/...`.
-2. It updates dracut config with `omit_drivers` for `omit` and `add_drivers` for the inspect-Job-computed `inTreeModules`.
-3. It runs `rpm-ostree initramfs --enable` and uses `--include` to copy the staged files from `/etc/kmods/...` into the new initramfs (including the pre-udev hook).
+1. It pulls the container image (`spec.containerImage` + `-` + normalized `uname -r`) and extracts the modules tree and the firmware directory into `/etc/kmods/...`. The modules tree includes the out-of-tree `.ko` files, `modules.dep`, and `modules.softdep`. It removes the image `host` symlink from the staged tree before `--include`, so that link is not copied into the initramfs.
+2. It writes `/etc/dracut.conf.d/` on the host before `rpm-ostree` runs. `omit_drivers` is `spec.omit`. `add_drivers` is the inspect-Job-computed `inTreeModules`. A module that dracut was already going to install stays one copy; dracut still installs any hard dependency of an `add_drivers` name that is missing.
+3. It runs `rpm-ostree initramfs --enable` and uses `--include` to copy the staged files from `/etc/kmods/...` into the new initramfs (the modules tree, the firmware tree, and the pre-udev hook). `rpm-ostree initramfs --enable` alone does not pull files out of the container image.
 4. It reboots the node after initramfs creation succeeds.
 
-**Pre-udev hook:** the MachineConfig also delivers a pre-udev hook. `initramfs.sh` includes that hook in the initramfs (`--include`). At early boot the hook creates the inspect-Job-computed soft links so `modprobe` can load in-tree dependencies, then runs `modprobe` for each name in `moduleNames`. [User]
+**Pre-udev hook:** the MachineConfig also delivers a pre-udev hook. `initramfs.sh` includes that hook in the initramfs (`--include`). At early boot, inside the initramfs, the hook does three things. [User]
+
+1. It creates the symlink the image used at `depmod` time, and does this before any `modprobe`. `<dirName>` defaults to `/opt`. `<kernel>` is `uname -r`.
+
+```sh
+ln -sfn "/lib/modules/<kernel>" "<dirName>/lib/modules/<kernel>/host"
+```
+
+`modprobe` then opens an in-tree dependency at `host/kernel/.../name.ko.xz`, which follows that symlink into the tree dracut installed with `add_drivers`.
+2. It sets `/sys/module/firmware_class/parameters/path` to the copied firmware directory. `/lib/firmware` stays on the kernel search path, so firmware that dracut installed for in-tree modules still resolves.
+3. It runs `modprobe -d <dirName> <module-name>` once per out-of-tree `.ko`, `.ko.xz`, or `.ko.gz` in the copied modules tree. `<dirName>` defaults to `/opt`. The argument is the module name, not the `.ko` path. The walk does not follow `host`. `modprobe` loads hard dependencies from `modules.dep` and `pre:` / `post:` soft dependencies from `modules.softdep`. A missing soft dependency does not fail the load. A missing hard dependency does. [User]
 
 The flowchart is that host sequence: the unit starts after the network, always runs `initramfs.sh`, then either exits, rolls back, or rebuilds and reboots. The pre-udev hook is not part of the unit; it runs from the new initramfs on the next boot after a successful `--enable`. [User]
 
@@ -220,11 +232,11 @@ flowchart TD
   rebootOff["systemctl reboot"]
   orig["Next boot: original in-tree initramfs"]
   fail["Exit non-zero: systemd restarts the unit"]
-  pull["Pull image and extract .ko, modules.*, firmware to /etc/kmods"]
-  dracut["Update dracut.conf: omit_drivers and inTreeModules"]
+  pull["Pull image and extract modules tree and firmware, drop host symlink"]
+  dracut["Write /etc/dracut.conf.d: omit_drivers and add_drivers"]
   enable["rpm-ostree initramfs --enable --include"]
   rebootOn["systemctl reboot"]
-  hook["Early boot: pre-udev hook creates softLinks then modprobe moduleNames"]
+  hook["Early boot: create host symlink, set firmware path, modprobe -d"]
   start --> run
   run --> stamp
   stamp -->|yes| idle
@@ -274,9 +286,10 @@ type InitramfsModuleSpec struct {
     // Empty or nil: all nodes with label node-role.kubernetes.io/worker="".
     Selector map[string]string `json:"selector,omitempty"`
 
-    // ModuleNames are the OOT kernel modules to extract and load
-    // (.ko basename without .ko). The pre-udev hook modprobes each name
-    // in list order. At least one is required. [User]
+    // ModuleNames are the OOT kernel modules this CR requires
+    // (.ko basename without .ko). The pre-udev hook modprobes every
+    // out-of-tree module in the image, including these. At least one
+    // is required. [User]
     // +kubebuilder:validation:MinItems=1
     ModuleNames []string `json:"moduleNames"`
 
@@ -313,12 +326,6 @@ type InitramfsModuleSpec struct {
     Rollback bool `json:"rollback,omitempty"`
 }
 
-// SoftLink is written into the MachineConfig from the inspect Job JSON. It is not a spec field.
-type SoftLink struct {
-    Path   string `json:"path"`   // path of the link in initramfs
-    Target string `json:"target"` // link target
-}
-
 type InitramfsNodeStatus struct {
     Name              string `json:"name"`
     KernelVersion     string `json:"kernelVersion,omitempty"`
@@ -333,14 +340,14 @@ type InitramfsModuleStatus struct {
 
 MIC name: `irm-<initramfsmodule-name>` in the CR namespace, ownerRef = `InitramfsModule`, so it does not collide with a `Module` of the same name. MIC `images` are `spec.containerImage` + `-` + normalized kernel for each unique selected-node kernel. `spec.build` / `spec.sign` apply to every such image. [Codebase: internal/mic/mic.go]
 
-Parameters for `initramfs.sh` are embedded in the MachineConfig (`rollback`, `containerImage`, `moduleNames`, `firmwarePath`, `modulesPath`, `omit`, `dirName`, `specHash`, plus inspect-Job-computed `inTreeModules` and `softLinks` keyed by kernel version). `specHash` covers the spec fields that affect initramfs content (`moduleNames`, `omit`, `containerImage`, `firmwarePath`, `modulesPath`, `dirName`, `build`, `sign`, `rollback`) and the computed dependency lists. Selector-only changes do not change `specHash` and do not patch the MachineConfig.
+Parameters for `initramfs.sh` are embedded in the MachineConfig (`rollback`, `containerImage`, `moduleNames`, `firmwarePath`, `modulesPath`, `omit`, `dirName`, `specHash`, plus inspect-Job-computed `inTreeModules` keyed by kernel version). `specHash` covers the spec fields that affect initramfs content (`moduleNames`, `omit`, `containerImage`, `firmwarePath`, `modulesPath`, `dirName`, `build`, `sign`, `rollback`) and the computed `inTreeModules` list. Selector-only changes do not change `specHash` and do not patch the MachineConfig.
 
 Namespaced children of the `InitramfsModule` use `ownerReferences` (MIC, inspect Job). Cluster-scoped MCP and MC use the annotations in §4.1; they have no `ownerReference` to the CR. [User]
 
 | Object | Name | Notes |
 |--------|------|--------|
 | MachineConfigPool | `kmm-initramfs` | Always created by KMM. Stamped with the three `initramfsmodule-*` annotations. `nodeSelector` = `node-role.kubernetes.io/initramfs: ""`; `machineConfigSelector` role in `{worker, kmm-initramfs}`; `maxUnavailable: 1`. If the name already exists and is not stamped for this CR, reconcile errors (no adopt, no overwrite). [User] |
-| MachineConfig | `99-kmm-initramfs` | Same annotation stamp as the pool. Label `machineconfiguration.openshift.io/role: kmm-initramfs`; embeds inspect-Job-computed per-kernel `inTreeModules` and `softLinks`; content changes reboot via default MCO policy. If the name already exists and is not stamped for this CR, reconcile errors (no adopt, no overwrite). [User] |
+| MachineConfig | `99-kmm-initramfs` | Same annotation stamp as the pool. Label `machineconfiguration.openshift.io/role: kmm-initramfs`; embeds inspect-Job-computed per-kernel `inTreeModules`; content changes reboot via default MCO policy. If the name already exists and is not stamped for this CR, reconcile errors (no adopt, no overwrite). [User] |
 | Job | `irm-inspect-<name>-<inputHash>` | namespaced; `ownerReference` to the CR; two-container extract/parse Job; JSON answer in Pod `terminated.message`; does not patch the MachineConfig |
 
 The reconciler sets `node-role.kubernetes.io/initramfs=""` on nodes matching `spec.selector` and removes it on deselect. Node matching uses `selector` only; there is no `tolerations` field. [User]
@@ -351,7 +358,7 @@ Additive CRD. Validating webhook (`/validate-kmm-sigs-x-k8s-io-v1beta1-initramfs
 
 - `moduleNames` required; at least one entry; entries unique; each is a kernel-module name (`[A-Za-z0-9_-]+`).
 - `omit` optional; entries unique; each the same name form as `moduleNames`.
-- There are no `inTreeModules` or `softLinks` spec fields. [User] [Locked: D15]
+- There is no `inTreeModules` spec field. [User] [Locked: D15]
 - `containerImage` required; form `<repository>:<partialTag>` (includes a tag; does not include the kernel version). The node script appends `-<kernelVersion>` when pulling.
 - `rollback` optional boolean. When true, targeted nodes `--disable` and reboot; `initramfs.sh` does not pull or `--enable`.
 - `build` / `sign` follow the same rules as Module (sign `filesToSign` under `dirName`).
@@ -437,7 +444,7 @@ Idempotency: stamp == current kver + spec hash → exit 0 (FR-18).
 
 ## 4.8 Extensibility / Future-Proofing
 
-`Build` and `Sign` types are shared with Module, so new build fields apply here without a parallel API. A later hub ManifestWork can wrap `InitramfsModule` the same way it wraps `Module`; this design does not add that. `moduleNames` and `omit` are lists, so adding another kmod from the same image is a spec edit, not a CRD change. In-tree dependency lists stay computed from `modules.dep`, so a new DTK-resolved dependency does not require a CRD change. Module-style `spec.tolerations` can be added later as an additive field. Supporting more than one `InitramfsModule` (union of `--include`s, one custom pool) is out of scope; adding it later is an additive controller change, not a CRD break.
+`Build` and `Sign` types are shared with Module, so new build fields apply here without a parallel API. A later hub ManifestWork can wrap `InitramfsModule` the same way it wraps `Module`; this design does not add that. `moduleNames` and `omit` are lists, so adding another kmod from the same image is a spec edit, not a CRD change. In-tree dependency names stay computed from `modules.dep` and `modules.softdep`, so a new DTK-resolved dependency does not require a CRD change. Module-style `spec.tolerations` can be added later as an additive field. Supporting more than one `InitramfsModule` (union of `--include`s, one custom pool) is out of scope; adding it later is an additive controller change, not a CRD break.
 
 # 5. Interface Changes
 
@@ -451,7 +458,7 @@ Namespaced CR `InitramfsModule` (`irm`) in `kmm.sigs.x-k8s.io/v1beta1`. Create, 
 
 **Requirements:** FR-3, FR-4, FR-5, FR-6, FR-7, FR-8, FR-9, NFR-2
 
-Fields in §4.2. Unset `selector` targets `node-role.kubernetes.io/worker=""`. `moduleNames` lists OOT `.ko` files to extract and load. `omit` lists in-tree names for `omit_drivers`. There are no `inTreeModules` or `softLinks` spec fields; the inspect Job computes those from `modules.dep` and the reconciler writes them into the MachineConfig (IC-5, FR-10). `containerImage` is `<repository>:<partialTag>`; `initramfs.sh` appends `-<kernelVersion>` when pulling. `build` triggers MIC/MBSC when the tagged image is missing. `sign` uses the Module sign Dockerfile. `firmwarePath` and `modulesPath` are in-image directories to extract. `rollback: true` makes `initramfs.sh` run `rpm-ostree initramfs --disable` and reboot on still-selected nodes.
+Fields in §4.2. Unset `selector` targets `node-role.kubernetes.io/worker=""`. `moduleNames` lists the OOT modules the image must contain. The pre-udev hook loads every out-of-tree module in the image with `modprobe -d <dirName>`. `omit` lists in-tree names for `omit_drivers`. There is no `inTreeModules` spec field; the inspect Job computes it from `modules.dep` and `modules.softdep`, and the reconciler writes it into the MachineConfig for `add_drivers` (IC-5, FR-10). `containerImage` is `<repository>:<partialTag>`; `initramfs.sh` appends `-<kernelVersion>` when pulling. `build` triggers MIC/MBSC when the tagged image is missing. `sign` uses the Module sign Dockerfile. `firmwarePath` and `modulesPath` are in-image directories to extract. `rollback: true` makes `initramfs.sh` run `rpm-ostree initramfs --disable` and reboot on still-selected nodes.
 
 ## IC-3: InitramfsModule status created / applied per node
 
@@ -469,7 +476,7 @@ Label `kmm.node.kubernetes.io/initramfs.<namespace>.<name>=""` on the node after
 
 **Requirements:** FR-10, FR-11, FR-18, FR-19, FR-20, FR-21
 
-Cluster-scoped objects operators can `oc get`. KMM always creates MachineConfigPool `kmm-initramfs` and MachineConfig `99-kmm-initramfs` and stamps both with `kmm.sigs.x-k8s.io/initramfsmodule-{namespace,name,uid}`. They have no `ownerReference` to the namespaced CR. If either name already exists and is not stamped for this `InitramfsModule`, reconciliation errors and does not adopt or overwrite. The MachineConfig installs `kmm-initramfs.service`, `initramfs.sh`, and the pre-udev hook, and embeds the inspect-Job-computed per-kernel `inTreeModules` and `softLinks`. Those lists come from the inspect Job's JSON answer in Pod `terminated.message`; the Job never patches the MachineConfig. A MachineConfig content change reboots the node (MCO default). Selector-only changes do not patch the MachineConfig. Not a user-facing API for creating MCs or MCPs by hand. [User]
+Cluster-scoped objects operators can `oc get`. KMM always creates MachineConfigPool `kmm-initramfs` and MachineConfig `99-kmm-initramfs` and stamps both with `kmm.sigs.x-k8s.io/initramfsmodule-{namespace,name,uid}`. They have no `ownerReference` to the namespaced CR. If either name already exists and is not stamped for this `InitramfsModule`, reconciliation errors and does not adopt or overwrite. The MachineConfig installs `kmm-initramfs.service`, `initramfs.sh`, and the pre-udev hook, and embeds the inspect-Job-computed per-kernel `inTreeModules`. That list comes from the inspect Job's JSON answer in Pod `terminated.message`; the Job never patches the MachineConfig. `initramfs.sh` writes it to `add_drivers` in `/etc/dracut.conf.d/`. A MachineConfig content change reboots the node (MCO default). Selector-only changes do not patch the MachineConfig. Not a user-facing API for creating MCs or MCPs by hand. [User]
 
 FR-12, FR-13, FR-14, FR-15, NFR-1 are host and wait-state behavior exercised through IC-1–IC-5 (two-reboot upgrade, wait without reboot, delete leaves current initramfs). They add no further interface objects.
 
@@ -493,9 +500,11 @@ FR-12, FR-13, FR-14, FR-15, NFR-1 are host and wait-state behavior exercised thr
 
 **Infer `omit_drivers` from `moduleNames`.** Rejected: omit is an explicit list so replace (FR-7) and add (FR-8) stay distinct, and in-tree names may differ from OOT names. [User]
 
-**User lists `inTreeModules` and `softLinks` on the CR.** Rejected: D15 requires in-tree deps from `modules.dep` without the user naming them. The inspect Job computes both lists; the reconciler embeds them in the MachineConfig. [User] [Locked: D15]
+**User lists `inTreeModules` on the CR.** Rejected: D15 requires in-tree deps from `modules.dep` without the user naming them. The inspect Job also adds in-tree names from `modules.softdep`. The reconciler embeds `inTreeModules` in the MachineConfig. [User] [Locked: D15]
 
-**`initramfs.sh` parses `modules.dep` on the node.** Rejected: the inspect Job computes `inTreeModules` and `softLinks` before the MachineConfig is applied; the host unit only consumes those lists. [User]
+**Copy the image `host` symlink into the initramfs with `--include`.** Rejected: the pre-udev hook creates `host` → `/lib/modules/<kernel>` after dracut has unpacked `add_drivers`. The image symlink exists only so `depmod` can record `host/` paths. `initramfs.sh` removes it from the staged tree before `--include`. [User]
+
+**`initramfs.sh` parses `modules.dep` on the node.** Rejected: the inspect Job computes `inTreeModules` before the MachineConfig is applied; the host unit only writes that list to `add_drivers`. [User]
 
 **Reconciler parses `modules.dep`.** Rejected: the Job main container parses the copy on the `emptyDir` and writes the JSON answer; the reconciler only unmarshals Pod status. [User]
 
@@ -517,7 +526,7 @@ FR-12, FR-13, FR-14, FR-15, NFR-1 are host and wait-state behavior exercised thr
 
 # 7. Observability and Monitoring
 
-- Reconciler logs: targeted nodes, MIC image state, inspect Job name/status, JSON `inTreeModules` and `softLinks` read from Pod `terminated.message`, MCP/MC create (or conflict if `kmm-initramfs` or `99-kmm-initramfs` already exists and is not stamped for this CR).
+- Reconciler logs: targeted nodes, MIC image state, inspect Job name/status, JSON `inTreeModules` read from Pod `terminated.message`, MCP/MC create (or conflict if `kmm-initramfs` or `99-kmm-initramfs` already exists and is not stamped for this CR).
 - Webhook logs: rejected second CREATE, including the existing `namespace/name`.
 - Host unit stdout (journald `kmm-initramfs.service`): `initramfs.sh` pull, extract, `rpm-ostree --enable` / `--disable`, reboot.
 - No new Prometheus metrics. Created/applied on the CR is the operator-facing signal. [Locked: D13]
