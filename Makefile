@@ -45,6 +45,9 @@ WEBHOOK_IMG ?= $(WEBHOOK_IMAGE_TAG_BASE):$(IMAGE_TAG)
 WORKER_IMAGE_TAG_BASE ?= quay.io/edge-infrastructure/kernel-module-management-worker
 WORKER_IMG ?= $(WORKER_IMAGE_TAG_BASE):$(IMAGE_TAG)
 
+KMOD_IMAGE_PARSE_IMAGE_TAG_BASE ?= quay.io/edge-infrastructure/kernel-module-management-kmod-image-parse
+KMOD_IMAGE_PARSE_IMG ?= $(KMOD_IMAGE_PARSE_IMAGE_TAG_BASE):$(IMAGE_TAG)
+
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
 BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
@@ -163,6 +166,9 @@ webhook-server: $(shell find -name "*.go") go.mod go.sum  ## Build webhook-serve
 
 worker: $(shell find -name "*.go") go.mod go.sum  ## Build worker binary.
 	go build -ldflags="-X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT)" -o $@ ./cmd/worker
+
+kmod-image-parse: $(shell find -name "*.go") go.mod go.sum  ## Build kmod-image-parse binary.
+	go build -ldflags="-X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT)" -o $@ ./cmd/kmod-image-parse
 
 day1-utility: $(shell find -name "*.go") go.mod go.sum  ## Build day1 binary
 	go build -ldflags="-X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT)" -o $@ ./cmd/day1-utility
@@ -382,5 +388,9 @@ webhookimage-build: ## Build docker image for the webhook server.
 .PHONY: workerimage-build 
 workerimage-build: ## Build docker image for worker app.
 	docker build -f Dockerfile.worker -t $(WORKER_IMG) .
+
+.PHONY: kmod-image-parse-image-build
+kmod-image-parse-image-build: ## Build docker image for the kmod image parser.
+	docker build -f Dockerfile.kmod-image-parse -t $(KMOD_IMAGE_PARSE_IMG) .
 
 include docs.mk
