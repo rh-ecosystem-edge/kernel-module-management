@@ -1,0 +1,39 @@
+# Build the kmod image parse binary
+FROM golang:1.25 as builder
+
+# Add the vendored dependencies
+COPY vendor vendor
+
+# Copy the Go Modules manifests
+COPY go.mod go.mod
+COPY go.sum go.sum
+
+# Copy the go source
+COPY cmd/kmod-image-parse cmd/kmod-image-parse
+COPY internal/kmodparser internal/kmodparser
+
+# Copy Makefile
+COPY Makefile Makefile
+COPY docs.mk docs.mk
+
+# Copy the .git directory which is needed to store the build info
+COPY .git .git
+
+# Build
+RUN git config --global --add safe.directory ${PWD}
+RUN CGO_ENABLED=0 make kmod-image-parse
+
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.4
+
+RUN microdnf update -y && \
+    microdnf install -y shadow-utils && \
+    microdnf clean all
+
+COPY --from=builder /go/kmod-image-parse /usr/local/bin/kmod-image-parse
+
+RUN ["groupadd", "--system", "-g", "201", "kmm"]
+RUN ["useradd", "--system", "-u", "201", "-g", "201", "-s", "/sbin/nologin", "kmm"]
+
+USER 201:201
+
+ENTRYPOINT ["/usr/local/bin/kmod-image-parse"]

@@ -2,6 +2,7 @@
 /manager
 /manager-hub
 /worker
+/kmod-image-parse
 
 # Binaries for programs and plugins
 *.exe
