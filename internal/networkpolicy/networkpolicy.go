@@ -5,13 +5,10 @@ import (
 	"fmt"
 
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/pod"
-	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -184,6 +181,8 @@ func (np *networkPolicy) DevicePluginNetworkPolicy(namespace string) *networking
 					"app.kubernetes.io/component": "device-plugin",
 				},
 			},
+			Ingress: []networkingv1.NetworkPolicyIngressRule{{}},
+			Egress:  []networkingv1.NetworkPolicyEgressRule{{}},
 			PolicyTypes: []networkingv1.PolicyType{
 				networkingv1.PolicyTypeIngress,
 				networkingv1.PolicyTypeEgress,
@@ -204,19 +203,8 @@ func (np *networkPolicy) DRANetworkPolicy(namespace string) *networkingv1.Networ
 					"app.kubernetes.io/component": "dra",
 				},
 			},
-			Egress: []networkingv1.NetworkPolicyEgressRule{
-				{
-					Ports: []networkingv1.NetworkPolicyPort{
-						{Protocol: ptr.To(v1.ProtocolTCP), Port: ptr.To(intstr.FromInt32(443))},
-					},
-				},
-				{
-					Ports: []networkingv1.NetworkPolicyPort{
-						{Protocol: ptr.To(v1.ProtocolTCP), Port: ptr.To(intstr.FromInt32(53))},
-						{Protocol: ptr.To(v1.ProtocolUDP), Port: ptr.To(intstr.FromInt32(53))},
-					},
-				},
-			},
+			Ingress: []networkingv1.NetworkPolicyIngressRule{{}},
+			Egress:  []networkingv1.NetworkPolicyEgressRule{{}},
 			PolicyTypes: []networkingv1.PolicyType{
 				networkingv1.PolicyTypeIngress,
 				networkingv1.PolicyTypeEgress,
