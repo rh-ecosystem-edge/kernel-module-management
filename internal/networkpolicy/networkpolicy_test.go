@@ -10,13 +10,10 @@ import (
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/pod"
 	"go.uber.org/mock/gomock"
-	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -231,7 +228,7 @@ var _ = Describe("NetworkPolicy", func() {
 	})
 
 	Describe("DevicePluginNetworkPolicy", func() {
-		It("should return correct NetworkPolicy for device plugin pods", func() {
+		It("should allow all ingress and egress for device plugin pods", func() {
 			result := np.DevicePluginNetworkPolicy(testNamespace)
 
 			Expect(result).NotTo(BeNil())
@@ -245,8 +242,8 @@ var _ = Describe("NetworkPolicy", func() {
 				networkingv1.PolicyTypeEgress,
 			))
 
-			Expect(result.Spec.Ingress).To(BeEmpty())
-			Expect(result.Spec.Egress).To(BeEmpty())
+			Expect(result.Spec.Ingress).To(Equal([]networkingv1.NetworkPolicyIngressRule{{}}))
+			Expect(result.Spec.Egress).To(Equal([]networkingv1.NetworkPolicyEgressRule{{}}))
 		})
 
 		It("should use default namespace when empty namespace is provided", func() {
@@ -256,7 +253,7 @@ var _ = Describe("NetworkPolicy", func() {
 	})
 
 	Describe("DRANetworkPolicy", func() {
-		It("should return correct NetworkPolicy for DRA pods", func() {
+		It("should allow all ingress and egress for DRA pods", func() {
 			result := np.DRANetworkPolicy(testNamespace)
 
 			Expect(result).NotTo(BeNil())
@@ -270,15 +267,8 @@ var _ = Describe("NetworkPolicy", func() {
 				networkingv1.PolicyTypeEgress,
 			))
 
-			Expect(result.Spec.Ingress).To(BeEmpty())
-			Expect(result.Spec.Egress).To(HaveLen(2))
-			Expect(result.Spec.Egress[0].Ports).To(ConsistOf(
-				networkingv1.NetworkPolicyPort{Protocol: ptr.To(v1.ProtocolTCP), Port: ptr.To(intstr.FromInt32(443))},
-			))
-			Expect(result.Spec.Egress[1].Ports).To(ConsistOf(
-				networkingv1.NetworkPolicyPort{Protocol: ptr.To(v1.ProtocolTCP), Port: ptr.To(intstr.FromInt32(53))},
-				networkingv1.NetworkPolicyPort{Protocol: ptr.To(v1.ProtocolUDP), Port: ptr.To(intstr.FromInt32(53))},
-			))
+			Expect(result.Spec.Ingress).To(Equal([]networkingv1.NetworkPolicyIngressRule{{}}))
+			Expect(result.Spec.Egress).To(Equal([]networkingv1.NetworkPolicyEgressRule{{}}))
 		})
 
 		It("should use default namespace when empty namespace is provided", func() {
