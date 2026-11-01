@@ -53,8 +53,6 @@ const (
 	configFileName             = "config.yaml"
 	configFullPath             = volMountPointConfig + "/" + configFileName
 	volNameConfig              = "config"
-	sharedFilesDir             = "/tmp"
-	volNameTmp                 = "tmp"
 	volumeNameConfig           = "config"
 	initContainerName          = "image-extractor"
 	modulesOrderKey            = "kmm.node.kubernetes.io/modules-order"

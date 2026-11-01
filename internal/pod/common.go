@@ -9,6 +9,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	sharedFilesDir = "/tmp"
+	volNameTmp     = "tmp"
+)
+
 func deletePod(clnt client.Client, ctx context.Context, pod *v1.Pod) error {
 
 	logger := ctrl.LoggerFrom(ctx)
