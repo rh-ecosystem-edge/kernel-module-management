@@ -13,3 +13,7 @@ RUN install -o root -g root -m 0755 /tmp/kubectl /usr/local/bin/kubectl
 RUN ln -s /usr/local/bin/kubectl /usr/bin/oc
 RUN chmod +x /usr/bin/oc
 
+# Skipper creates a build user with the host UID, which can exceed Alpine's default range.
+RUN sed -i '/^[[:space:]]*UID_MAX[[:space:]]/d' /etc/login.defs \
+    && printf '\nUID_MAX 2147483647\n' >> /etc/login.defs
+

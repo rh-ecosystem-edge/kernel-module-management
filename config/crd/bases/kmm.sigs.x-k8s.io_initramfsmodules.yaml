@@ -169,10 +169,6 @@ spec:
                 minItems: 1
                 type: array
                 x-kubernetes-list-type: set
-              modulesPath:
-                description: ModulesPath is the directory in the image that contains
-                  modules.* files.
-                type: string
               omit:
                 description: Omit is the list of in-tree kernel module names passed
                   to dracut omit_drivers.

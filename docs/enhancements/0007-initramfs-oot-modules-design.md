@@ -109,7 +109,7 @@ The Pod has two containers. [User]
 
 The init container uses the same pull-secret pattern as MIC image-pull pods (`internal/pod/imagepuller.go`). The kmod image must contain `/bin/sh` and `cp` (MIC pull pods already require `/bin/sh`). [Codebase: internal/pod/imagepuller.go] [Codebase: internal/pod/workerpodmanager.go] [User]
 
-`extract` copies `{dirName}/lib/modules/{kernelVersion}/` (`dirName` defaults to `/opt`; `modulesPath` overrides that directory when set) onto the `emptyDir` with `cp -a` so the `host` symlink stays a symlink. If `modules.dep` is missing, it writes `{"error":"missing_modules.dep"}` to `/dev/termination-log` and exits 1; the main container never starts. A missing `modules.softdep` means there are no soft dependencies. [User]
+`extract` copies `{dirName}/lib/modules/{kernelVersion}/` (`dirName` defaults to `/opt`) onto the `emptyDir` with `cp -a` so the `host` symlink stays a symlink. If `modules.dep` is missing, it writes `{"error":"missing_modules.dep"}` to `/dev/termination-log` and exits 1; the main container never starts. A missing `modules.softdep` means there are no soft dependencies. [User]
 
 The kmod image must contain both of these build steps, with `dirName` defaulting to `/opt`:
 
@@ -191,7 +191,7 @@ The diagram is the operator-only path. Copy happens in the init container (kmod 
 
 If the stamp already matches the current kernel and `specHash`, the script exits 0 (no rebuild, no reboot).
 
-It receives these parameters from the MachineConfig: `rollback`, `containerImage`, `moduleNames`, `firmwarePath`, `modulesPath`, `omit`, `dirName`, `specHash`, and the inspect-Job-computed `inTreeModules` for the node's kernel. `inTreeModules` is not copied from the CR. [User]
+It receives these parameters from the MachineConfig: `rollback`, `containerImage`, `moduleNames`, `firmwarePath`, `omit`, `dirName`, `specHash`, and the inspect-Job-computed `inTreeModules` for the node's kernel. `inTreeModules` is not copied from the CR. [User]
 
 If `rollback` is true:
 
@@ -310,7 +310,6 @@ type InitramfsModuleSpec struct {
     ContainerImage string `json:"containerImage"`
 
     FirmwarePath string `json:"firmwarePath,omitempty"` // firmware directory inside the image
-    ModulesPath  string `json:"modulesPath,omitempty"`  // directory in the image that contains modules.*
     DirName      string `json:"dirName,omitempty"`      // default /opt
 
     Build *Build `json:"build,omitempty"` // same type as Module
@@ -340,7 +339,7 @@ type InitramfsModuleStatus struct {
 
 MIC name: `irm-<initramfsmodule-name>` in the CR namespace, ownerRef = `InitramfsModule`, so it does not collide with a `Module` of the same name. MIC `images` are `spec.containerImage` + `-` + normalized kernel for each unique selected-node kernel. `spec.build` / `spec.sign` apply to every such image. [Codebase: internal/mic/mic.go]
 
-Parameters for `initramfs.sh` are embedded in the MachineConfig (`rollback`, `containerImage`, `moduleNames`, `firmwarePath`, `modulesPath`, `omit`, `dirName`, `specHash`, plus inspect-Job-computed `inTreeModules` keyed by kernel version). `specHash` covers the spec fields that affect initramfs content (`moduleNames`, `omit`, `containerImage`, `firmwarePath`, `modulesPath`, `dirName`, `build`, `sign`, `rollback`) and the computed `inTreeModules` list. Selector-only changes do not change `specHash` and do not patch the MachineConfig.
+Parameters for `initramfs.sh` are embedded in the MachineConfig (`rollback`, `containerImage`, `moduleNames`, `firmwarePath`, `omit`, `dirName`, `specHash`, plus inspect-Job-computed `inTreeModules` keyed by kernel version). `specHash` covers the spec fields that affect initramfs content (`moduleNames`, `omit`, `containerImage`, `firmwarePath`, `dirName`, `build`, `sign`, `rollback`) and the computed `inTreeModules` list. Selector-only changes do not change `specHash` and do not patch the MachineConfig.
 
 Namespaced children of the `InitramfsModule` use `ownerReferences` (MIC, inspect Job). Cluster-scoped MCP and MC use the annotations in §4.1; they have no `ownerReference` to the CR. [User]
 
@@ -392,7 +391,6 @@ spec:
     - my-nic
   containerImage: registry.example.com/kmods/nic:v1
   firmwarePath: /firmware
-  modulesPath: /opt/lib/modules
   rollback: false
   build:
     dockerfileConfigMap:
@@ -458,7 +456,7 @@ Namespaced CR `InitramfsModule` (`irm`) in `kmm.sigs.x-k8s.io/v1beta1`. Create, 
 
 **Requirements:** FR-3, FR-4, FR-5, FR-6, FR-7, FR-8, FR-9, NFR-2
 
-Fields in §4.2. Unset `selector` targets `node-role.kubernetes.io/worker=""`. `moduleNames` lists the OOT modules the image must contain. The pre-udev hook loads every out-of-tree module in the image with `modprobe -d <dirName>`. `omit` lists in-tree names for `omit_drivers`. There is no `inTreeModules` spec field; the inspect Job computes it from `modules.dep` and `modules.softdep`, and the reconciler writes it into the MachineConfig for `add_drivers` (IC-5, FR-10). `containerImage` is `<repository>:<partialTag>`; `initramfs.sh` appends `-<kernelVersion>` when pulling. `build` triggers MIC/MBSC when the tagged image is missing. `sign` uses the Module sign Dockerfile. `firmwarePath` and `modulesPath` are in-image directories to extract. `rollback: true` makes `initramfs.sh` run `rpm-ostree initramfs --disable` and reboot on still-selected nodes.
+Fields in §4.2. Unset `selector` targets `node-role.kubernetes.io/worker=""`. `moduleNames` lists the OOT modules the image must contain. The pre-udev hook loads every out-of-tree module in the image with `modprobe -d <dirName>`. `omit` lists in-tree names for `omit_drivers`. There is no `inTreeModules` spec field; the inspect Job computes it from `modules.dep` and `modules.softdep`, and the reconciler writes it into the MachineConfig for `add_drivers` (IC-5, FR-10). `containerImage` is `<repository>:<partialTag>`; `initramfs.sh` appends `-<kernelVersion>` when pulling. `build` triggers MIC/MBSC when the tagged image is missing. `sign` uses the Module sign Dockerfile. `firmwarePath` is the in-image firmware directory to extract. The `modules.*` files are included in the module tree at `{dirName}/lib/modules/{kernelVersion}/`. `rollback: true` makes `initramfs.sh` run `rpm-ostree initramfs --disable` and reboot on still-selected nodes.
 
 ## IC-3: InitramfsModule status created / applied per node
 

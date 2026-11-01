@@ -71,9 +71,6 @@ if [ "$kernel_tag" != "$kernel" ]; then
         mv "$tagged_dir" "$kmod_dir"
     fi
 fi
-mkdir -p "$kmod_dir"
-podman cp "${cid}:${MODULES_PATH}/." "${kmod_dir}/"
-
 if [ ! -f "${kmod_dir}/modules.dep" ]; then
     exit 1
 fi

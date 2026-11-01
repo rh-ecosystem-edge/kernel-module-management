@@ -52,10 +52,6 @@ type InitramfsModuleSpec struct {
 	// +optional
 	FirmwarePath string `json:"firmwarePath,omitempty"`
 
-	// ModulesPath is the directory in the image that contains modules.* files.
-	// +optional
-	ModulesPath string `json:"modulesPath,omitempty"`
-
 	// DirName is the in-image directory that contains the module tree.
 	// The default is /opt
 	// +optional

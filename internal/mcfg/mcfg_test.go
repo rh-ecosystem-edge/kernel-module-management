@@ -314,7 +314,6 @@ var _ = Describe("initramfs pool and MachineConfig", func() {
 		irm.Spec = kmmv1beta1.InitramfsModuleSpec{
 			ModuleNames:    []string{"nic"},
 			ContainerImage: "reg.example/kmods:v1",
-			ModulesPath:    "/usr/lib/modules",
 			DirName:        "/opt/modules",
 			Omit:           []string{"module_b", "module_a", "module_a"},
 			Selector:       map[string]string{"node": "a"},
@@ -348,7 +347,6 @@ var _ = Describe("initramfs pool and MachineConfig", func() {
 		Expect(unit.Contents).To(ContainSubstring("ExecStart=/usr/local/bin/initramfs.sh"))
 		Expect(unit.Contents).To(ContainSubstring(`Environment="ROLLBACK=false"`))
 		Expect(unit.Contents).To(ContainSubstring(`Environment="CONTAINER_IMAGE=reg.example/kmods:v1"`))
-		Expect(unit.Contents).To(ContainSubstring(`Environment="MODULES_PATH=/usr/lib/modules"`))
 		Expect(unit.Contents).To(ContainSubstring(`Environment="DIR_NAME=/opt/modules"`))
 		Expect(unit.Contents).To(ContainSubstring(`Environment="OMIT_DRIVERS=module_a module_b"`))
 		hash := specHashFromUnit(unit.Contents)
@@ -425,7 +423,6 @@ var _ = Describe("initramfs pool and MachineConfig", func() {
 		irm.Spec = kmmv1beta1.InitramfsModuleSpec{
 			ModuleNames:    []string{"nic"},
 			ContainerImage: "reg.example/kmods:v1",
-			ModulesPath:    "/usr/lib/modules",
 			DirName:        "/opt/modules",
 			Selector:       map[string]string{"node": "a"},
 		}
@@ -469,7 +466,6 @@ var _ = Describe("initramfs pool and MachineConfig", func() {
 		irm.Spec = kmmv1beta1.InitramfsModuleSpec{
 			ModuleNames:    []string{"nic"},
 			ContainerImage: "reg.example/kmods:v1",
-			ModulesPath:    "/usr/lib/modules",
 			DirName:        "/opt/modules",
 		}
 		auth := []byte(`{"auths":{"image-registry.openshift-image-registry.svc:5000":{"auth":"dG9rZW4="}}}`)

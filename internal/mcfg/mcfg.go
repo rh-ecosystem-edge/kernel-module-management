@@ -292,7 +292,6 @@ func (m *mcfgImpl) UpdateInitramfsMachineConfig(mc *mcfgv1.MachineConfig, irm *k
 type initramfsScriptData struct {
 	Rollback       bool
 	ContainerImage string
-	ModulesPath    string
 	DirName        string
 	SpecHash       string
 	ModuleName     string
@@ -316,7 +315,6 @@ func renderInitramfsIgnition(irm *kmmv1beta1.InitramfsModule, builderAuth []byte
 	data := initramfsScriptData{
 		Rollback:       irm.Spec.Rollback,
 		ContainerImage: irm.Spec.ContainerImage,
-		ModulesPath:    irm.Spec.ModulesPath,
 		DirName:        irm.Spec.DirName,
 		ModuleName:     moduleName,
 		OmitDrivers:    omitDrivers,
@@ -380,14 +378,12 @@ func initramfsSpecHash(data initramfsScriptData) (string, error) {
 	raw, err := json.Marshal(struct {
 		Rollback       bool   `json:"rollback"`
 		ContainerImage string `json:"containerImage"`
-		ModulesPath    string `json:"modulesPath"`
 		DirName        string `json:"dirName"`
 		ModuleName     string `json:"moduleName"`
 		OmitDrivers    string `json:"omitDrivers"`
 	}{
 		Rollback:       data.Rollback,
 		ContainerImage: data.ContainerImage,
-		ModulesPath:    data.ModulesPath,
 		DirName:        data.DirName,
 		ModuleName:     data.ModuleName,
 		OmitDrivers:    data.OmitDrivers,
