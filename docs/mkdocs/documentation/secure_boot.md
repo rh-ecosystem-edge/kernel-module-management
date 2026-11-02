@@ -21,6 +21,11 @@ If you have a pre-built image, such as one distributed by a hardware vendor, or 
 Alternatively if you have source code and need to build your image first, please see the
 [Build and Sign](#building-and-signing-a-kmod-image) docs for deploying with KMM.
 
+!!! note "Build and signing pod tolerations"
+
+    KMM currently does not apply the `Module`'s `.spec.tolerations` to build or signing pods.
+    See [Tolerations](deploy_kmod.md#tolerations) for details.
+
 If all goes well KMM should load your driver into the node's kernel.
 If not, see [Common Issues](#debugging--troubleshooting).
 

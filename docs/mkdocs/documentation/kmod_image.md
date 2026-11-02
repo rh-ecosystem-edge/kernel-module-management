@@ -76,6 +76,11 @@ If it does, the build will be skipped.
 Otherwise, KMM will create a [`Build`](https://docs.openshift.com/container-platform/4.12/cicd/builds/build-configuration.html)
 object to build your image.
 
+!!! note "Build and signing pod tolerations"
+
+    KMM currently does not apply the `Module`'s `.spec.tolerations` to build or signing pods.
+    See [Tolerations](deploy_kmod.md#tolerations) for details.
+
 The following build arguments are automatically set by KMM:
 
 | Name                  | Description                            | Example                       |
