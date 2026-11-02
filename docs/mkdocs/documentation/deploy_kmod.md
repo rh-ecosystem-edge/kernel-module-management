@@ -183,6 +183,23 @@ The reconciliation loop for `Module` runs the following steps:
     2. successful build pods;
     3. successful signing pods.
 
+### Tolerations
+
+Set `.spec.tolerations` in a `Module` to configure tolerations for its worker pods, device plugin pods and DRA driver pods.
+
+!!! note "Build and signing pod tolerations"
+
+    KMM currently does not apply the `Module`'s `.spec.tolerations` to build or signing pods.
+    These pods use the legacy OpenShift `Build` API, which does not support per-build tolerations.
+
+To work around this limitation, use one of the following options:
+
+1. Temporarily remove the blocking taint from a node that matches the build or signing pod's node selector.
+   Wait for KMM to build, sign (if configured) and push the image, then restore the taint.
+2. Before tainting the nodes, create a [`PreflightValidationOCP`](preflight_validation.md) resource for the required kernel
+   version with `.spec.pushBuiltImage: true` to build, sign (if configured) and push the image in advance.
+   Wait for validation to succeed before applying the taints.
+
 ### Soft dependencies between kernel modules
 
 Some setups may require that several kernel modules be loaded in a specific order to work properly, although the modules
