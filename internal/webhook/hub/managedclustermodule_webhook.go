@@ -38,7 +38,7 @@ type ManagedClusterModuleValidator struct {
 func NewManagedClusterModuleValidator(logger logr.Logger, ocpVersion *version.OCPVersion) *ManagedClusterModuleValidator {
 	return &ManagedClusterModuleValidator{
 		logger: logger,
-		m:      webhook.NewModuleValidator(logger, ocpVersion),
+		m:      webhook.NewModuleValidator(logger, ocpVersion, nil),
 	}
 }
 
