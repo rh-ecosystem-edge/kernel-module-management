@@ -28,12 +28,22 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&ContainerRuntimeConfigList{},
 		&ControllerConfig{},
 		&ControllerConfigList{},
+		&InternalReleaseImage{},
+		&InternalReleaseImageList{},
 		&KubeletConfig{},
 		&KubeletConfigList{},
 		&MachineConfig{},
 		&MachineConfigList{},
 		&MachineConfigPool{},
 		&MachineConfigPoolList{},
+		&MachineOSConfig{},
+		&MachineOSConfigList{},
+		&MachineOSBuild{},
+		&MachineOSBuildList{},
+		&PinnedImageSet{},
+		&PinnedImageSetList{},
+		&MachineConfigNode{},
+		&MachineConfigNodeList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, GroupVersion)
