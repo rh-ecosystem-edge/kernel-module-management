@@ -9,7 +9,6 @@ import (
 	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
 	kmmclient "github.com/rh-ecosystem-edge/kernel-module-management/internal/client"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mcfg"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mic"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/node"
@@ -104,19 +103,8 @@ var _ = Describe("InitramfsModuleReconciler_Reconcile", func() {
 		Expect(err.Error()).To(ContainSubstring("finalize failed"))
 	})
 
-	It("returns the unstamped-object error and does not list nodes", func() {
-		irm := newIRM(nil, nil, nil)
-		mockHelper.EXPECT().checkUnstampedPoolAndMachineConfig(ctx, irm).Return(errors.New("MachineConfigPool kmm-initramfs already exists and is not stamped for this CR"))
-
-		_, err := r.Reconcile(ctx, irm)
-
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("not stamped"))
-	})
-
 	It("returns the list error and does not build images", func() {
 		irm := newIRM(nil, nil, nil)
-		mockHelper.EXPECT().checkUnstampedPoolAndMachineConfig(ctx, irm).Return(nil)
 		mockHelper.EXPECT().listSelectedNodes(ctx, irm).Return(nil, errors.New("list failed"))
 
 		_, err := r.Reconcile(ctx, irm)
@@ -128,7 +116,6 @@ var _ = Describe("InitramfsModuleReconciler_Reconcile", func() {
 	It("returns the node label error and does not build images", func() {
 		irm := newIRM(nil, nil, nil)
 		nodes := []v1.Node{nodeWithKernel("n1", "6.1.0")}
-		mockHelper.EXPECT().checkUnstampedPoolAndMachineConfig(ctx, irm).Return(nil)
 		mockHelper.EXPECT().listSelectedNodes(ctx, irm).Return(nodes, nil)
 		mockHelper.EXPECT().handleNodeLabels(ctx, irm, nodes).Return(errors.New("label failed"))
 
@@ -138,23 +125,16 @@ var _ = Describe("InitramfsModuleReconciler_Reconcile", func() {
 		Expect(err.Error()).To(ContainSubstring("label failed"))
 	})
 
-	It("calls the parse job, then the pool, then the MachineConfig", func() {
+	It("handles the pool before the MachineOSConfig", func() {
 		irm := newIRM(nil, nil, nil)
 		nodes := []v1.Node{nodeWithKernel("n1", "6.1.0")}
-		parsed := initramfsParseParams{
-			Kernels: map[string]mcfg.KernelInspectLists{
-				"6.1.0": {InTreeModules: []string{"crc32"}},
-			},
-		}
 		gomock.InOrder(
-			mockHelper.EXPECT().checkUnstampedPoolAndMachineConfig(ctx, irm).Return(nil),
 			mockHelper.EXPECT().listSelectedNodes(ctx, irm).Return(nodes, nil),
 			mockHelper.EXPECT().handleNodeLabels(ctx, irm, nodes).Return(nil),
 			mockHelper.EXPECT().handleMIC(ctx, irm, nodes).Return(nil),
 			mockHelper.EXPECT().areImagesReady(ctx, irm).Return(true, nil),
-			mockHelper.EXPECT().handleParseJob(ctx, irm).Return(parsed, nil),
 			mockHelper.EXPECT().handleMachineConfigPool(ctx, irm).Return(nil),
-			mockHelper.EXPECT().handleMachineConfig(ctx, irm, parsed).Return(nil),
+			mockHelper.EXPECT().handleMachineOSConfig(ctx, irm).Return(nil),
 		)
 
 		res, err := r.Reconcile(ctx, irm)
@@ -166,7 +146,6 @@ var _ = Describe("InitramfsModuleReconciler_Reconcile", func() {
 	It("returns the handleMIC error", func() {
 		irm := newIRM(nil, nil, nil)
 		nodes := []v1.Node{nodeWithKernel("n1", "6.1.0")}
-		mockHelper.EXPECT().checkUnstampedPoolAndMachineConfig(ctx, irm).Return(nil)
 		mockHelper.EXPECT().listSelectedNodes(ctx, irm).Return(nodes, nil)
 		mockHelper.EXPECT().handleNodeLabels(ctx, irm, nodes).Return(nil)
 		mockHelper.EXPECT().handleMIC(ctx, irm, nodes).Return(errors.New("apply failed"))
@@ -177,11 +156,10 @@ var _ = Describe("InitramfsModuleReconciler_Reconcile", func() {
 		Expect(err.Error()).To(ContainSubstring("apply failed"))
 	})
 
-	It("does not create the pool or MachineConfig when the image does not exist yet", func() {
+	It("does not create the pool or MachineOSConfig when the image does not exist yet", func() {
 		irm := newIRM(nil, nil, nil)
 		nodes := []v1.Node{nodeWithKernel("n1", "6.1.0")}
 		gomock.InOrder(
-			mockHelper.EXPECT().checkUnstampedPoolAndMachineConfig(ctx, irm).Return(nil),
 			mockHelper.EXPECT().listSelectedNodes(ctx, irm).Return(nodes, nil),
 			mockHelper.EXPECT().handleNodeLabels(ctx, irm, nodes).Return(nil),
 			mockHelper.EXPECT().handleMIC(ctx, irm, nodes).Return(nil),
@@ -198,7 +176,6 @@ var _ = Describe("InitramfsModuleReconciler_Reconcile", func() {
 		irm := newIRM(nil, nil, nil)
 		nodes := []v1.Node{nodeWithKernel("n1", "6.1.0")}
 		gomock.InOrder(
-			mockHelper.EXPECT().checkUnstampedPoolAndMachineConfig(ctx, irm).Return(nil),
 			mockHelper.EXPECT().listSelectedNodes(ctx, irm).Return(nodes, nil),
 			mockHelper.EXPECT().handleNodeLabels(ctx, irm, nodes).Return(nil),
 			mockHelper.EXPECT().handleMIC(ctx, irm, nodes).Return(nil),
@@ -211,34 +188,13 @@ var _ = Describe("InitramfsModuleReconciler_Reconcile", func() {
 		Expect(err.Error()).To(ContainSubstring("get failed"))
 	})
 
-	It("returns the parse job error and does not create the pool", func() {
-		irm := newIRM(nil, nil, nil)
-		nodes := []v1.Node{nodeWithKernel("n1", "6.1.0")}
-		gomock.InOrder(
-			mockHelper.EXPECT().checkUnstampedPoolAndMachineConfig(ctx, irm).Return(nil),
-			mockHelper.EXPECT().listSelectedNodes(ctx, irm).Return(nodes, nil),
-			mockHelper.EXPECT().handleNodeLabels(ctx, irm, nodes).Return(nil),
-			mockHelper.EXPECT().handleMIC(ctx, irm, nodes).Return(nil),
-			mockHelper.EXPECT().areImagesReady(ctx, irm).Return(true, nil),
-			mockHelper.EXPECT().handleParseJob(ctx, irm).Return(initramfsParseParams{}, errors.New("parse failed")),
-		)
-
-		_, err := r.Reconcile(ctx, irm)
-
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("parse failed"))
-	})
-
 	It("returns the MachineConfigPool error", func() {
 		irm := newIRM(nil, nil, nil)
 		nodes := []v1.Node{nodeWithKernel("n1", "6.1.0")}
-		parsed := initramfsParseParams{}
-		mockHelper.EXPECT().checkUnstampedPoolAndMachineConfig(ctx, irm).Return(nil)
 		mockHelper.EXPECT().listSelectedNodes(ctx, irm).Return(nodes, nil)
 		mockHelper.EXPECT().handleNodeLabels(ctx, irm, nodes).Return(nil)
 		mockHelper.EXPECT().handleMIC(ctx, irm, nodes).Return(nil)
 		mockHelper.EXPECT().areImagesReady(ctx, irm).Return(true, nil)
-		mockHelper.EXPECT().handleParseJob(ctx, irm).Return(parsed, nil)
 		mockHelper.EXPECT().handleMachineConfigPool(ctx, irm).Return(errors.New("mcp failed"))
 
 		_, err := r.Reconcile(ctx, irm)
@@ -247,18 +203,15 @@ var _ = Describe("InitramfsModuleReconciler_Reconcile", func() {
 		Expect(err.Error()).To(ContainSubstring("mcp failed"))
 	})
 
-	It("returns the MachineConfig error", func() {
+	It("returns the MachineOSConfig error", func() {
 		irm := newIRM(nil, nil, nil)
 		nodes := []v1.Node{nodeWithKernel("n1", "6.1.0")}
-		parsed := initramfsParseParams{}
-		mockHelper.EXPECT().checkUnstampedPoolAndMachineConfig(ctx, irm).Return(nil)
 		mockHelper.EXPECT().listSelectedNodes(ctx, irm).Return(nodes, nil)
 		mockHelper.EXPECT().handleNodeLabels(ctx, irm, nodes).Return(nil)
 		mockHelper.EXPECT().handleMIC(ctx, irm, nodes).Return(nil)
 		mockHelper.EXPECT().areImagesReady(ctx, irm).Return(true, nil)
-		mockHelper.EXPECT().handleParseJob(ctx, irm).Return(parsed, nil)
 		mockHelper.EXPECT().handleMachineConfigPool(ctx, irm).Return(nil)
-		mockHelper.EXPECT().handleMachineConfig(ctx, irm, parsed).Return(errors.New("mc failed"))
+		mockHelper.EXPECT().handleMachineOSConfig(ctx, irm).Return(errors.New("mc failed"))
 
 		_, err := r.Reconcile(ctx, irm)
 
@@ -280,7 +233,7 @@ var _ = Describe("initramfsModuleReconcilerHelper", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		mockNode = node.NewMockNode(ctrl)
 		mockMIC = mic.NewMockMIC(ctrl)
-		h = newInitramfsModuleReconcilerHelper(nil, nil, mockMIC, mockNode, nil)
+		h = newInitramfsModuleReconcilerHelper(nil, mockMIC, mockNode, nil)
 		ctx = context.Background()
 	})
 
@@ -385,12 +338,6 @@ var _ = Describe("initramfsModuleReconcilerHelper", func() {
 		Expect(h.finalize(ctx, newIRM(nil, nil, nil))).To(Succeed())
 	})
 
-	It("returns no parse parameters and does not use the client", func() {
-		parsed, err := h.handleParseJob(ctx, newIRM(nil, nil, nil))
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(parsed).To(Equal(initramfsParseParams{}))
-	})
 })
 
 var _ = Describe("areImagesReady", func() {
@@ -407,7 +354,7 @@ var _ = Describe("areImagesReady", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = kmmclient.NewMockClient(ctrl)
 		mockMIC = mic.NewMockMIC(ctrl)
-		h = newInitramfsModuleReconcilerHelper(clnt, nil, mockMIC, nil, nil)
+		h = newInitramfsModuleReconcilerHelper(clnt, mockMIC, nil, nil)
 		ctx = context.Background()
 		irm = newIRM(nil, nil, nil)
 	})
@@ -468,7 +415,7 @@ var _ = Describe("handleNodeLabels", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		mockNode = node.NewMockNode(ctrl)
-		h = newInitramfsModuleReconcilerHelper(nil, nil, nil, mockNode, nil)
+		h = newInitramfsModuleReconcilerHelper(nil, nil, mockNode, nil)
 		ctx = context.Background()
 	})
 
@@ -519,7 +466,7 @@ var _ = Describe("handleNodeLabels", func() {
 	})
 })
 
-var _ = Describe("initramfs MachineConfigPool and MachineConfig", func() {
+var _ = Describe("initramfs MachineConfigPool and MachineOSConfig", func() {
 	var (
 		ctx      context.Context
 		ctrl     *gomock.Controller
@@ -533,43 +480,21 @@ var _ = Describe("initramfs MachineConfigPool and MachineConfig", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		clnt = kmmclient.NewMockClient(ctrl)
 		mockMCFG = mcfg.NewMockMCFG(ctrl)
-		h = newInitramfsModuleReconcilerHelper(clnt, clnt, nil, nil, mockMCFG)
+		h = newInitramfsModuleReconcilerHelper(clnt, nil, nil, mockMCFG)
 	})
 
-	It("accepts a cluster with neither object", func() {
-		expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName)
-		expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName)
-
-		Expect(h.checkUnstampedPoolAndMachineConfig(ctx, newIRM(nil, nil, nil))).To(Succeed())
-	})
-
-	It("creates the pool and MachineConfig without an ownerReference", func() {
+	It("creates the pool without an ownerReference", func() {
 		irm := newIRM(nil, nil, nil)
-		kernels := map[string]mcfg.KernelInspectLists{
-			"6.1.0": {InTreeModules: []string{"crc32"}},
-		}
 		var pool *mcfgv1.MachineConfigPool
-		var mc *mcfgv1.MachineConfig
-		auth := []byte(`{"auths":{"registry.example.com":{"auth":"dG9rZW4="}}}`)
-		secret := dockerConfigSecret(builderDockercfgSecret, map[string][]byte{v1.DockerConfigJsonKey: auth})
 		gomock.InOrder(
-			expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName),
+			expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName, &mcfgv1.MachineConfigPool{}),
 			mockMCFG.EXPECT().UpdateInitramfsPool(gomock.Any(), irm),
 			expectCreate(clnt, ctx, func(obj client.Object) { pool = obj.(*mcfgv1.MachineConfigPool).DeepCopy() }),
-			expectServiceAccount(clnt, ctx, builderServiceAccount(builderDockercfgSecret), nil),
-			expectNamedSecret(clnt, ctx, secret, nil),
-			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
-			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, kernels, auth).Return(nil),
-			expectCreate(clnt, ctx, func(obj client.Object) { mc = obj.(*mcfgv1.MachineConfig).DeepCopy() }),
 		)
 
 		Expect(h.handleMachineConfigPool(ctx, irm)).To(Succeed())
-		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{Kernels: kernels})).To(Succeed())
-
 		Expect(pool.Name).To(Equal(mcfg.InitramfsPoolName))
-		Expect(mc.Name).To(Equal(mcfg.InitramfsMachineConfigName))
 		Expect(pool.OwnerReferences).To(BeEmpty())
-		Expect(mc.OwnerReferences).To(BeEmpty())
 	})
 
 	It("patches an existing pool instead of creating it again", func() {
@@ -580,9 +505,6 @@ var _ = Describe("initramfs MachineConfigPool and MachineConfig", func() {
 		}}
 		var patched *mcfgv1.MachineConfigPool
 		gomock.InOrder(
-			expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName),
-			mockMCFG.EXPECT().UpdateInitramfsPool(gomock.Any(), irm),
-			expectCreate(clnt, ctx, func(client.Object) {}),
 			expectGetObject(clnt, ctx, existing),
 			mockMCFG.EXPECT().UpdateInitramfsPool(gomock.Any(), irm).Do(
 				func(pool *mcfgv1.MachineConfigPool, _ *kmmv1beta1.InitramfsModule) {
@@ -593,111 +515,131 @@ var _ = Describe("initramfs MachineConfigPool and MachineConfig", func() {
 		)
 
 		Expect(h.handleMachineConfigPool(ctx, irm)).To(Succeed())
-		Expect(h.handleMachineConfigPool(ctx, irm)).To(Succeed())
-
 		Expect(patched.UID).To(Equal(existing.UID))
 		Expect(patched.Annotations).To(HaveKeyWithValue("updated", "yes"))
 	})
 
-	It("refuses a pool that is not stamped for this CR and does not create the MachineConfig", func() {
+	DescribeTable("returns pool API errors", func(failCreate bool) {
 		irm := newIRM(nil, nil, nil)
-		existing := &mcfgv1.MachineConfigPool{
-			ObjectMeta: metav1.ObjectMeta{Name: mcfg.InitramfsPoolName},
-			Spec:       mcfgv1.MachineConfigPoolSpec{Paused: true},
+		failure := errors.New("pool API failed")
+		if failCreate {
+			expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName, &mcfgv1.MachineConfigPool{})
+			mockMCFG.EXPECT().UpdateInitramfsPool(gomock.Any(), irm)
+			clnt.EXPECT().Create(ctx, gomock.AssignableToTypeOf(&mcfgv1.MachineConfigPool{})).Return(failure)
+		} else {
+			clnt.EXPECT().Get(ctx, client.ObjectKey{Name: mcfg.InitramfsPoolName}, gomock.AssignableToTypeOf(&mcfgv1.MachineConfigPool{})).Return(failure)
 		}
-		gomock.InOrder(
-			expectGetObject(clnt, ctx, existing),
-			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
-			mockMCFG.EXPECT().StampedForInitramfsModule(gomock.Any(), irm).Return(false),
+		Expect(h.handleMachineConfigPool(ctx, irm)).To(MatchError(failure))
+	}, Entry("get", false), Entry("create", true))
+
+	DescribeTable("creates or patches the MachineOSConfig", func(exists, stamped bool) {
+		irm := newIRM(nil, nil, nil)
+		existing := &mcfgv1.MachineOSConfig{ObjectMeta: metav1.ObjectMeta{
+			Name:        mcfg.InitramfsMachineOSConfigName,
+			UID:         "mosc-uid",
+			Annotations: map[string]string{"keep": "yes"},
+		}, Spec: mcfgv1.MachineOSConfigSpec{RenderedImagePushSpec: "registry.example.com/os:existing"}}
+		if stamped {
+			existing.Annotations[mcfg.InitramfsModuleNamespaceAnnotation] = irm.Namespace
+			existing.Annotations[mcfg.InitramfsModuleNameAnnotation] = irm.Name
+		}
+		var actual *mcfgv1.MachineOSConfig
+		if exists {
+			expectGetObject(clnt, ctx, existing)
+		} else {
+			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineOSConfigName, &mcfgv1.MachineOSConfig{})
+		}
+		mockMCFG.EXPECT().UpdateInitramfsMachineOSConfig(gomock.Any(), irm).DoAndReturn(
+			func(mosc *mcfgv1.MachineOSConfig, irm *kmmv1beta1.InitramfsModule) error {
+				return mcfg.NewMCFG("").UpdateInitramfsMachineOSConfig(mosc, irm)
+			},
 		)
+		capture := func(obj client.Object) { actual = obj.(*mcfgv1.MachineOSConfig).DeepCopy() }
+		if !exists {
+			expectCreate(clnt, ctx, capture)
+		} else if !stamped {
+			expectPatch(clnt, ctx, capture)
+		}
 
-		err := h.checkUnstampedPoolAndMachineConfig(ctx, irm)
+		Expect(h.handleMachineOSConfig(ctx, irm)).To(Succeed())
 
-		Expect(err).To(MatchError(ContainSubstring("MachineConfigPool kmm-initramfs already exists and is not stamped for this CR")))
-		Expect(existing.Spec.Paused).To(BeTrue())
-		Expect(existing.Spec.NodeSelector).To(BeNil())
-		Expect(existing.Spec.MachineConfigSelector).To(BeNil())
+		if stamped {
+			Expect(actual).To(BeNil())
+			return
+		}
+		Expect(actual).NotTo(BeNil())
+		Expect(actual.Name).To(Equal(mcfg.InitramfsMachineOSConfigName))
+		Expect(actual.Namespace).To(BeEmpty())
+		Expect(actual.OwnerReferences).To(BeEmpty())
+		Expect(actual.Annotations).To(HaveKeyWithValue(mcfg.InitramfsModuleNamespaceAnnotation, irm.Namespace))
+		Expect(actual.Annotations).To(HaveKeyWithValue(mcfg.InitramfsModuleNameAnnotation, irm.Name))
+		if exists {
+			Expect(actual.UID).To(Equal(existing.UID))
+			Expect(actual.Annotations).To(HaveKeyWithValue("keep", "yes"))
+			Expect(actual.Spec).To(Equal(existing.Spec))
+		} else {
+			Expect(actual.Spec).To(Equal(mcfgv1.MachineOSConfigSpec{}))
+		}
+	}, Entry("create", false, false), Entry("patch", true, false), Entry("unchanged", true, true))
+
+	DescribeTable("propagates MachineOSConfig errors", func(stage string) {
+		irm := newIRM(nil, nil, nil)
+		failure := errors.New("MachineOSConfig failed")
+		if stage == "get" {
+			clnt.EXPECT().Get(ctx, client.ObjectKey{Name: mcfg.InitramfsMachineOSConfigName}, gomock.AssignableToTypeOf(&mcfgv1.MachineOSConfig{})).Return(failure)
+		} else {
+			if stage == "patch" {
+				expectGetObject(clnt, ctx, &mcfgv1.MachineOSConfig{ObjectMeta: metav1.ObjectMeta{Name: mcfg.InitramfsMachineOSConfigName}})
+			} else {
+				expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineOSConfigName, &mcfgv1.MachineOSConfig{})
+			}
+			mockMCFG.EXPECT().UpdateInitramfsMachineOSConfig(gomock.Any(), irm).DoAndReturn(
+				func(mosc *mcfgv1.MachineOSConfig, _ *kmmv1beta1.InitramfsModule) error {
+					if stage == "populate" {
+						return failure
+					}
+					mosc.Annotations = map[string]string{"updated": "yes"}
+					return nil
+				},
+			)
+			if stage == "create" {
+				clnt.EXPECT().Create(ctx, gomock.AssignableToTypeOf(&mcfgv1.MachineOSConfig{})).Return(failure)
+			} else if stage == "patch" {
+				clnt.EXPECT().Patch(ctx, gomock.AssignableToTypeOf(&mcfgv1.MachineOSConfig{}), gomock.Any()).Return(failure)
+			}
+		}
+
+		Expect(h.handleMachineOSConfig(ctx, irm)).To(MatchError(failure))
+	}, Entry("get", "get"), Entry("populate", "populate"), Entry("create", "create"), Entry("patch", "patch"))
+
+})
+
+var _ = Describe("InitramfsModuleReconciler resource integration", func() {
+	var (
+		ctx      context.Context
+		ctrl     *gomock.Controller
+		clnt     *kmmclient.MockClient
+		mockMIC  *mic.MockMIC
+		mockNode *node.MockNode
+		r        *initramfsModuleReconciler
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		ctrl = gomock.NewController(GinkgoT())
+		clnt = kmmclient.NewMockClient(ctrl)
+		mockMIC = mic.NewMockMIC(ctrl)
+		mockNode = node.NewMockNode(ctrl)
+		r = NewInitramfsModuleReconciler(clnt, mockMIC, mockNode, mcfg.NewMCFG(""), nil)
 	})
 
-	It("accepts a pool and MachineConfig that are stamped for this CR", func() {
-		irm := newIRM(nil, nil, nil)
-		pool := &mcfgv1.MachineConfigPool{ObjectMeta: metav1.ObjectMeta{Name: mcfg.InitramfsPoolName}}
-		pool.Spec.NodeSelector = &metav1.LabelSelector{MatchLabels: map[string]string{"touched": "yes"}}
-		mc := &mcfgv1.MachineConfig{
-			ObjectMeta: metav1.ObjectMeta{Name: mcfg.InitramfsMachineConfigName},
-			Spec:       mcfgv1.MachineConfigSpec{OSImageURL: "keep"},
-		}
-		gomock.InOrder(
-			expectGetObject(clnt, ctx, pool),
-			expectGetObject(clnt, ctx, mc),
-			mockMCFG.EXPECT().StampedForInitramfsModule(gomock.Any(), irm).Return(true),
-			mockMCFG.EXPECT().StampedForInitramfsModule(gomock.Any(), irm).Return(true),
-		)
-
-		Expect(h.checkUnstampedPoolAndMachineConfig(ctx, irm)).To(Succeed())
-		Expect(pool.Spec.NodeSelector.MatchLabels).To(HaveKeyWithValue("touched", "yes"))
-		Expect(mc.Spec.OSImageURL).To(Equal("keep"))
-	})
-
-	It("refuses a MachineConfig that is not stamped for this CR and does not create the pool", func() {
-		irm := newIRM(nil, nil, nil)
-		existing := &mcfgv1.MachineConfig{
-			ObjectMeta: metav1.ObjectMeta{Name: mcfg.InitramfsMachineConfigName},
-			Spec:       mcfgv1.MachineConfigSpec{OSImageURL: "keep"},
-		}
-		gomock.InOrder(
-			expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName),
-			expectGetObject(clnt, ctx, existing),
-			mockMCFG.EXPECT().StampedForInitramfsModule(gomock.Any(), irm).Return(false),
-		)
-
-		err := h.checkUnstampedPoolAndMachineConfig(ctx, irm)
-
-		Expect(err).To(MatchError(ContainSubstring("MachineConfig 99-kmm-initramfs already exists and is not stamped for this CR")))
-		Expect(existing.Spec.OSImageURL).To(Equal("keep"))
-		Expect(existing.Labels).To(BeEmpty())
-	})
-
-	It("does not create the pool or MachineConfig from Reconcile when the image does not exist", func() {
-		mockNode := node.NewMockNode(ctrl)
-		mockMIC := mic.NewMockMIC(ctrl)
+	DescribeTable("creates or patches KMM resources only when images are ready", func(ready, exists bool) {
 		selector := map[string]string{"kmm-test": "initramfs"}
 		irm := newIRM(selector, nil, nil)
 		nodes := []v1.Node{nodeWithKernel("n1", "6.1.0")}
-		r := NewInitramfsModuleReconciler(clnt, clnt, mockMIC, mockNode, mockMCFG, nil)
-		gomock.InOrder(
-			expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName),
-			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
-			mockNode.EXPECT().GetAllNodesBySelector(ctx, selector).Return(nodes, nil),
-			mockMIC.EXPECT().CreateOrPatch(
-				ctx, "irm-"+irmName, irmNS,
-				[]kmmv1beta1.ModuleImageSpec{imageSpec("6.1.0", nil, nil, irm)},
-				irm.Spec.ImageRepoSecret, v1.PullPolicy(""), true, nil, nil, irm,
-			).Return(nil),
-			expectGetMIC(clnt, ctx, existingInitramfsMIC()),
-			mockMIC.EXPECT().DoAllImagesExist(gomock.Any()).Return(false),
-		)
-
-		res, err := r.Reconcile(ctx, irm)
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res).To(Equal(reconcile.Result{}))
-	})
-
-	It("creates both objects from Reconcile when the image exists and the parse job returns no lists", func() {
-		mockNode := node.NewMockNode(ctrl)
-		mockMIC := mic.NewMockMIC(ctrl)
-		selector := map[string]string{"kmm-test": "initramfs"}
-		irm := newIRM(selector, nil, nil)
-		nodes := []v1.Node{nodeWithKernel("n1", "6.1.0")}
-		r := NewInitramfsModuleReconciler(clnt, clnt, mockMIC, mockNode, mockMCFG, nil)
 		var pool *mcfgv1.MachineConfigPool
-		var mc *mcfgv1.MachineConfig
-		auth := []byte(`{"auths":{"registry.example.com":{"auth":"dG9rZW4="}}}`)
-		secret := dockerConfigSecret(builderDockercfgSecret, map[string][]byte{v1.DockerConfigJsonKey: auth})
-		gomock.InOrder(
-			expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName),
-			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
+		var mosc *mcfgv1.MachineOSConfig
+		calls := []*gomock.Call{
 			mockNode.EXPECT().GetAllNodesBySelector(ctx, selector).Return(nodes, nil),
 			mockMIC.EXPECT().CreateOrPatch(
 				ctx, "irm-"+irmName, irmNS,
@@ -705,212 +647,66 @@ var _ = Describe("initramfs MachineConfigPool and MachineConfig", func() {
 				irm.Spec.ImageRepoSecret, v1.PullPolicy(""), true, nil, nil, irm,
 			).Return(nil),
 			expectGetMIC(clnt, ctx, existingInitramfsMIC()),
-			mockMIC.EXPECT().DoAllImagesExist(gomock.Any()).Return(true),
-			expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName),
-			mockMCFG.EXPECT().UpdateInitramfsPool(gomock.Any(), irm),
-			expectCreate(clnt, ctx, func(obj client.Object) { pool = obj.(*mcfgv1.MachineConfigPool).DeepCopy() }),
-			expectServiceAccount(clnt, ctx, builderServiceAccount(builderDockercfgSecret), nil),
-			expectNamedSecret(clnt, ctx, secret, nil),
-			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
-			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, gomock.Nil(), auth).Return(nil),
-			expectCreate(clnt, ctx, func(obj client.Object) { mc = obj.(*mcfgv1.MachineConfig).DeepCopy() }),
-		)
+			mockMIC.EXPECT().DoAllImagesExist(gomock.Any()).Return(ready),
+		}
+		poolBefore := &mcfgv1.MachineConfigPool{ObjectMeta: metav1.ObjectMeta{
+			Name: mcfg.InitramfsPoolName, UID: "pool-uid", Annotations: map[string]string{"keep": "yes"},
+		}}
+		moscBefore := &mcfgv1.MachineOSConfig{ObjectMeta: metav1.ObjectMeta{
+			Name: mcfg.InitramfsMachineOSConfigName, UID: "mosc-uid", Annotations: map[string]string{"keep": "yes"},
+		}, Spec: mcfgv1.MachineOSConfigSpec{RenderedImagePushSpec: "registry.example.com/os:existing"}}
+		if ready {
+			if exists {
+				calls = append(calls,
+					expectGetObject(clnt, ctx, poolBefore),
+					expectPatch(clnt, ctx, func(obj client.Object) { pool = obj.(*mcfgv1.MachineConfigPool).DeepCopy() }),
+					expectGetObject(clnt, ctx, moscBefore),
+					expectPatch(clnt, ctx, func(obj client.Object) { mosc = obj.(*mcfgv1.MachineOSConfig).DeepCopy() }),
+				)
+			} else {
+				calls = append(calls,
+					expectGetNotFound(clnt, ctx, mcfg.InitramfsPoolName, &mcfgv1.MachineConfigPool{}),
+					expectCreate(clnt, ctx, func(obj client.Object) { pool = obj.(*mcfgv1.MachineConfigPool).DeepCopy() }),
+					expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineOSConfigName, &mcfgv1.MachineOSConfig{}),
+					expectCreate(clnt, ctx, func(obj client.Object) { mosc = obj.(*mcfgv1.MachineOSConfig).DeepCopy() }),
+				)
+			}
+		}
+		for i := 1; i < len(calls); i++ {
+			calls[i].After(calls[i-1])
+		}
 
 		res, err := r.Reconcile(ctx, irm)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res).To(Equal(reconcile.Result{}))
-		Expect(pool.Name).To(Equal(mcfg.InitramfsPoolName))
-		Expect(mc.Name).To(Equal(mcfg.InitramfsMachineConfigName))
-		Expect(pool.OwnerReferences).To(BeEmpty())
-		Expect(mc.OwnerReferences).To(BeEmpty())
-	})
-
-	It("passes builder docker config into the MachineConfig for an internal image", func() {
-		irm := newIRM(nil, nil, nil)
-		irm.Spec.ContainerImage = "image-registry.openshift-image-registry.svc:5000/ns/nic:v1"
-		auth := []byte(`{"auths":{"image-registry.openshift-image-registry.svc:5000":{"auth":"dG9rZW4="}}}`)
-		secret := dockerConfigSecret(builderDockercfgSecret, map[string][]byte{v1.DockerConfigJsonKey: auth})
-		gomock.InOrder(
-			expectServiceAccount(clnt, ctx, builderServiceAccount(builderDockercfgSecret), nil),
-			expectNamedSecret(clnt, ctx, secret, nil),
-			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
-			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, gomock.Nil(), auth).Return(nil),
-			expectCreate(clnt, ctx, func(client.Object) {}),
-		)
-
-		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(Succeed())
-	})
-
-	It("passes builder docker config into the MachineConfig for an external image", func() {
-		irm := newIRM(nil, nil, nil)
-		auth := []byte(`{"auths":{"registry.example.com":{"auth":"dG9rZW4="}}}`)
-		secret := dockerConfigSecret(builderDockercfgSecret, map[string][]byte{v1.DockerConfigJsonKey: auth})
-		gomock.InOrder(
-			expectServiceAccount(clnt, ctx, builderServiceAccount(builderDockercfgSecret), nil),
-			expectNamedSecret(clnt, ctx, secret, nil),
-			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
-			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, gomock.Nil(), auth).Return(nil),
-			expectCreate(clnt, ctx, func(client.Object) {}),
-		)
-
-		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(Succeed())
-	})
-
-	It("wraps a dockercfg secret as docker config JSON", func() {
-		irm := newIRM(nil, nil, nil)
-		dockercfg := []byte(`{"reg:5000":{"username":"sa","password":"tok"}}`)
-		secret := dockerConfigSecret(builderDockercfgSecret, map[string][]byte{v1.DockerConfigKey: dockercfg})
-		wrapped := []byte(`{"auths":{"reg:5000":{"username":"sa","password":"tok"}}}`)
-		gomock.InOrder(
-			expectServiceAccount(clnt, ctx, builderServiceAccount(builderDockercfgSecret), nil),
-			expectNamedSecret(clnt, ctx, secret, nil),
-			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
-			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, gomock.Nil(), wrapped).Return(nil),
-			expectCreate(clnt, ctx, func(client.Object) {}),
-		)
-
-		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(Succeed())
-	})
-
-	It("prefers docker config JSON when the pull secret has both keys", func() {
-		irm := newIRM(nil, nil, nil)
-		auth := []byte(`{"auths":{"reg:5000":{"auth":"dG9rZW4="}}}`)
-		secret := dockerConfigSecret(builderDockercfgSecret, map[string][]byte{
-			v1.DockerConfigJsonKey: auth,
-			v1.DockerConfigKey:     []byte(`{"reg:5000":{"username":"sa","password":"tok"}}`),
-		})
-		gomock.InOrder(
-			expectServiceAccount(clnt, ctx, builderServiceAccount(builderDockercfgSecret), nil),
-			expectNamedSecret(clnt, ctx, secret, nil),
-			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
-			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, gomock.Nil(), auth).Return(nil),
-			expectCreate(clnt, ctx, func(client.Object) {}),
-		)
-
-		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(Succeed())
-	})
-
-	It("ignores an earlier image pull secret that is not a builder dockercfg secret", func() {
-		irm := newIRM(nil, nil, nil)
-		auth := []byte(`{"auths":{"reg:5000":{"auth":"dG9rZW4="}}}`)
-		secret := dockerConfigSecret(builderDockercfgSecret, map[string][]byte{v1.DockerConfigJsonKey: auth})
-		gomock.InOrder(
-			expectServiceAccount(clnt, ctx, builderServiceAccount("other-pull", builderDockercfgSecret), nil),
-			expectNamedSecret(clnt, ctx, secret, nil),
-			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
-			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, gomock.Nil(), auth).Return(nil),
-			expectCreate(clnt, ctx, func(client.Object) {}),
-		)
-
-		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(Succeed())
-	})
-
-	It("accepts valid JSON that is not an object", func() {
-		irm := newIRM(nil, nil, nil)
-		auth := []byte(`[]`)
-		secret := dockerConfigSecret(builderDockercfgSecret, map[string][]byte{v1.DockerConfigJsonKey: auth})
-		gomock.InOrder(
-			expectServiceAccount(clnt, ctx, builderServiceAccount(builderDockercfgSecret), nil),
-			expectNamedSecret(clnt, ctx, secret, nil),
-			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
-			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, gomock.Nil(), auth).Return(nil),
-			expectCreate(clnt, ctx, func(client.Object) {}),
-		)
-		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(Succeed())
-
-		dockercfg := []byte(`[]`)
-		wrapped := []byte(`{"auths":[]}`)
-		secret = dockerConfigSecret(builderDockercfgSecret, map[string][]byte{v1.DockerConfigKey: dockercfg})
-		gomock.InOrder(
-			expectServiceAccount(clnt, ctx, builderServiceAccount(builderDockercfgSecret), nil),
-			expectNamedSecret(clnt, ctx, secret, nil),
-			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
-			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, gomock.Nil(), wrapped).Return(nil),
-			expectCreate(clnt, ctx, func(client.Object) {}),
-		)
-		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(Succeed())
-	})
-
-	It("returns an error when a builder dockercfg secret is not valid docker config", func() {
-		irm := newIRM(nil, nil, nil)
-		for _, tc := range []struct {
-			data map[string][]byte
-			msg  string
-		}{
-			{map[string][]byte{}, "has no .dockerconfigjson or .dockercfg data"},
-			{map[string][]byte{v1.DockerConfigKey: []byte(`not-json`)}, "has invalid .dockercfg data"},
-			{map[string][]byte{v1.DockerConfigJsonKey: []byte(`not-json`)}, "has invalid .dockerconfigjson data"},
-		} {
-			expectServiceAccount(clnt, ctx, builderServiceAccount("builder-dockercfg-bad", builderDockercfgSecret), nil)
-			expectNamedSecret(clnt, ctx, dockerConfigSecret("builder-dockercfg-bad", tc.data), nil)
-
-			Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(MatchError(ContainSubstring(tc.msg)))
+		if ready {
+			Expect(pool).NotTo(BeNil())
+			Expect(mosc).NotTo(BeNil())
+			Expect(pool.Name).To(Equal(mcfg.InitramfsPoolName))
+			Expect(pool.Spec.NodeSelector.MatchLabels).To(Equal(selector))
+			Expect(pool.OwnerReferences).To(BeEmpty())
+			Expect(pool.Annotations).To(HaveKeyWithValue(mcfg.InitramfsModuleNamespaceAnnotation, irm.Namespace))
+			Expect(pool.Annotations).To(HaveKeyWithValue(mcfg.InitramfsModuleNameAnnotation, irm.Name))
+			Expect(mosc.Name).To(Equal(mcfg.InitramfsMachineOSConfigName))
+			Expect(mosc.OwnerReferences).To(BeEmpty())
+			Expect(mosc.Annotations).To(HaveKeyWithValue(mcfg.InitramfsModuleNamespaceAnnotation, irm.Namespace))
+			Expect(mosc.Annotations).To(HaveKeyWithValue(mcfg.InitramfsModuleNameAnnotation, irm.Name))
+			if exists {
+				Expect(pool.UID).To(Equal(poolBefore.UID))
+				Expect(pool.Annotations).To(HaveKeyWithValue("keep", "yes"))
+				Expect(mosc.UID).To(Equal(moscBefore.UID))
+				Expect(mosc.Annotations).To(HaveKeyWithValue("keep", "yes"))
+				Expect(mosc.Spec).To(Equal(moscBefore.Spec))
+			} else {
+				Expect(mosc.Spec).To(Equal(mcfgv1.MachineOSConfigSpec{}))
+			}
+		} else {
+			Expect(pool).To(BeNil())
+			Expect(mosc).To(BeNil())
 		}
-	})
+	}, Entry("image pending", false, false), Entry("image ready with new resources", true, false), Entry("image ready with existing unstamped resources", true, true))
 
-	It("returns an error when no image pull secret name starts with builder-dockercfg", func() {
-		irm := newIRM(nil, nil, nil)
-		expectServiceAccount(clnt, ctx, builderServiceAccount("other-pull"), nil)
-
-		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(HaveOccurred())
-	})
-
-	It("returns an error and does not update the MachineConfig when builder pull auth cannot be read", func() {
-		irm := newIRM(nil, nil, nil)
-		expectServiceAccount(clnt, ctx, nil, notFound())
-		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(HaveOccurred())
-
-		expectServiceAccount(clnt, ctx, builderServiceAccount(), nil)
-		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(HaveOccurred())
-
-		expectServiceAccount(clnt, ctx, builderServiceAccount(builderDockercfgSecret), nil)
-		expectNamedSecret(clnt, ctx, dockerConfigSecret(builderDockercfgSecret, nil), notFound())
-		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(HaveOccurred())
-	})
-
-	It("returns an error when image pull secrets have no docker config", func() {
-		irm := newIRM(nil, nil, nil)
-		for _, data := range []map[string][]byte{
-			nil,
-			{v1.DockerConfigJsonKey: nil},
-			{v1.DockerConfigJsonKey: {}},
-			{v1.DockerConfigJsonKey: []byte(`not-json`)},
-			{v1.DockerConfigKey: nil},
-			{v1.DockerConfigKey: {}},
-			{v1.DockerConfigKey: []byte(`not-json`)},
-		} {
-			expectServiceAccount(clnt, ctx, builderServiceAccount(builderDockercfgSecret), nil)
-			expectNamedSecret(clnt, ctx, dockerConfigSecret(builderDockercfgSecret, data), nil)
-
-			Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(HaveOccurred())
-		}
-	})
-
-	It("passes builder docker config into the MachineConfig when rolling back", func() {
-		irm := newIRM(nil, nil, nil)
-		irm.Spec.ContainerImage = "image-registry.openshift-image-registry.svc:5000/ns/nic:v1"
-		irm.Spec.Rollback = true
-		auth := []byte(`{"auths":{"image-registry.openshift-image-registry.svc:5000":{"auth":"dG9rZW4="}}}`)
-		secret := dockerConfigSecret(builderDockercfgSecret, map[string][]byte{v1.DockerConfigJsonKey: auth})
-		gomock.InOrder(
-			expectServiceAccount(clnt, ctx, builderServiceAccount(builderDockercfgSecret), nil),
-			expectNamedSecret(clnt, ctx, secret, nil),
-			expectGetNotFound(clnt, ctx, mcfg.InitramfsMachineConfigName),
-			mockMCFG.EXPECT().UpdateInitramfsMachineConfig(gomock.Any(), irm, gomock.Nil(), auth).Return(nil),
-			expectCreate(clnt, ctx, func(client.Object) {}),
-		)
-
-		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(Succeed())
-	})
-
-	It("returns an error and does not update the MachineConfig when rolling back without pull auth", func() {
-		irm := newIRM(nil, nil, nil)
-		irm.Spec.Rollback = true
-		expectServiceAccount(clnt, ctx, nil, notFound())
-
-		Expect(h.handleMachineConfig(ctx, irm, initramfsParseParams{})).To(HaveOccurred())
-	})
 })
 
 func existingInitramfsMIC() *kmmv1beta1.ModuleImagesConfig {
@@ -925,56 +721,12 @@ func existingInitramfsMIC() *kmmv1beta1.ModuleImagesConfig {
 	}
 }
 
-const builderDockercfgSecret = "builder-dockercfg-abcde"
-
-func builderServiceAccount(pullSecrets ...string) *v1.ServiceAccount {
-	refs := make([]v1.LocalObjectReference, 0, len(pullSecrets))
-	for _, name := range pullSecrets {
-		refs = append(refs, v1.LocalObjectReference{Name: name})
-	}
-	return &v1.ServiceAccount{
-		ObjectMeta:       metav1.ObjectMeta{Namespace: irmNS, Name: constants.OCPBuilderServiceAccountName},
-		ImagePullSecrets: refs,
-	}
-}
-
-func dockerConfigSecret(name string, data map[string][]byte) *v1.Secret {
-	return &v1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Namespace: irmNS, Name: name},
-		Data:       data,
-	}
-}
-
-func expectServiceAccount(clnt *kmmclient.MockClient, ctx context.Context, sa *v1.ServiceAccount, ret error) *gomock.Call {
-	return clnt.EXPECT().Get(ctx, client.ObjectKey{Namespace: irmNS, Name: constants.OCPBuilderServiceAccountName}, gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) error {
-			if ret != nil {
-				return ret
-			}
-			sa.DeepCopyInto(obj.(*v1.ServiceAccount))
-			return nil
-		},
-	)
-}
-
-func expectNamedSecret(clnt *kmmclient.MockClient, ctx context.Context, secret *v1.Secret, ret error) *gomock.Call {
-	return clnt.EXPECT().Get(ctx, client.ObjectKey{Namespace: irmNS, Name: secret.Name}, gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) error {
-			if ret != nil {
-				return ret
-			}
-			secret.DeepCopyInto(obj.(*v1.Secret))
-			return nil
-		},
-	)
-}
-
 func notFound() error {
 	return apierrors.NewNotFound(schema.GroupResource{}, "missing")
 }
 
-func expectGetNotFound(clnt *kmmclient.MockClient, ctx context.Context, name string) *gomock.Call {
-	return clnt.EXPECT().Get(ctx, client.ObjectKey{Name: name}, gomock.Any()).Return(notFound())
+func expectGetNotFound(clnt *kmmclient.MockClient, ctx context.Context, name string, obj client.Object) *gomock.Call {
+	return clnt.EXPECT().Get(ctx, client.ObjectKey{Name: name}, gomock.AssignableToTypeOf(obj)).Return(notFound())
 }
 
 func expectGetMIC(clnt *kmmclient.MockClient, ctx context.Context, src *kmmv1beta1.ModuleImagesConfig) *gomock.Call {
@@ -987,13 +739,13 @@ func expectGetMIC(clnt *kmmclient.MockClient, ctx context.Context, src *kmmv1bet
 }
 
 func expectGetObject(clnt *kmmclient.MockClient, ctx context.Context, src client.Object) *gomock.Call {
-	return clnt.EXPECT().Get(ctx, client.ObjectKey{Name: src.GetName()}, gomock.Any()).DoAndReturn(
+	return clnt.EXPECT().Get(ctx, client.ObjectKey{Name: src.GetName()}, gomock.AssignableToTypeOf(src)).DoAndReturn(
 		func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) error {
 			switch s := src.(type) {
 			case *mcfgv1.MachineConfigPool:
 				s.DeepCopyInto(obj.(*mcfgv1.MachineConfigPool))
-			case *mcfgv1.MachineConfig:
-				s.DeepCopyInto(obj.(*mcfgv1.MachineConfig))
+			case *mcfgv1.MachineOSConfig:
+				s.DeepCopyInto(obj.(*mcfgv1.MachineOSConfig))
 			}
 			return nil
 		},

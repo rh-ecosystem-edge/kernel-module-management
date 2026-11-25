@@ -194,6 +194,16 @@ rules:
   - update
   - watch
 - apiGroups:
+  - machineconfiguration.openshift.io
+  resources:
+  - machineosconfigs
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
   - networking.k8s.io
   resources:
   - networkpolicies

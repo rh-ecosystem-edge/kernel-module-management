@@ -18,7 +18,6 @@ package controllers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -26,7 +25,6 @@ import (
 
 	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
 	kmmv1beta1 "github.com/rh-ecosystem-edge/kernel-module-management/api/v1beta1"
-	"github.com/rh-ecosystem-edge/kernel-module-management/internal/constants"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/filter"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mcfg"
 	"github.com/rh-ecosystem-edge/kernel-module-management/internal/mic"
@@ -47,17 +45,13 @@ const InitramfsModuleReconcilerName = "InitramfsModuleReconciler"
 
 const workerNodeLabelKey = "node-role.kubernetes.io/worker"
 
-const builderDockercfgPrefix = "builder-dockercfg"
-
 // +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=initramfsmodules,verbs=get;list;patch;update;watch
 // +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=initramfsmodules/status,verbs=get;patch;update
 // +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=initramfsmodules/finalizers,verbs=update
 // +kubebuilder:rbac:groups=kmm.sigs.x-k8s.io,resources=moduleimagesconfigs,verbs=create;get;list;patch;watch
-// +kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineosconfigs,verbs=create;get;list;patch;watch
 // +kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigpools,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;patch;watch
-// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get
-// +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get
 
 type initramfsModuleReconciler struct {
 	helper initramfsModuleReconcilerHelper
@@ -66,14 +60,13 @@ type initramfsModuleReconciler struct {
 
 func NewInitramfsModuleReconciler(
 	client client.Client,
-	secretReader client.Reader,
 	micAPI mic.MIC,
 	nodeAPI node.Node,
 	mcfgAPI mcfg.MCFG,
 	filter *filter.Filter,
 ) *initramfsModuleReconciler {
 	return &initramfsModuleReconciler{
-		helper: newInitramfsModuleReconcilerHelper(client, secretReader, micAPI, nodeAPI, mcfgAPI),
+		helper: newInitramfsModuleReconcilerHelper(client, micAPI, nodeAPI, mcfgAPI),
 		filter: filter,
 	}
 }
@@ -98,10 +91,6 @@ func (r *initramfsModuleReconciler) Reconcile(ctx context.Context, irm *kmmv1bet
 		return res, r.helper.finalize(ctx, irm)
 	}
 
-	if err := r.helper.checkUnstampedPoolAndMachineConfig(ctx, irm); err != nil {
-		return res, err
-	}
-
 	nodes, err := r.helper.listSelectedNodes(ctx, irm)
 	if err != nil {
 		return res, err
@@ -119,17 +108,13 @@ func (r *initramfsModuleReconciler) Reconcile(ctx context.Context, irm *kmmv1bet
 		return res, err
 	}
 	if !ready {
-		log.FromContext(ctx).Info("container image is not present yet; skipping MachineConfigPool and MachineConfig")
+		log.FromContext(ctx).Info("container image is not present yet; skipping MachineConfigPool and MachineOSConfig")
 		return res, nil
-	}
-	parsed, err := r.helper.handleParseJob(ctx, irm)
-	if err != nil {
-		return res, err
 	}
 	if err = r.helper.handleMachineConfigPool(ctx, irm); err != nil {
 		return res, err
 	}
-	if err = r.helper.handleMachineConfig(ctx, irm, parsed); err != nil {
+	if err = r.helper.handleMachineOSConfig(ctx, irm); err != nil {
 		return res, err
 	}
 	return res, nil
@@ -143,28 +128,23 @@ type initramfsModuleReconcilerHelper interface {
 	handleMIC(ctx context.Context, irm *kmmv1beta1.InitramfsModule, nodes []v1.Node) error
 	areImagesReady(ctx context.Context, irm *kmmv1beta1.InitramfsModule) (bool, error)
 	finalize(ctx context.Context, irm *kmmv1beta1.InitramfsModule) error
-	checkUnstampedPoolAndMachineConfig(ctx context.Context, irm *kmmv1beta1.InitramfsModule) error
-	handleParseJob(ctx context.Context, irm *kmmv1beta1.InitramfsModule) (initramfsParseParams, error)
 	handleMachineConfigPool(ctx context.Context, irm *kmmv1beta1.InitramfsModule) error
-	handleMachineConfig(ctx context.Context, irm *kmmv1beta1.InitramfsModule, parsed initramfsParseParams) error
+	handleMachineOSConfig(ctx context.Context, irm *kmmv1beta1.InitramfsModule) error
 }
 
 type initramfsModuleReconcilerHelperImpl struct {
-	client client.Client
-	// secretReader reads Secrets from the API. The cached client would list and watch every Secret.
-	secretReader client.Reader
-	micAPI       mic.MIC
-	nodeAPI      node.Node
-	mcfgAPI      mcfg.MCFG
+	client  client.Client
+	micAPI  mic.MIC
+	nodeAPI node.Node
+	mcfgAPI mcfg.MCFG
 }
 
-func newInitramfsModuleReconcilerHelper(cl client.Client, secretReader client.Reader, micAPI mic.MIC, nodeAPI node.Node, mcfgAPI mcfg.MCFG) initramfsModuleReconcilerHelper {
+func newInitramfsModuleReconcilerHelper(cl client.Client, micAPI mic.MIC, nodeAPI node.Node, mcfgAPI mcfg.MCFG) initramfsModuleReconcilerHelper {
 	return &initramfsModuleReconcilerHelperImpl{
-		client:       cl,
-		secretReader: secretReader,
-		micAPI:       micAPI,
-		nodeAPI:      nodeAPI,
-		mcfgAPI:      mcfgAPI,
+		client:  cl,
+		micAPI:  micAPI,
+		nodeAPI: nodeAPI,
+		mcfgAPI: mcfgAPI,
 	}
 }
 
@@ -265,121 +245,10 @@ func (h *initramfsModuleReconcilerHelperImpl) handleMachineConfigPool(ctx contex
 	return err
 }
 
-func (h *initramfsModuleReconcilerHelperImpl) handleMachineConfig(ctx context.Context, irm *kmmv1beta1.InitramfsModule, parsed initramfsParseParams) error {
-	auth, err := h.builderPullAuth(ctx, irm)
-	if err != nil {
-		return err
-	}
-	mc := &mcfgv1.MachineConfig{ObjectMeta: metav1.ObjectMeta{Name: mcfg.InitramfsMachineConfigName}}
-	_, err = controllerutil.CreateOrPatch(ctx, h.client, mc, func() error {
-		return h.mcfgAPI.UpdateInitramfsMachineConfig(mc, irm, parsed.Kernels, auth)
+func (h *initramfsModuleReconcilerHelperImpl) handleMachineOSConfig(ctx context.Context, irm *kmmv1beta1.InitramfsModule) error {
+	mosc := &mcfgv1.MachineOSConfig{ObjectMeta: metav1.ObjectMeta{Name: mcfg.InitramfsMachineOSConfigName}}
+	_, err := controllerutil.CreateOrPatch(ctx, h.client, mosc, func() error {
+		return h.mcfgAPI.UpdateInitramfsMachineOSConfig(mosc, irm)
 	})
 	return err
-}
-
-func (h *initramfsModuleReconcilerHelperImpl) builderPullAuth(ctx context.Context, irm *kmmv1beta1.InitramfsModule) ([]byte, error) {
-	account := &v1.ServiceAccount{}
-	accountName := client.ObjectKey{Namespace: irm.Namespace, Name: constants.OCPBuilderServiceAccountName}
-	if err := h.secretReader.Get(ctx, accountName, account); err != nil {
-		return nil, fmt.Errorf("failed to get builder service account %s/%s: %v", irm.Namespace, constants.OCPBuilderServiceAccountName, err)
-	}
-	if len(account.ImagePullSecrets) == 0 {
-		return nil, fmt.Errorf("builder service account %s/%s has no image pull secrets", irm.Namespace, constants.OCPBuilderServiceAccountName)
-	}
-	for _, ref := range account.ImagePullSecrets {
-		if !strings.HasPrefix(ref.Name, builderDockercfgPrefix) {
-			continue
-		}
-		secret := &v1.Secret{}
-		secretName := client.ObjectKey{Namespace: irm.Namespace, Name: ref.Name}
-		if err := h.secretReader.Get(ctx, secretName, secret); err != nil {
-			return nil, fmt.Errorf("failed to get builder pull secret %s/%s: %v", irm.Namespace, ref.Name, err)
-		}
-		auth, err := dockerConfigAuth(secret)
-		if err != nil {
-			return nil, err
-		}
-		return auth, nil
-	}
-	return nil, fmt.Errorf("builder service account %s/%s has no usable %s image pull secret", irm.Namespace, constants.OCPBuilderServiceAccountName, builderDockercfgPrefix)
-}
-
-func dockerConfigAuth(secret *v1.Secret) ([]byte, error) {
-	if auth := secret.Data[v1.DockerConfigJsonKey]; len(auth) > 0 {
-		if !json.Valid(auth) {
-			return nil, fmt.Errorf("builder pull secret %s/%s has invalid %s data", secret.Namespace, secret.Name, v1.DockerConfigJsonKey)
-		}
-		return auth, nil
-	}
-	dockercfg := secret.Data[v1.DockerConfigKey]
-	if len(dockercfg) == 0 {
-		return nil, fmt.Errorf("builder pull secret %s/%s has no %s or %s data", secret.Namespace, secret.Name, v1.DockerConfigJsonKey, v1.DockerConfigKey)
-	}
-	if !json.Valid(dockercfg) {
-		return nil, fmt.Errorf("builder pull secret %s/%s has invalid %s data", secret.Namespace, secret.Name, v1.DockerConfigKey)
-	}
-	wrapped, err := json.Marshal(struct {
-		Auths json.RawMessage `json:"auths"`
-	}{Auths: dockercfg})
-	if err != nil {
-		return nil, fmt.Errorf("builder pull secret %s/%s has invalid %s data: %v", secret.Namespace, secret.Name, v1.DockerConfigKey, err)
-	}
-	return wrapped, nil
-}
-
-type initramfsParseParams struct {
-	Kernels map[string]mcfg.KernelInspectLists
-}
-
-func (h *initramfsModuleReconcilerHelperImpl) handleParseJob(context.Context, *kmmv1beta1.InitramfsModule) (initramfsParseParams, error) {
-	return initramfsParseParams{}, nil
-}
-
-func (h *initramfsModuleReconcilerHelperImpl) checkUnstampedPoolAndMachineConfig(ctx context.Context, irm *kmmv1beta1.InitramfsModule) error {
-	pool, mc, err := h.lookupPoolAndMachineConfig(ctx)
-	if err != nil {
-		return err
-	}
-	return h.refuseUnstamped(pool, mc, irm)
-}
-
-func (h *initramfsModuleReconcilerHelperImpl) lookupPoolAndMachineConfig(ctx context.Context) (*mcfgv1.MachineConfigPool, *mcfgv1.MachineConfig, error) {
-	pool := &mcfgv1.MachineConfigPool{}
-	found, err := getIfExists(ctx, h.client, mcfg.InitramfsPoolName, pool)
-	if err != nil {
-		return nil, nil, err
-	}
-	if !found {
-		pool = nil
-	}
-	mc := &mcfgv1.MachineConfig{}
-	found, err = getIfExists(ctx, h.client, mcfg.InitramfsMachineConfigName, mc)
-	if err != nil {
-		return nil, nil, err
-	}
-	if !found {
-		mc = nil
-	}
-	return pool, mc, nil
-}
-
-func getIfExists(ctx context.Context, c client.Client, name string, obj client.Object) (bool, error) {
-	err := c.Get(ctx, client.ObjectKey{Name: name}, obj)
-	if apierrors.IsNotFound(err) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-func (h *initramfsModuleReconcilerHelperImpl) refuseUnstamped(pool *mcfgv1.MachineConfigPool, mc *mcfgv1.MachineConfig, irm *kmmv1beta1.InitramfsModule) error {
-	if pool != nil && !h.mcfgAPI.StampedForInitramfsModule(pool, irm) {
-		return fmt.Errorf("MachineConfigPool %s already exists and is not stamped for this CR", mcfg.InitramfsPoolName)
-	}
-	if mc != nil && !h.mcfgAPI.StampedForInitramfsModule(mc, irm) {
-		return fmt.Errorf("MachineConfig %s already exists and is not stamped for this CR", mcfg.InitramfsMachineConfigName)
-	}
-	return nil
 }

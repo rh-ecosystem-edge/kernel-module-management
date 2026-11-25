@@ -2,15 +2,10 @@ package mcfg
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"embed"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"maps"
-	"slices"
-	"strings"
 	"text/template"
 
 	"gopkg.in/yaml.v3"
@@ -23,8 +18,8 @@ import (
 )
 
 const (
-	InitramfsPoolName          = "kmm-initramfs"
-	InitramfsMachineConfigName = "99-kmm-initramfs"
+	InitramfsPoolName            = "kmm-initramfs"
+	InitramfsMachineOSConfigName = "kmm-initramfs"
 
 	InitramfsNodeRoleLabel             = "node-role.kubernetes.io/initramfs"
 	machineConfigRoleLabel             = "machineconfiguration.openshift.io/role"
@@ -36,21 +31,7 @@ const (
 	workerConfigFilepath      = "/var/lib/kmm_day1_config.yaml"
 	pullImageSystemdService   = "pull-kernel-module-image.service"
 	replaceKmodSystemdService = "replace-kernel-module.service"
-
-	BuilderAuthFilePath = "/var/opt/kmods/builder-config.json"
 )
-
-// InspectSoftLink is one pre-udev symlink for an initramfs kernel.
-type InspectSoftLink struct {
-	Path   string `json:"path"`
-	Target string `json:"target"`
-}
-
-// KernelInspectLists is the in-tree module and symlink list for one kernel.
-type KernelInspectLists struct {
-	InTreeModules []string          `json:"inTreeModules"`
-	SoftLinks     []InspectSoftLink `json:"softLinks"`
-}
 
 var (
 	//go:embed scripts/pull-image.sh
@@ -62,32 +43,11 @@ var (
 	//go:embed scripts/wait-for-dispatcher.sh
 	scriptWaitForNetworkDispatcher string
 
-	//go:embed scripts/kmm-initramfs.service
-	scriptInitramfsService string
-
-	//go:embed scripts/kmm-pre-udev.sh
-	scriptPreUdev string
-
-	//go:embed scripts/initramfs.sh
-	scriptInitramfs string
-
 	//go:embed templates
 	templateFS embed.FS
 
 	ignitionTemplate = template.Must(
 		template.ParseFS(templateFS, "templates/ignition.gotmpl"),
-	)
-
-	initramfsServiceTemplate = template.Must(
-		template.New("kmm-initramfs.service").Option("missingkey=error").Parse(scriptInitramfsService),
-	)
-	initramfsPreUdevTemplate = template.Must(
-		template.New("kmm-pre-udev.sh").Option("missingkey=error").Parse(scriptPreUdev),
-	)
-	initramfsIgnitionTemplate = template.Must(
-		template.New("initramfs-ignition.gotmpl").Option("missingkey=error").ParseFS(
-			templateFS, "templates/initramfs-ignition.gotmpl",
-		),
 	)
 )
 
@@ -99,9 +59,8 @@ type MCFG interface {
 	UpdateMachineConfig(mc *mcfgv1.MachineConfig, bmc *kmmv1beta1.BootModuleConfig) error
 	GenerateIgnition(kernelModuleImage, kernelModuleName, firmwareFilesPath, workerImage, servicePrefix string,
 		inTreeModulesToRemove []string) ([]byte, string, error)
-	StampedForInitramfsModule(meta metav1.Object, irm *kmmv1beta1.InitramfsModule) bool
 	UpdateInitramfsPool(pool *mcfgv1.MachineConfigPool, irm *kmmv1beta1.InitramfsModule)
-	UpdateInitramfsMachineConfig(mc *mcfgv1.MachineConfig, irm *kmmv1beta1.InitramfsModule, kernels map[string]KernelInspectLists, builderAuth []byte) error
+	UpdateInitramfsMachineOSConfig(mosc *mcfgv1.MachineOSConfig, irm *kmmv1beta1.InitramfsModule) error
 }
 
 type mcfgImpl struct {
@@ -244,12 +203,6 @@ func removeFileFromDisruptionPolicies(mc *apioperatorv1.MachineConfiguration, fi
 	}
 }
 
-func (m *mcfgImpl) StampedForInitramfsModule(meta metav1.Object, irm *kmmv1beta1.InitramfsModule) bool {
-	ann := meta.GetAnnotations()
-	return ann[InitramfsModuleNamespaceAnnotation] == irm.Namespace &&
-		ann[InitramfsModuleNameAnnotation] == irm.Name
-}
-
 func (m *mcfgImpl) UpdateInitramfsPool(pool *mcfgv1.MachineConfigPool, irm *kmmv1beta1.InitramfsModule) {
 	setInitramfsStamp(pool, irm)
 	unavailable := intstr.FromInt(1)
@@ -273,126 +226,10 @@ func initramfsPoolNodeSelector(irm *kmmv1beta1.InitramfsModule) map[string]strin
 	return irm.Spec.Selector
 }
 
-func (m *mcfgImpl) UpdateInitramfsMachineConfig(mc *mcfgv1.MachineConfig, irm *kmmv1beta1.InitramfsModule, _ map[string]KernelInspectLists, builderAuth []byte) error {
-	raw, err := renderInitramfsIgnition(irm, builderAuth)
-	if err != nil {
-		return err
-	}
-	setInitramfsStamp(mc, irm)
-	labels := mc.GetLabels()
-	if labels == nil {
-		labels = map[string]string{}
-	}
-	labels[machineConfigRoleLabel] = InitramfsPoolName
-	mc.SetLabels(labels)
-	mc.Spec.Config.Raw = raw
+func (m *mcfgImpl) UpdateInitramfsMachineOSConfig(mosc *mcfgv1.MachineOSConfig, irm *kmmv1beta1.InitramfsModule) error {
+	setInitramfsStamp(mosc, irm)
+	// Build-spec population is deferred until layered-image construction is implemented.
 	return nil
-}
-
-type initramfsScriptData struct {
-	Rollback       bool
-	ContainerImage string
-	DirName        string
-	SpecHash       string
-	ModuleName     string
-	OmitDrivers    string
-}
-
-type initramfsIgnitionParams struct {
-	UnitContents    string
-	InitramfsScript string
-	PreUdevScript   string
-	BuilderAuth     string
-	BuilderAuthPath string
-}
-
-func renderInitramfsIgnition(irm *kmmv1beta1.InitramfsModule, builderAuth []byte) ([]byte, error) {
-	moduleName, err := singleInitramfsModuleName(irm.Spec.ModuleNames)
-	if err != nil {
-		return nil, err
-	}
-	omitDrivers := strings.Join(canonicalInitramfsOmit(irm.Spec.Omit), " ")
-	data := initramfsScriptData{
-		Rollback:       irm.Spec.Rollback,
-		ContainerImage: irm.Spec.ContainerImage,
-		DirName:        irm.Spec.DirName,
-		ModuleName:     moduleName,
-		OmitDrivers:    omitDrivers,
-	}
-	data.SpecHash, err = initramfsSpecHash(data)
-	if err != nil {
-		return nil, err
-	}
-
-	var serviceBuf, hookBuf bytes.Buffer
-	if err = initramfsServiceTemplate.Execute(&serviceBuf, data); err != nil {
-		return nil, fmt.Errorf("failed to render kmm-initramfs.service: %v", err)
-	}
-	if err = initramfsPreUdevTemplate.Execute(&hookBuf, data); err != nil {
-		return nil, fmt.Errorf("failed to render kmm-pre-udev.sh: %v", err)
-	}
-
-	params := initramfsIgnitionParams{
-		UnitContents:    serviceBuf.String(),
-		InitramfsScript: base64.StdEncoding.EncodeToString([]byte(scriptInitramfs)),
-		PreUdevScript:   base64.StdEncoding.EncodeToString(hookBuf.Bytes()),
-		BuilderAuth:     base64.StdEncoding.EncodeToString(builderAuth),
-		BuilderAuthPath: BuilderAuthFilePath,
-	}
-
-	var yamlIgnition bytes.Buffer
-	if err = initramfsIgnitionTemplate.Execute(&yamlIgnition, params); err != nil {
-		return nil, fmt.Errorf("failed to render initramfs ignition: %v", err)
-	}
-
-	var ignitionObj map[string]interface{}
-	if err = yaml.Unmarshal(yamlIgnition.Bytes(), &ignitionObj); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal initramfs ignition: %v", err)
-	}
-	raw, err := json.Marshal(ignitionObj)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal initramfs ignition: %v", err)
-	}
-	return raw, nil
-}
-
-func canonicalInitramfsOmit(names []string) []string {
-	uniqueNames := make(map[string]struct{}, len(names))
-	for _, name := range names {
-		uniqueNames[name] = struct{}{}
-	}
-
-	canonical := slices.Collect(maps.Keys(uniqueNames))
-	slices.Sort(canonical)
-	return canonical
-}
-
-func singleInitramfsModuleName(names []string) (string, error) {
-	if len(names) != 1 {
-		return "", fmt.Errorf("initramfs MachineConfig requires exactly one moduleNames entry, got %d", len(names))
-	}
-	return names[0], nil
-}
-
-func initramfsSpecHash(data initramfsScriptData) (string, error) {
-	raw, err := json.Marshal(struct {
-		Rollback       bool   `json:"rollback"`
-		ContainerImage string `json:"containerImage"`
-		DirName        string `json:"dirName"`
-		ModuleName     string `json:"moduleName"`
-		OmitDrivers    string `json:"omitDrivers"`
-	}{
-		Rollback:       data.Rollback,
-		ContainerImage: data.ContainerImage,
-		DirName:        data.DirName,
-		ModuleName:     data.ModuleName,
-		OmitDrivers:    data.OmitDrivers,
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal initramfs spec hash: %v", err)
-	}
-	sum := sha256.Sum256(raw)
-	return hex.EncodeToString(sum[:]), nil
 }
 
 func setInitramfsStamp(obj metav1.Object, irm *kmmv1beta1.InitramfsModule) {
