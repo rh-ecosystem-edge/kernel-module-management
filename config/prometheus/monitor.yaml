@@ -5,6 +5,7 @@ kind: ServiceMonitor
 metadata:
   labels:
     control-plane: controller
+    openshift.io/user-monitoring: "false"
   name: controller-metrics-monitor
   namespace: system
 spec:

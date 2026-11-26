@@ -6,6 +6,7 @@ metadata:
     app.kubernetes.io/name: kmm
     app.kubernetes.io/part-of: kmm
     control-plane: controller
+    openshift.io/user-monitoring: "false"
   name: kmm-operator-controller-metrics-monitor
 spec:
   endpoints:
